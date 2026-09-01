@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:service-sdk-v0-1
 kind: story
-status: active
+status: implemented
 title: Build service-sdk 0.1
 summary: Implement lossless compilation, runtime ports, deterministic generators, Connector contribution, and conformance.
 relations:
 - derived_from: epic:builder-runtime
 - serves: vision:composable-services
-revision: 3
+revision: 4
 ---
 # Build service-sdk 0.1
 
