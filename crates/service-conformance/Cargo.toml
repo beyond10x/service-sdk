@@ -1,0 +1,23 @@
+[package]
+name = "service-conformance"
+description = "Deterministic cross-artifact conformance for ESS-built standalone services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+service-builder = { path = "../service-builder" }
+service-connectors = { path = "../service-connectors" }
+service-runtime-ir = { path = "../service-runtime-ir" }
+
+[dev-dependencies]
+service-definition = { path = "../service-definition" }
+
+[lints]
+workspace = true

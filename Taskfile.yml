@@ -1,0 +1,31 @@
+version: '3'
+
+tasks:
+  fmt:
+    cmds:
+      - cargo fmt --all
+
+  fmt-check:
+    cmds:
+      - cargo fmt --all -- --check
+
+  clippy:
+    cmds:
+      - cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    cmds:
+      - cargo test --workspace --locked
+
+  doc:
+    env:
+      RUSTDOCFLAGS: -D warnings
+    cmds:
+      - cargo doc --workspace --no-deps --locked
+
+  aep-check:
+    cmds:
+      - aep artifact validate
+
+  check:
+    deps: [fmt-check, clippy, test, doc, aep-check]

@@ -1,0 +1,29 @@
+[package]
+name = "service-builder"
+description = "Compile ESS-backed service definitions into runtime realization artifacts."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+ess-compiler.workspace = true
+ess-domain.workspace = true
+ess-gen.workspace = true
+ess-synth.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+service-connectors = { path = "../service-connectors" }
+service-definition = { path = "../service-definition" }
+service-runtime-ir = { path = "../service-runtime-ir" }
+
+[lints]
+workspace = true
