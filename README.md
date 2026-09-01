@@ -11,7 +11,7 @@ service/1 package
   -> ESS SynthesisPlan
   -> validated service-runtime-ir/2 + versioned obligation catalog
   -> SDK-executable realization plan
-  -> generated Rust service, client plan, and ConnectorServiceFactory
+  -> generated Rust service, client plan, validated scenario fixtures, and ConnectorServiceFactory
 ```
 
 The SDK never guesses business logic or redefines ESS-owned meaning. Every runtime gap must select a
@@ -27,7 +27,7 @@ handwritten runtime hooks.
 - `service-runtime`: transport-independent authenticated intent and guarded Eventlog execution ports.
 - `service-engine`: executes generated realization plans and owns obligation ordering and behavior; deployment injects resource adapters only.
 - `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products only register factories and supply deployment policy.
-- `service-builder`: transactionally loads `service/1`, compiles ESS/runtime IR, and emits deterministic plans, Rust services, and Connector factories.
+- `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, fixtures, Rust services, and Connector factories.
 - `service-conformance`: proves runtime IR, client plans, and inert Connector descriptors remain one exact operation contract.
 
 ## Authority rule
