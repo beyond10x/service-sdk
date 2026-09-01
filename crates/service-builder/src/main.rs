@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context as _, Result, bail};
 use clap::{Parser, Subcommand};
-use service_builder::build_service;
 use service_builder::ess::EssSources;
+use service_builder::package::ServicePackage;
 use service_builder::tree::Drift;
+use service_builder::{build_package, build_service};
 use service_definition::ServiceDefinition;
 
 #[derive(Debug, Parser)]
@@ -27,12 +28,15 @@ enum Command {
 
 #[derive(Debug, clap::Args)]
 struct Inputs {
+    /// Unified `service/1` package manifest. Preferred over legacy split inputs.
+    #[arg(long, conflicts_with_all = ["ess", "definition"])]
+    package: Option<PathBuf>,
     /// Directory containing the ESS `system.yaml` and its YAML sources.
-    #[arg(long)]
-    ess: PathBuf,
-    /// Strict `service-definition/1` YAML or JSON document.
-    #[arg(long)]
-    definition: PathBuf,
+    #[arg(long, requires = "definition")]
+    ess: Option<PathBuf>,
+    /// Strict `service-definition/2` YAML or JSON document.
+    #[arg(long, requires = "ess")]
+    definition: Option<PathBuf>,
     /// Exclusively builder-owned generated output root.
     #[arg(long)]
     output: PathBuf,
@@ -67,8 +71,18 @@ fn main() -> Result<()> {
 }
 
 fn compile(inputs: &Inputs) -> Result<service_builder::ServiceBuild> {
-    let sources = EssSources::read(&inputs.ess)?;
-    let definition = read_definition(&inputs.definition)?;
+    if let Some(package) = &inputs.package {
+        let package = ServicePackage::read(package)?;
+        return build_package(&package);
+    }
+    let ess = inputs.ess.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("either --package or both --ess and --definition are required")
+    })?;
+    let definition = inputs.definition.as_deref().ok_or_else(|| {
+        anyhow::anyhow!("either --package or both --ess and --definition are required")
+    })?;
+    let sources = EssSources::read(ess)?;
+    let definition = read_definition(definition)?;
     build_service(&sources, &definition)
 }
 

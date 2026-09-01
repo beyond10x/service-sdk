@@ -5,23 +5,29 @@
 The pipeline is deliberately one-way:
 
 ```text
-ESS source
+service/1 package
+  -> ESS fragments + service-definition/2 + scenarios + exact SDK lock
   -> compiler-minted EssIr
-  -> ESS SynthesisPlan and structural Rust workspace
-  -> validated service-runtime-ir/1
-  -> auth/Eventlog/content/projection realization
-  -> client plan and inert Connector contribution
+  -> ESS SynthesisPlan
+  -> validated service-runtime-ir/2 + versioned obligation catalog
+  -> SDK-executable realization plan
+  -> generated Rust service, client plan, and ConnectorServiceFactory
 ```
 
-The SDK never guesses business logic or re-emits ESS-owned types, commands, events, or views. Every ESS synthesis obligation remains explicit until a handwritten realization closes it.
+The SDK never guesses business logic or redefines ESS-owned meaning. Every runtime gap must select a
+closed, versioned SDK obligation provider; unknown, incomplete, wrong-surface, unused, and uncovered
+selections fail generation. Application repositories contain definitions and generated output, not
+handwritten runtime hooks.
 
 ## Workspace
 
 - `service-definition`: author-facing runtime annotations referencing ESS semantic names.
+- `service-obligations`: closed, versioned SDK implementations and complete-coverage checks.
 - `service-runtime-ir`: closed, digest-bound, validated runtime realization contract.
 - `service-runtime`: transport-independent authenticated intent and guarded Eventlog execution ports.
+- `service-engine`: executes generated realization plans and owns obligation ordering and behavior; deployment injects resource adapters only.
 - `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products only register factories and supply deployment policy.
-- `service-builder`: compiles ESS, consumes ESS synthesis, validates runtime IR, and emits deterministic artifacts.
+- `service-builder`: transactionally loads `service/1`, compiles ESS/runtime IR, and emits deterministic plans, Rust services, and Connector factories.
 - `service-conformance`: proves runtime IR, client plans, and inert Connector descriptors remain one exact operation contract.
 
 ## Authority rule

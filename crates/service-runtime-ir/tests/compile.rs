@@ -73,7 +73,7 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/1
+format: service-definition/2
 service: demo_todo
 realm: optional
 content:
@@ -84,13 +84,32 @@ content:
     custody: external_erasable
 obligations:
   - name: bind_owner
-    kind: derivation
+    provider: sdk.derive.inherit-parent-authority/v1
+    bindings:
+      parent: demo.todo.Item
+      child: demo.todo.Item
+      parent_owner: demo.todo.Item.owner
+      parent_scopes: demo.todo.Item.authority_id
+      child_owner: demo.todo.Item.owner
+      child_scopes: demo.todo.Item.authority_id
     description: Bind owner from current authenticated authority.
+  - name: aggregate
+    provider: sdk.aggregate.event-sourced/v1
+    bindings: { aggregate: demo.todo.Item, identity: item_id }
+    description: Execute the item as one guarded event-sourced aggregate.
+  - name: content_lifecycle
+    provider: sdk.content.external-erasable/v1
+    bindings: { content: item_content }
+    description: Stage and finalize external erasable content around append.
+  - name: visibility
+    provider: sdk.projection.auth-partitioned-visibility/v1
+    bindings: { owner: owner, scopes: authority_id }
+    description: Partition projection access by authenticated authority.
 projections:
   - name: item_by_id
     view: demo.todo.ItemById
     delivery: inline_transactional
-    obligations: [bind_owner]
+    obligations: [bind_owner, visibility]
 intents:
   - name: add_item
     command: demo.todo.AddItem
@@ -115,7 +134,7 @@ intents:
         field: authority_id
         source: { kind: context, value: current_authority }
     projections: [item_by_id]
-    obligations: [bind_owner]
+    obligations: [aggregate, bind_owner, content_lifecycle]
 queries:
   - name: get_item
     view: demo.todo.ItemById
@@ -131,7 +150,7 @@ queries:
     sort:
       - { view_field: item_id, direction: ascending }
     delivery: read_your_writes
-    obligations: [bind_owner]
+    obligations: [visibility]
 ";
 
 fn ess(source: &str) -> EssIr {
@@ -170,7 +189,7 @@ fn canonical_roundtrip_binds_exact_ess_and_synthesis_and_loses_no_annotations() 
     assert_eq!(first.definition(), &definition);
 
     for annotation in [
-        "service-definition/1",
+        "service-definition/2",
         "demo_todo",
         "optional",
         "item_content",
@@ -213,8 +232,8 @@ fn persisted_ir_is_closed_and_recompiled_before_acceptance() {
     let canonical = runtime.to_canonical_json();
 
     let unknown = canonical.replacen(
-        "\"format\": \"service-runtime-ir/1\"",
-        "\"format\": \"service-runtime-ir/1\",\n  \"route\": \"/realms/default\"",
+        "\"format\": \"service-runtime-ir/2\"",
+        "\"format\": \"service-runtime-ir/2\",\n  \"route\": \"/realms/default\"",
         1,
     );
     let error = ServiceRuntimeIr::from_json_bound(&unknown, &ir, &plan)

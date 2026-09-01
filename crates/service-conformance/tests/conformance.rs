@@ -73,7 +73,7 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/1
+format: service-definition/2
 service: demo_todo
 realm: optional
 content:
@@ -84,13 +84,32 @@ content:
     custody: external_erasable
 obligations:
   - name: bind_owner
-    kind: derivation
+    provider: sdk.derive.inherit-parent-authority/v1
+    bindings:
+      parent: demo.todo.Item
+      child: demo.todo.Item
+      parent_owner: demo.todo.Item.owner
+      parent_scopes: demo.todo.Item.owner
+      child_owner: demo.todo.Item.owner
+      child_scopes: demo.todo.Item.owner
     description: Bind owner from current authenticated authority.
+  - name: aggregate
+    provider: sdk.aggregate.event-sourced/v1
+    bindings: { aggregate: demo.todo.Item, identity: item_id }
+    description: Execute one guarded event-sourced aggregate.
+  - name: content_lifecycle
+    provider: sdk.content.external-erasable/v1
+    bindings: { content: item_content }
+    description: Own the external content lifecycle around append.
+  - name: visibility
+    provider: sdk.projection.auth-partitioned-visibility/v1
+    bindings: { owner: owner, scopes: owner }
+    description: Partition projection access by authenticated authority.
 projections:
   - name: item_by_id
     view: demo.todo.ItemById
     delivery: inline_transactional
-    obligations: [bind_owner]
+    obligations: [bind_owner, visibility]
 intents:
   - name: add_item
     command: demo.todo.AddItem
@@ -106,7 +125,7 @@ intents:
         field: owner
         source: { kind: context, value: current_authority }
     projections: [item_by_id]
-    obligations: [bind_owner]
+    obligations: [aggregate, bind_owner, content_lifecycle]
 queries:
   - name: get_item
     view: demo.todo.ItemById
@@ -116,7 +135,7 @@ queries:
     sort:
       - { view_field: item_id, direction: ascending }
     delivery: read_your_writes
-    obligations: [bind_owner]
+    obligations: [visibility]
 ";
 
 fn fixture() -> ServiceBuild {

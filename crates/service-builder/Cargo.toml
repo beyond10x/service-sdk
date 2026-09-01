@@ -23,6 +23,7 @@ sha2.workspace = true
 thiserror.workspace = true
 service-connectors = { path = "../service-connectors" }
 service-definition = { path = "../service-definition" }
+service-engine = { path = "../service-engine" }
 service-runtime-ir = { path = "../service-runtime-ir" }
 
 [lints]

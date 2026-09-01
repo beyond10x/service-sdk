@@ -52,7 +52,7 @@ pub enum ClientAuthentication {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClientOperation {
-    /// Stable operation name from `service-definition/1`.
+    /// Stable operation name from `service-definition/2`.
     pub operation: String,
     /// Exact ESS command or view reference.
     pub semantic_ref: String,
@@ -100,7 +100,7 @@ pub enum ClientInputSource {
     Idempotency,
     /// Plaintext staged through a named external-content policy.
     Content {
-        /// Content-policy name from `service-definition/1`.
+        /// Content-policy name from `service-definition/2`.
         policy: String,
     },
     /// Query selector mapped to a resolved view field.

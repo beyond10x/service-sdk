@@ -12,7 +12,7 @@ use std::str::FromStr;
 use ess_compiler::refs::{CommandRef, DeclaredTypeRef, EventRef, ViewRef};
 
 /// The only service-definition format understood by this crate.
-pub const SERVICE_DEFINITION_FORMAT: &str = "service-definition/1";
+pub const SERVICE_DEFINITION_FORMAT: &str = "service-definition/2";
 
 /// A stable lowercase identifier within one service definition.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
@@ -88,6 +88,76 @@ impl fmt::Display for DefinitionIdError {
 }
 
 impl std::error::Error for DefinitionIdError {}
+
+/// Stable versioned identity of an obligation implementation supplied by this SDK.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct ObligationProviderId(String);
+
+impl ObligationProviderId {
+    /// Parses an SDK obligation identity such as `sdk.aggregate.event-sourced/v1`.
+    pub fn new(value: impl AsRef<str>) -> Result<Self, ObligationProviderIdError> {
+        let value = value.as_ref();
+        let Some((name, version)) = value.rsplit_once('/') else {
+            return Err(ObligationProviderIdError(value.to_owned()));
+        };
+        let valid_name = name.starts_with("sdk.")
+            && name.len() <= 120
+            && name.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-')
+            });
+        let valid_version = version
+            .strip_prefix('v')
+            .is_some_and(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()));
+        if valid_name && valid_version {
+            Ok(Self(value.to_owned()))
+        } else {
+            Err(ObligationProviderIdError(value.to_owned()))
+        }
+    }
+
+    /// Returns the exact versioned provider identity.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ObligationProviderId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl FromStr for ObligationProviderId {
+    type Err = ObligationProviderIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ObligationProviderId {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+/// An invalid [`ObligationProviderId`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObligationProviderIdError(String);
+
+impl fmt::Display for ObligationProviderIdError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "invalid SDK obligation provider {:?}: expected sdk.<lowercase-name>/v<positive-format-version>",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for ObligationProviderIdError {}
 
 /// Admission policy for the optional realm carried by verified authentication.
 #[derive(
@@ -395,34 +465,17 @@ pub struct ContentDefinition {
     pub custody: ContentCustody,
 }
 
-/// Why handwritten service behavior is still required.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ObligationKind {
-    /// Domain-specific authorization beyond ESS actor grants.
-    Authorization,
-    /// Cross-aggregate invariant enforced by guarded append.
-    CrossAggregateGuard,
-    /// Derived event or projection value.
-    Derivation,
-    /// Content lifecycle behavior.
-    ContentLifecycle,
-    /// Authenticated projection filter.
-    AuthenticatedFilter,
-    /// Other explicitly reviewed business behavior.
-    BusinessRule,
-}
-
-/// One named handwritten realization contract.
+/// One binding to a versioned obligation implementation supplied by the SDK.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObligationDefinition {
     /// Stable obligation identity.
     pub name: DefinitionId,
-    /// Closed category used by generators and conformance suites.
-    pub kind: ObligationKind,
+    /// Exact SDK catalog entry that implements this obligation.
+    pub provider: ObligationProviderId,
+    /// Provider-defined parameters bound to ESS handles, field paths, or reviewed constants.
+    #[serde(default)]
+    pub bindings: BTreeMap<DefinitionId, String>,
     /// Non-empty human-readable contract.
     pub description: String,
 }
@@ -449,7 +502,7 @@ pub struct ServiceDefinition {
     /// External content policies.
     #[serde(default)]
     pub content: Vec<ContentDefinition>,
-    /// Handwritten realization contracts.
+    /// Versioned SDK-provided obligation bindings.
     #[serde(default)]
     pub obligations: Vec<ObligationDefinition>,
 }
@@ -539,13 +592,7 @@ impl ServiceDefinition {
             .map(|obligation| &obligation.name)
             .collect();
 
-        for (index, obligation) in self.obligations.iter().enumerate() {
-            nonempty(
-                &mut diagnostics,
-                &format!("obligations[{index}].description"),
-                &obligation.description,
-            );
-        }
+        validate_obligation_definitions(&mut diagnostics, &self.obligations);
         for (index, content) in self.content.iter().enumerate() {
             validate_content(&mut diagnostics, index, content);
         }
@@ -584,6 +631,26 @@ impl ServiceDefinition {
             .unwrap_or_else(|error| panic!("validated service definition serializes: {error}"));
         output.push('\n');
         output
+    }
+}
+
+fn validate_obligation_definitions(
+    diagnostics: &mut Vec<DefinitionDiagnostic>,
+    obligations: &[ObligationDefinition],
+) {
+    for (index, obligation) in obligations.iter().enumerate() {
+        nonempty(
+            diagnostics,
+            &format!("obligations[{index}].description"),
+            &obligation.description,
+        );
+        for (binding, value) in &obligation.bindings {
+            nonempty(
+                diagnostics,
+                &format!("obligations[{index}].bindings.{binding}"),
+                value,
+            );
+        }
     }
 }
 
@@ -1034,7 +1101,7 @@ mod tests {
     use super::*;
 
     const COMPLETE: &str = r"
-format: service-definition/1
+format: service-definition/2
 service: todo
 realm: optional
 content:
@@ -1045,7 +1112,14 @@ content:
     custody: external_erasable
 obligations:
   - name: inherit_scope
-    kind: derivation
+    provider: sdk.derive.inherit-parent-authority/v1
+    bindings:
+      parent: todo.list.TodoList
+      child: todo.list.Item
+      parent_owner: todo.list.TodoList.owner
+      parent_scopes: todo.list.TodoList.scopes
+      child_owner: todo.list.Item.owner
+      child_scopes: todo.list.Item.scopes
     description: Inherit the authenticated list scope without accepting it from the caller.
 projections:
   - name: item_by_id
@@ -1114,6 +1188,7 @@ queries:
             "content_ref",
             "ItemCreated",
             "inherit_scope",
+            "sdk.derive.inherit-parent-authority/v1",
             "item_by_id",
             "inline_transactional",
             "get_item",

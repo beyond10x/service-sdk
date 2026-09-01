@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use service_builder::client::{ClientInputSource, ClientOperationKind};
 use service_builder::ess::EssSources;
 use service_builder::{
-    CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, RUNTIME_IR_PATH, build_service,
+    CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, ESS_IR_PATH, REALIZATION_PLAN_PATH,
+    RUNTIME_IR_PATH, build_service,
 };
 use service_definition::{RealmPolicy, ServiceDefinition};
 
@@ -73,7 +74,7 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/1
+format: service-definition/2
 service: demo_todo
 realm: optional
 content:
@@ -84,13 +85,32 @@ content:
     custody: external_erasable
 obligations:
   - name: bind_owner
-    kind: derivation
+    provider: sdk.derive.inherit-parent-authority/v1
+    bindings:
+      parent: demo.todo.Item
+      child: demo.todo.Item
+      parent_owner: demo.todo.Item.owner
+      parent_scopes: demo.todo.Item.owner
+      child_owner: demo.todo.Item.owner
+      child_scopes: demo.todo.Item.owner
     description: Bind owner from current authenticated authority.
+  - name: aggregate
+    provider: sdk.aggregate.event-sourced/v1
+    bindings: { aggregate: demo.todo.Item, identity: item_id }
+    description: Execute one guarded event-sourced aggregate.
+  - name: content_lifecycle
+    provider: sdk.content.external-erasable/v1
+    bindings: { content: item_content }
+    description: Own the external content lifecycle around append.
+  - name: visibility
+    provider: sdk.projection.auth-partitioned-visibility/v1
+    bindings: { owner: owner, scopes: owner }
+    description: Partition projection access by authenticated authority.
 projections:
   - name: item_by_id
     view: demo.todo.ItemById
     delivery: inline_transactional
-    obligations: [bind_owner]
+    obligations: [bind_owner, visibility]
 intents:
   - name: add_item
     command: demo.todo.AddItem
@@ -106,7 +126,7 @@ intents:
         field: owner
         source: { kind: context, value: current_authority }
     projections: [item_by_id]
-    obligations: [bind_owner]
+    obligations: [aggregate, bind_owner, content_lifecycle]
 queries:
   - name: get_item
     view: demo.todo.ItemById
@@ -122,7 +142,7 @@ queries:
     sort:
       - { view_field: item_id, direction: ascending }
     delivery: read_your_writes
-    obligations: [bind_owner]
+    obligations: [visibility]
 ";
 
 fn inputs() -> (EssSources, ServiceDefinition) {
@@ -153,6 +173,8 @@ fn assert_expected_artifacts(build: &service_builder::ServiceBuild) {
         .map(|(path, _)| path)
         .collect::<Vec<_>>();
     assert!(paths.contains(&RUNTIME_IR_PATH));
+    assert!(paths.contains(&ESS_IR_PATH));
+    assert!(paths.contains(&REALIZATION_PLAN_PATH));
     assert!(paths.contains(&CLIENT_PLAN_PATH));
     assert!(paths.contains(&CONNECTOR_CONTRIBUTION_PATH));
     assert!(paths.contains(&"ess/synthesis/plan.json"));
@@ -344,4 +366,73 @@ fn cli_generate_then_check_detects_byte_drift() {
     assert!(!drifted.status.success());
     let error = String::from_utf8_lossy(&drifted.stderr);
     assert!(error.contains("changed client/plan.json"), "{error}");
+}
+
+#[test]
+fn unified_package_emits_compilable_service_and_connector_factory_sources() {
+    let temporary = TestDirectory::new();
+    let ess = temporary.path().join("ess");
+    fs::create_dir_all(&ess).expect("create ESS directory");
+    fs::write(ess.join("system.yaml"), ESS).expect("write ESS fixture");
+    fs::write(
+        temporary.path().join("runtime.yaml"),
+        DEFINITION.replace("service: demo_todo", "service: demo"),
+    )
+    .expect("write runtime fixture");
+    fs::write(
+        temporary.path().join("scenario.yaml"),
+        r"format: service-scenarios/1
+service: demo
+scenarios:
+  - name: reads-an-item
+    given:
+      auth: { tenant: tenant-a, realm: null, authority: person-a, user: person-a }
+    then:
+      - query: get_item
+        input: { item_id: item-a }
+        count: 1
+",
+    )
+    .expect("write scenario fixture");
+    fs::write(
+        temporary.path().join("service.yaml"),
+        r"format: service/1
+service: demo
+sdk:
+  repository: https://github.com/beyond10x/service-sdk.git
+  revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+semantic:
+  root: ess
+  sources: [system.yaml]
+runtime: runtime.yaml
+scenarios: [scenario.yaml]
+",
+    )
+    .expect("write package fixture");
+    let output = temporary.path().join("generated");
+    let generated = Command::new(env!("CARGO_BIN_EXE_service-builder"))
+        .arg("generate")
+        .arg("--package")
+        .arg(temporary.path().join("service.yaml"))
+        .arg("--output")
+        .arg(&output)
+        .output()
+        .expect("run package generation");
+    assert!(
+        generated.status.success(),
+        "package generation failed: {}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+
+    let cargo = fs::read_to_string(output.join("rust/Cargo.toml")).unwrap();
+    let rust = fs::read_to_string(output.join("rust/src/lib.rs")).unwrap();
+    assert!(cargo.contains("rev = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""));
+    assert!(rust.contains("impl connectors_service::ConnectorServiceFactory"));
+    assert!(rust.contains("service_engine::ServiceEngine"));
+    assert!(!rust.contains("Unimplemented"));
+    assert!(!rust.contains("realm_id:"));
+    assert!(output.join(ESS_IR_PATH).is_file());
+    assert!(output.join(REALIZATION_PLAN_PATH).is_file());
+    assert!(output.join("conformance/scenario.yaml").is_file());
+    assert!(!output.join("ess/synthesis/Cargo.toml").exists());
 }

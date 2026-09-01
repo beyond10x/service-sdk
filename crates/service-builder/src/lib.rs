@@ -6,6 +6,8 @@
 
 pub mod client;
 pub mod ess;
+pub mod package;
+pub mod realization;
 pub mod tree;
 
 use std::collections::BTreeMap;
@@ -18,16 +20,24 @@ use service_definition::ServiceDefinition;
 use service_runtime_ir::ServiceRuntimeIr;
 
 use crate::client::ClientPlan;
+use crate::package::ServicePackage;
+use crate::realization::RealizationArtifacts;
 use crate::tree::ArtifactTree;
 
 /// Canonical generated runtime IR path.
 pub const RUNTIME_IR_PATH: &str = "runtime/ir.json";
+
+/// Canonical compiler-minted ESS IR path used by composition tooling.
+pub const ESS_IR_PATH: &str = "ess/ir.json";
 
 /// Canonical generated client plan path.
 pub const CLIENT_PLAN_PATH: &str = "client/plan.json";
 
 /// Canonical generated inert Connector contribution path.
 pub const CONNECTOR_CONTRIBUTION_PATH: &str = "connectors/contribution.json";
+
+/// Canonical generated executable realization-plan path.
+pub const REALIZATION_PLAN_PATH: &str = "runtime/realization-plan.json";
 
 /// ESS-owned structural synthesis and projections for one compiled model.
 pub struct EssBuild {
@@ -53,6 +63,8 @@ pub struct ServiceBuild {
     ///
     /// The composing product supplies only its explicit `ServiceDeployment` binding.
     pub connector_descriptor: ConnectorServiceFactoryDescriptor,
+    /// SDK-executable realization plan derived from ESS and the runtime IR.
+    pub realization_plan: service_engine::ServicePlan,
     /// Complete exclusively owned generated output tree.
     pub artifacts: ArtifactTree,
 }
@@ -82,12 +94,20 @@ pub fn build_service(
     let connector_descriptor = client_plan
         .connector_descriptor()
         .context("deriving inert Connector contribution")?;
+    let realization_plan = realization::compile(&ess.ir, &runtime_ir, &client_plan)
+        .context("compiling executable service realization plan")?;
 
     let mut artifacts = ArtifactTree::new();
-    artifacts.extend_ess("ess/synthesis", &ess.synthesis)?;
+    artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
+    for path in ["PLAN.md", "plan.json"] {
+        if let Some(artifact) = ess.synthesis.get(path) {
+            artifacts.insert(format!("ess/synthesis/{path}"), artifact.contents.clone())?;
+        }
+    }
     artifacts.extend_ess("ess/projections", &ess.projections)?;
     artifacts.insert(RUNTIME_IR_PATH, runtime_ir.to_canonical_json())?;
     artifacts.insert(CLIENT_PLAN_PATH, client_plan.to_canonical_json())?;
+    artifacts.insert(REALIZATION_PLAN_PATH, realization_plan.to_canonical_json())?;
     artifacts.insert(
         CONNECTOR_CONTRIBUTION_PATH,
         connector_descriptor.to_canonical_json(),
@@ -98,6 +118,28 @@ pub fn build_service(
         runtime_ir,
         client_plan,
         connector_descriptor,
+        realization_plan,
         artifacts,
     })
+}
+
+/// Compiles one unified package and emits its complete compilable Rust and Connector factory.
+pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
+    let mut build = build_service(&package.sources, &package.definition)?;
+    package.validate_scenarios(&build.client_plan)?;
+    let generated = RealizationArtifacts::generate(
+        &build.realization_plan,
+        &build.client_plan,
+        &package.manifest.sdk,
+    )?;
+    for (path, contents) in generated.files {
+        build.artifacts.insert(path, contents)?;
+    }
+    for scenario in &package.scenarios {
+        build.artifacts.insert(
+            format!("conformance/{}", scenario.path),
+            scenario.contents.clone(),
+        )?;
+    }
+    Ok(build)
 }
