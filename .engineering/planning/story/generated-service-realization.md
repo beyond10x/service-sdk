@@ -2,13 +2,13 @@
 format: aep.planning-md/1
 id: story:generated-service-realization
 kind: story
-status: active
+status: implemented
 title: Generate complete service realizations
 summary: Provide versioned SDK obligations and synthesize definition-only services without handwritten runtime code.
 relations:
 - derived_from: epic:builder-runtime
 - serves: vision:composable-services
-revision: 3
+revision: 4
 ---
 # Generate complete service realizations
 
