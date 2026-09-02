@@ -114,7 +114,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 [[package]]
 name = "catalog"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "catalog-reader"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 
 [[package]]
 name = "cc"
@@ -191,7 +191,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 [[package]]
 name = "connector-address"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "thiserror",
 ]
@@ -199,7 +199,7 @@ dependencies = [
 [[package]]
 name = "connector-resolve"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -214,7 +214,7 @@ dependencies = [
 [[package]]
 name = "connector-secrets"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "thiserror",
 ]
@@ -364,7 +364,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -967,7 +967,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "domain",
  "schemars 1.2.2",
@@ -1205,7 +1205,7 @@ dependencies = [
 [[package]]
 name = "service"
 version = "0.4.1"
-source = "git+https://github.com/beyond10x/connectors.git?rev=1bf84ea4d28995857176577226405943c50ae256#1bf84ea4d28995857176577226405943c50ae256"
+source = "git+https://github.com/beyond10x/connectors.git?rev=c3f7cd952e7776e5496e4d369443a819daa15c44#c3f7cd952e7776e5496e4d369443a819daa15c44"
 dependencies = [
  "async-trait",
  "base64",
