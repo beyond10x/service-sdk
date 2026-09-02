@@ -471,8 +471,7 @@ use std::sync::Arc;
 pub const REALIZATION_PLAN_JSON: &str = include_str!("../../runtime/realization-plan.json");
 
 /// Exact generated, realm-free Connector catalog contribution.
-pub const CONNECTOR_CONTRIBUTION_JSON: &str =
-    include_str!("../../connectors/contribution.json");
+pub const CONNECTOR_CONTRIBUTION_JSON: &str = include_str!("../../connectors/contribution.json");
 
 /// Constructs the SDK-owned executor; deployment injects only resource adapters.
 pub fn service() -> Result<service_engine::ServiceEngine, service_engine::PlanError> {{
