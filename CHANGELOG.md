@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 - 2026-09-02
+
+- Align generated factories, external service catalogs, and conformance with the generic Connector
+  embedding seam that lets SIP-disabled compositions omit the unrelated voice dependency graph.
+- Preserve the existing external factory and deployment-overlay architecture; this release adds no
+  generated-service concept to Connectors.
+
 ## 0.2.3 - 2026-09-02
 
 - Keep service-console activity records reactive so completed live and demo calls repaint from
