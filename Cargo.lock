@@ -113,8 +113,8 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "catalog"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -123,8 +123,8 @@ dependencies = [
 
 [[package]]
 name = "catalog-reader"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 
 [[package]]
 name = "cc"
@@ -190,16 +190,16 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "connector-address"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "connector-resolve"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -213,8 +213,8 @@ dependencies = [
 
 [[package]]
 name = "connector-secrets"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -227,8 +227,8 @@ dependencies = [
 
 [[package]]
 name = "connector-state"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "thiserror",
 ]
@@ -363,8 +363,8 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -966,8 +966,8 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "domain",
  "schemars 1.2.2",
@@ -1204,8 +1204,8 @@ dependencies = [
 
 [[package]]
 name = "service"
-version = "0.4.4"
-source = "git+https://github.com/beyond10x/connectors.git?rev=6410df32d0f24c44b87ee26891e3259431740fa7#6410df32d0f24c44b87ee26891e3259431740fa7"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=ea335281ef8029ca4cb375768d98db3dc3135feb#ea335281ef8029ca4cb375768d98db3dc3135feb"
 dependencies = [
  "async-trait",
  "base64",

@@ -17,8 +17,9 @@ use connectors_protocol::operation::{
 };
 use connectors_service::{
     BackendCapabilities, BackendReadinessError, ConnectorBackend, ConnectorServiceFactory,
-    OperationEffect as ConnectorEffect, PrincipalContext, ServiceDeployment, ServiceDispatch,
-    ServiceFactoryBindError, ServiceManifest, ServiceOperation, ServiceProviderMetadata,
+    DelegatedExecution, OperationEffect as ConnectorEffect, PrincipalContext, ServiceDeployment,
+    ServiceDispatch, ServiceFactoryBindError, ServiceManifest, ServiceOperation,
+    ServiceProviderMetadata,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -27,7 +28,8 @@ use service_engine::{
 };
 use service_eventlog::{EventlogService, PageRequest};
 use service_runtime::{
-    AuthorityId, ExecutorId, RealmId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
+    AgentId, AttemptId, AuthorityId, DelegationId, ExecutorId, GrantId, RealmId, TenantId, UserId,
+    VerifiedAuthContext, VerifiedExecution, VerifiedIdentity,
 };
 use sha2::{Digest as _, Sha256};
 
@@ -833,8 +835,30 @@ fn verified_context(context: &PrincipalContext) -> Result<VerifiedAuthContext, O
         .map(RealmId::new)
         .transpose()
         .map_err(|_| unavailable())?;
-    Ok(VerifiedAuthContext::from_verified(
-        VerifiedIdentity::after_verification(tenant, authority, user, executor, realm),
+    let identity = match (executor, context.execution()) {
+        (Some(executor), Some(execution)) => VerifiedIdentity::after_verification_with_execution(
+            tenant,
+            authority,
+            user,
+            executor,
+            realm,
+            verified_execution(execution)?,
+        ),
+        (executor, None) => {
+            VerifiedIdentity::after_verification(tenant, authority, user, executor, realm)
+        }
+        (None, Some(_)) => return Err(unavailable()),
+    };
+    Ok(VerifiedAuthContext::from_verified(identity))
+}
+
+fn verified_execution(execution: &DelegatedExecution) -> Result<VerifiedExecution, OperationError> {
+    Ok(VerifiedExecution::after_verification(
+        AgentId::new(execution.agent_id()).map_err(|_| unavailable())?,
+        AttemptId::new(execution.attempt_id()).map_err(|_| unavailable())?,
+        DelegationId::new(execution.delegation_id()).map_err(|_| unavailable())?,
+        GrantId::new(execution.grant_id()).map_err(|_| unavailable())?,
+        execution.grant_revision(),
     ))
 }
 
@@ -1066,5 +1090,38 @@ mod tests {
             scopes["properties"]["principal"]["type"],
             json!(["string", "null"])
         );
+    }
+
+    #[test]
+    fn delegated_connector_provenance_reaches_generated_service_execution() {
+        let connector_execution = DelegatedExecution::after_verification(
+            "agent-7".into(),
+            "attempt-12".into(),
+            "delegation-4".into(),
+            "grant-9".into(),
+            3,
+        )
+        .unwrap();
+        let connector_context = PrincipalContext::hosted(
+            "tenant-1".into(),
+            "human-2".into(),
+            "agent-7".into(),
+            None,
+            "snapshot-1".into(),
+            "a".repeat(64),
+        )
+        .unwrap()
+        .with_verified_execution(connector_execution)
+        .unwrap();
+
+        let service_context = verified_context(&connector_context).unwrap();
+        let execution = service_context.execution().unwrap();
+        assert_eq!(service_context.user().as_str(), "human-2");
+        assert_eq!(service_context.executor().unwrap().as_str(), "agent-7");
+        assert_eq!(execution.agent().as_str(), "agent-7");
+        assert_eq!(execution.attempt().as_str(), "attempt-12");
+        assert_eq!(execution.delegation().as_str(), "delegation-4");
+        assert_eq!(execution.grant().as_str(), "grant-9");
+        assert_eq!(execution.grant_revision(), 3);
     }
 }

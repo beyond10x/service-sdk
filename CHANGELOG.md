@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Align generated Connector factories and conformance with Connectors 0.5.0, preserving
+  receiver-verified agent, attempt, delegation, and grant provenance through service execution.
 - Carry receiver-verified agent, attempt, delegation, and grant provenance alongside the existing
   generated-service authentication context.
 - Add bounded projection pages and authorized aggregate event cursors on top of the organization

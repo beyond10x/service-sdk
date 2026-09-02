@@ -20,8 +20,8 @@ service-connectors = { path = "../service-connectors" }
 service-runtime-ir = { path = "../service-runtime-ir" }
 thiserror.workspace = true
 
-connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "6410df32d0f24c44b87ee26891e3259431740fa7" }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "6410df32d0f24c44b87ee26891e3259431740fa7" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "ea335281ef8029ca4cb375768d98db3dc3135feb" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "ea335281ef8029ca4cb375768d98db3dc3135feb" }
 
 [dev-dependencies]
 service-definition = { path = "../service-definition" }
