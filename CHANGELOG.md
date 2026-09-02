@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3 - 2026-09-02
+
+- Keep service-console activity records reactive so completed live and demo calls repaint from
+  `running` to their exact result or failure state.
+- Cover the asynchronous activity result in the SDK widget test instead of observing only the
+  outbound binding call.
+
 ## 0.2.2 - 2026-09-02
 
 - Pin generated service documentation to the supported TypeScript 5 line and explicitly allow only
