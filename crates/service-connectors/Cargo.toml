@@ -22,8 +22,8 @@ sha2.workspace = true
 thiserror.workspace = true
 
 # Exact generator/runtime contract; updated to the landed Connectors commit before publishing.
-connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "c3f7cd952e7776e5496e4d369443a819daa15c44" }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "c3f7cd952e7776e5496e4d369443a819daa15c44" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "2208a885d8d5306526dfc985db3690a3cfc27825" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "2208a885d8d5306526dfc985db3690a3cfc27825" }
 
 [lints]
 workspace = true

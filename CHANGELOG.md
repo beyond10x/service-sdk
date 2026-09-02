@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 - 2026-09-02
+
+- Align generated Connector factories and conformance execution with Connectors 0.4.3 so composed
+  services share one exact factory trait with hosted Integration administration.
+
 ## 0.1.0 - 2026-09-02
 
 - Compile `service/1` packages from ESS semantics, runtime obligation bindings, exact SDK locks, and declarative scenarios.
