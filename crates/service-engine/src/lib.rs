@@ -35,6 +35,8 @@ pub struct ServicePlan {
     pub ess_source_digest: String,
     /// SDK obligation catalog digest.
     pub obligation_catalog_digest: String,
+    /// Closed plaintext-content policies enforced before the storage adapter sees bytes.
+    pub content: BTreeMap<String, ContentPolicyPlan>,
     /// Authenticated mutations by operation identity.
     pub intents: BTreeMap<String, IntentPlan>,
     /// Authenticated projection reads by operation identity.
@@ -43,6 +45,16 @@ pub struct ServicePlan {
     pub reducers: BTreeMap<String, ReducerPlan>,
     /// Projection row plans derived from ESS views.
     pub views: BTreeMap<String, ViewPlan>,
+}
+
+/// One generated plaintext-content admission policy.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContentPolicyPlan {
+    /// Exact media types accepted by the definition.
+    pub media_types: BTreeSet<String>,
+    /// Maximum UTF-8 payload size in bytes.
+    pub max_bytes: u64,
 }
 
 impl ServicePlan {
@@ -388,6 +400,25 @@ pub struct LoadedStream {
     pub events: Vec<StoredEvent>,
 }
 
+/// Structured aggregate identity handed to persistence adapters.
+///
+/// Tenant and realm are authenticated partition facts, never reconstructed from a route or a
+/// delimiter-bearing string. In particular, `None` and `Some("default")` remain distinct values.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServiceStream {
+    /// Generated service identity.
+    pub service: String,
+    /// Hidden authenticated tenant partition.
+    pub tenant: String,
+    /// Hidden exact optional realm partition.
+    pub realm: Option<String>,
+    /// Generated aggregate category.
+    pub category: String,
+    /// Aggregate identity inside the category.
+    pub key: String,
+}
+
 /// Append precondition sent unchanged to the adapter.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AppendExpectation {
@@ -401,13 +432,30 @@ pub enum AppendExpectation {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AppendRequest {
     /// Fully partitioned storage key.
-    pub stream: String,
+    pub stream: ServiceStream,
     /// Exact precondition.
     pub expected: AppendExpectation,
     /// Mutation idempotency identity.
     pub idempotency_key: String,
     /// Non-empty event batch.
     pub events: Vec<DomainEvent>,
+    /// Receiver-derived audit metadata.
+    pub metadata: AppendMetadata,
+}
+
+/// Audit facts derived by the SDK before an Eventlog adapter sees an append.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AppendMetadata {
+    /// Opaque authority identity recorded as the subject.
+    pub subject: String,
+    /// Opaque executor identity, or the authority when execution was direct.
+    pub actor: String,
+    /// Receiver request identity, falling back to the mutation idempotency identity.
+    pub request_id: String,
+    /// Trace join for this standalone invocation.
+    pub trace_id: String,
+    /// Trusted RFC3339 occurrence instant.
+    pub occurred_at: String,
 }
 
 /// Whether an append committed or replayed the original receipt.
@@ -433,7 +481,7 @@ pub trait EventStore: Send {
     /// Loads one complete stream.
     fn load<'a>(
         &'a mut self,
-        stream: &'a str,
+        stream: &'a ServiceStream,
     ) -> BoxFuture<'a, Result<LoadedStream, ResourceError>>;
     /// Atomically enforces version and idempotency while appending.
     fn append(
@@ -456,11 +504,21 @@ pub struct ProjectionRow {
     pub value: BTreeMap<String, Value>,
 }
 
+/// Projection row paired with its source entity identity for deterministic adapter keys.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeyedProjectionRow {
+    /// Source entity identity inside the aggregate.
+    pub entity_key: String,
+    /// Complete authenticated projection row.
+    pub row: ProjectionRow,
+}
+
 /// Projection write after a guarded append.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectionWrite {
     /// Aggregate stream.
-    pub stream: String,
+    pub stream: ServiceStream,
     /// Version rows represent.
     pub through_version: u64,
     /// Complete rows for this stream, replacing older rows idempotently.
@@ -500,6 +558,15 @@ pub struct StagedContent {
     pub token: String,
 }
 
+/// Validated plaintext passed to a deployment-selected content store.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ContentPayload<'a> {
+    /// Definition-admitted media type.
+    pub media_type: &'a str,
+    /// Plaintext bytes, already checked against the policy limit.
+    pub bytes: &'a [u8],
+}
+
 /// Content resource selected by deployment.
 pub trait ContentStore: Send {
     /// Stages caller plaintext idempotently and returns an opaque reference.
@@ -508,7 +575,7 @@ pub trait ContentStore: Send {
         context: &'a VerifiedAuthContext,
         policy: &'a str,
         idempotency_key: &'a str,
-        value: &'a Value,
+        payload: ContentPayload<'a>,
     ) -> BoxFuture<'a, Result<StagedContent, ResourceError>>;
     /// Accepts a staged object after append and projection succeed.
     fn accept<'a>(
@@ -611,6 +678,7 @@ pub struct IntentResult {
 }
 
 /// SDK-owned generated service executor.
+#[derive(Clone)]
 pub struct ServiceEngine {
     plan: ServicePlan,
 }
@@ -624,6 +692,28 @@ impl ServiceEngine {
     /// Returns the exact generated plan.
     pub const fn plan(&self) -> &ServicePlan {
         &self.plan
+    }
+
+    /// Apply one already-recorded domain event to SDK projection fold state.
+    ///
+    /// Eventlog adapters use this exact reducer rather than reimplementing generated semantics.
+    pub fn apply_projection_event(
+        &self,
+        state: &mut ProjectionState,
+        event: &DomainEvent,
+    ) -> Result<(), ExecutionError> {
+        reduce(&self.plan, state, event)
+    }
+
+    /// Materialize every generated view row for one aggregate fold and exact auth partition.
+    #[must_use]
+    pub fn projection_rows(
+        &self,
+        tenant: &str,
+        realm: Option<&str>,
+        state: &ProjectionState,
+    ) -> Vec<KeyedProjectionRow> {
+        projection_rows_for_partition(&self.plan, tenant, realm, state)
     }
 
     /// Executes an authenticated intent. Context policy is enforced before body decoding.
@@ -655,16 +745,18 @@ impl ServiceEngine {
             )?,
             StreamPlan::GeneratedUuidV7 => resources.ids.uuid_v7()?,
         };
-        let stream = partition_key(
-            &self.plan.service,
-            context,
-            plan.obligations
+        let stream = ServiceStream {
+            service: self.plan.service.clone(),
+            tenant: context.tenant().as_str().to_owned(),
+            realm: context.realm().map(|realm| realm.as_str().to_owned()),
+            category: plan
+                .obligations
                 .iter()
                 .find(|item| item.provider == "sdk.aggregate.event-sourced/v1")
                 .and_then(|item| item.bindings.get("category"))
-                .map_or("aggregate", String::as_str),
-            &stream_key,
-        );
+                .map_or_else(|| "aggregate".to_owned(), Clone::clone),
+            key: stream_key.clone(),
+        };
         let history = resources.events.load(&stream).await?;
         let state = fold(&self.plan, &history)?;
         run_intent_obligations(resources, context, plan, &state, &command).await?;
@@ -679,9 +771,10 @@ impl ServiceEngine {
                 let value = decoded
                     .get(&input.name)
                     .ok_or_else(|| ExecutionError::MissingInput(input.name.clone()))?;
+                let payload = content_payload(&self.plan, policy, &input.name, value)?;
                 match resources
                     .content
-                    .stage(context, policy, &idempotency_key, value)
+                    .stage(context, policy, &idempotency_key, payload)
                     .await
                 {
                     Ok(staged_item) => {
@@ -714,6 +807,8 @@ impl ServiceEngine {
                 return Err(error);
             }
         };
+        let occurred_at = resources.clock.now()?;
+        let request_id = metadata.request_id.unwrap_or(&idempotency_key).to_owned();
         let receipt = match resources
             .events
             .append(AppendRequest {
@@ -721,6 +816,16 @@ impl ServiceEngine {
                 expected,
                 idempotency_key,
                 events: events.clone(),
+                metadata: AppendMetadata {
+                    subject: context.authority().as_str().to_owned(),
+                    actor: context.executor().map_or_else(
+                        || context.authority().as_str().to_owned(),
+                        |executor| executor.as_str().to_owned(),
+                    ),
+                    trace_id: request_id.clone(),
+                    request_id,
+                    occurred_at,
+                },
             })
             .await
         {
@@ -733,7 +838,15 @@ impl ServiceEngine {
 
         let committed = resources.events.load(&stream).await?;
         let state = fold(&self.plan, &committed)?;
-        let rows = projection_rows(&self.plan, context, &state);
+        let rows = projection_rows_for_partition(
+            &self.plan,
+            context.tenant().as_str(),
+            context.realm().map(service_runtime::RealmId::as_str),
+            &state,
+        )
+        .into_iter()
+        .map(|row| row.row)
+        .collect();
         if let Err(error) = resources
             .projections
             .project(ProjectionWrite {
@@ -809,18 +922,21 @@ impl ServiceEngine {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct AggregateState {
+/// Serializable fold state used by SDK-owned inline Eventlog projectors.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectionState {
     entities: BTreeMap<String, BTreeMap<String, EntityValue>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 struct EntityValue {
     state: String,
     fields: BTreeMap<String, Value>,
 }
 
-fn fold(plan: &ServicePlan, history: &LoadedStream) -> Result<AggregateState, ExecutionError> {
+fn fold(plan: &ServicePlan, history: &LoadedStream) -> Result<ProjectionState, ExecutionError> {
     if history.events.last().map_or(0, |event| event.version) != history.version
         || history
             .events
@@ -830,7 +946,7 @@ fn fold(plan: &ServicePlan, history: &LoadedStream) -> Result<AggregateState, Ex
     {
         return Err(ExecutionError::InvalidHistory);
     }
-    let mut state = AggregateState::default();
+    let mut state = ProjectionState::default();
     for stored in &history.events {
         reduce(plan, &mut state, &stored.event)?;
     }
@@ -839,7 +955,7 @@ fn fold(plan: &ServicePlan, history: &LoadedStream) -> Result<AggregateState, Ex
 
 fn reduce(
     plan: &ServicePlan,
-    state: &mut AggregateState,
+    state: &mut ProjectionState,
     event: &DomainEvent,
 ) -> Result<(), ExecutionError> {
     let reducer = plan
@@ -937,7 +1053,7 @@ async fn run_intent_obligations(
     resources: &mut ServiceResources<'_>,
     context: &VerifiedAuthContext,
     plan: &IntentPlan,
-    state: &AggregateState,
+    state: &ProjectionState,
     command: &BTreeMap<String, Value>,
 ) -> Result<(), ExecutionError> {
     for obligation in &plan.obligations {
@@ -1052,7 +1168,7 @@ async fn run_intent_obligations(
 fn validate_lifetime(
     clock: &mut dyn Clock,
     obligation: &ObligationUse,
-    state: &AggregateState,
+    state: &ProjectionState,
     command: &BTreeMap<String, Value>,
 ) -> Result<(), ExecutionError> {
     let child_field = binding(obligation, "child_lifetime")?;
@@ -1100,7 +1216,7 @@ fn validate_future(
 fn validate_expiry_due(
     clock: &mut dyn Clock,
     obligation: &ObligationUse,
-    state: &AggregateState,
+    state: &ProjectionState,
     command: &BTreeMap<String, Value>,
 ) -> Result<(), ExecutionError> {
     let instances = state
@@ -1198,7 +1314,7 @@ fn produce_events(
     stream_id: &str,
     command: &BTreeMap<String, Value>,
     plan: &IntentPlan,
-    state: &AggregateState,
+    state: &ProjectionState,
 ) -> Result<Vec<DomainEvent>, ExecutionError> {
     let mut events = Vec::with_capacity(plan.outcome.events.len());
     for event in &plan.outcome.events {
@@ -1240,7 +1356,7 @@ fn obligation_value(
     provider: &str,
     entity: &str,
     field: &str,
-    state: &AggregateState,
+    state: &ProjectionState,
 ) -> Result<Value, ExecutionError> {
     if provider != "sdk.derive.inherit-parent-authority/v1" {
         return Err(ExecutionError::UnknownProvider(provider.to_owned()));
@@ -1293,11 +1409,12 @@ fn context_value(context: &VerifiedAuthContext, source: ContextSource) -> Value 
     }
 }
 
-fn projection_rows(
+fn projection_rows_for_partition(
     plan: &ServicePlan,
-    context: &VerifiedAuthContext,
-    state: &AggregateState,
-) -> Vec<ProjectionRow> {
+    tenant: &str,
+    realm: Option<&str>,
+    state: &ProjectionState,
+) -> Vec<KeyedProjectionRow> {
     let mut rows = Vec::new();
     for (view_name, view) in &plan.views {
         let hidden_by_terminal_parent = view.obligations.iter().any(|obligation| {
@@ -1322,7 +1439,7 @@ fn projection_rows(
             continue;
         }
         if let Some(instances) = state.entities.get(&view.source) {
-            for entity in instances.values() {
+            for (entity_key, entity) in instances {
                 let mut value = BTreeMap::new();
                 for field in &view.fields {
                     if field == "state" {
@@ -1331,11 +1448,14 @@ fn projection_rows(
                         value.insert(field.clone(), field_value.clone());
                     }
                 }
-                rows.push(ProjectionRow {
-                    view: view_name.clone(),
-                    tenant: context.tenant().as_str().to_owned(),
-                    realm: context.realm().map(|realm| realm.as_str().to_owned()),
-                    value,
+                rows.push(KeyedProjectionRow {
+                    entity_key: entity_key.clone(),
+                    row: ProjectionRow {
+                        view: view_name.clone(),
+                        tenant: tenant.to_owned(),
+                        realm: realm.map(str::to_owned),
+                        value,
+                    },
                 });
             }
         }
@@ -1418,7 +1538,7 @@ fn idempotency(
 }
 
 fn bound_entity<'a>(
-    state: &'a AggregateState,
+    state: &'a ProjectionState,
     obligation: &ObligationUse,
     binding_name: &str,
 ) -> Result<&'a EntityValue, ExecutionError> {
@@ -1464,27 +1584,37 @@ fn scalar_string(value: &Value, field: &str) -> Result<String, ExecutionError> {
         .ok_or_else(|| ExecutionError::InvalidInput(field.to_owned()))
 }
 
-fn partition_key(
-    service: &str,
-    context: &VerifiedAuthContext,
-    category: &str,
-    key: &str,
-) -> String {
-    let realm = context.realm().map_or_else(
-        || "0".to_owned(),
-        |realm| format!("1:{}:{}", realm.as_str().len(), realm.as_str()),
-    );
-    format!(
-        "service-stream/1|{}:{}|{}:{}|{realm}|{}:{}|{}:{}",
-        service.len(),
-        service,
-        context.tenant().as_str().len(),
-        context.tenant().as_str(),
-        category.len(),
-        category,
-        key.len(),
-        key
-    )
+fn content_payload<'a>(
+    service: &ServicePlan,
+    policy: &str,
+    input: &str,
+    value: &'a Value,
+) -> Result<ContentPayload<'a>, ExecutionError> {
+    let policy = service
+        .content
+        .get(policy)
+        .ok_or_else(|| ExecutionError::InvalidPlan(format!("content.{policy}")))?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| ExecutionError::InvalidInput(input.to_owned()))?;
+    if object.len() != 2 || !object.contains_key("media_type") || !object.contains_key("text") {
+        return Err(ExecutionError::InvalidInput(input.to_owned()));
+    }
+    let media_type = object["media_type"]
+        .as_str()
+        .ok_or_else(|| ExecutionError::InvalidInput(input.to_owned()))?;
+    let text = object["text"]
+        .as_str()
+        .ok_or_else(|| ExecutionError::InvalidInput(input.to_owned()))?;
+    if !policy.media_types.contains(media_type)
+        || u64::try_from(text.len()).map_or(true, |length| length > policy.max_bytes)
+    {
+        return Err(ExecutionError::InvalidInput(input.to_owned()));
+    }
+    Ok(ContentPayload {
+        media_type,
+        bytes: text.as_bytes(),
+    })
 }
 
 async fn abandon_all(
@@ -1653,6 +1783,7 @@ mod tests {
             realm: PlanRealmPolicy::Optional,
             ess_source_digest: "a".repeat(64),
             obligation_catalog_digest: "b".repeat(64),
+            content: BTreeMap::new(),
             intents: BTreeMap::new(),
             queries: BTreeMap::new(),
             reducers: BTreeMap::from([
@@ -1694,7 +1825,7 @@ mod tests {
             "item-a",
             &BTreeMap::from([("id".to_owned(), Value::String("item-a".to_owned()))]),
             &intent,
-            &AggregateState::default(),
+            &ProjectionState::default(),
         )
         .expect("the update sees the create before it");
 
@@ -1739,8 +1870,20 @@ mod tests {
     #[test]
     fn absent_and_default_realms_are_distinct_stream_partitions() {
         assert_ne!(
-            partition_key("demo", &context(None), "item", "item-a"),
-            partition_key("demo", &context(Some("default")), "item", "item-a")
+            ServiceStream {
+                service: "demo".to_owned(),
+                tenant: "tenant-a".to_owned(),
+                realm: None,
+                category: "item".to_owned(),
+                key: "item-a".to_owned(),
+            },
+            ServiceStream {
+                service: "demo".to_owned(),
+                tenant: "tenant-a".to_owned(),
+                realm: Some("default".to_owned()),
+                category: "item".to_owned(),
+                key: "item-a".to_owned(),
+            }
         );
     }
 }

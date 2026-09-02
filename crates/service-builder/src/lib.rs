@@ -131,7 +131,7 @@ pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
         &build.realization_plan,
         &build.client_plan,
         &package.manifest.sdk,
-    )?;
+    );
     for (path, contents) in generated.files {
         build.artifacts.insert(path, contents)?;
     }

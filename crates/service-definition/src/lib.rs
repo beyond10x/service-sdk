@@ -769,15 +769,15 @@ fn validate_intent(
         if let EventBindingSource::CommandField { field } = &binding.source {
             operation_field(diagnostics, &format!("{binding_path}.source.field"), field);
         }
-        if let EventBindingSource::Obligation { name } = &binding.source {
-            if !obligations.contains(name) {
-                dangling(
-                    diagnostics,
-                    &format!("{binding_path}.source.name"),
-                    "obligation",
-                    name,
-                );
-            }
+        if let EventBindingSource::Obligation { name } = &binding.source
+            && !obligations.contains(name)
+        {
+            dangling(
+                diagnostics,
+                &format!("{binding_path}.source.name"),
+                "obligation",
+                name,
+            );
         }
     }
 

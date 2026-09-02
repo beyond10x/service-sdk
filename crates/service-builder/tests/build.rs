@@ -427,7 +427,10 @@ scenarios: [scenario.yaml]
     let cargo = fs::read_to_string(output.join("rust/Cargo.toml")).unwrap();
     let rust = fs::read_to_string(output.join("rust/src/lib.rs")).unwrap();
     assert!(cargo.contains("rev = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""));
-    assert!(rust.contains("impl connectors_service::ConnectorServiceFactory"));
+    assert!(cargo.contains("service-connectors"));
+    assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
+    assert!(rust.contains("service_connectors::DurableEventStore"));
+    assert!(!rust.contains("dyn connectors_service::ConnectorBackend"));
     assert!(rust.contains("service_engine::ServiceEngine"));
     assert!(!rust.contains("Unimplemented"));
     assert!(!rust.contains("realm_id:"));
