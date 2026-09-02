@@ -22,7 +22,9 @@ use connectors_service::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use service_engine::{ExecutionError, InputSource, RequestMetadata, ServiceEngine, ServicePlan};
+use service_engine::{
+    ExecutionError, InputSource, ObligationUse, RequestMetadata, ServiceEngine, ServicePlan,
+};
 use service_eventlog::EventlogService;
 use service_runtime::{
     AuthorityId, ExecutorId, RealmId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
@@ -378,16 +380,21 @@ fn manifest(descriptor: &ConnectorServiceFactoryDescriptor, plan: &ServicePlan) 
 }
 
 fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value {
-    let inputs = match operation.kind {
-        OperationKind::Intent => plan
-            .intents
-            .get(&operation.operation)
-            .map(|item| &item.inputs),
-        OperationKind::Query => plan
-            .queries
-            .get(&operation.operation)
-            .map(|item| &item.inputs),
-    };
+    let (inputs, obligations): (Option<&[service_engine::InputPlan]>, &[ObligationUse]) =
+        match operation.kind {
+            OperationKind::Intent => plan
+                .intents
+                .get(&operation.operation)
+                .map_or((None, &[]), |item| {
+                    (Some(item.inputs.as_slice()), item.obligations.as_slice())
+                }),
+            OperationKind::Query => plan
+                .queries
+                .get(&operation.operation)
+                .map_or((None, &[]), |item| {
+                    (Some(item.inputs.as_slice()), item.obligations.as_slice())
+                }),
+        };
     let properties = operation
         .inputs
         .iter()
@@ -413,7 +420,8 @@ fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value 
                     json!({"type": "integer", "minimum": 0})
                 }
                 Some(InputSource::Idempotency) => json!({"type": "string", "minLength": 1}),
-                _ => json!({"title": input.type_ref}),
+                _ => obligation_input_schema(obligations, &input.name)
+                    .unwrap_or_else(|| json!({"title": input.type_ref})),
             };
             (input.name.clone(), schema)
         })
@@ -428,6 +436,70 @@ fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value 
         "type": "object",
         "properties": properties,
         "required": required,
+        "additionalProperties": false
+    })
+}
+
+fn obligation_input_schema(obligations: &[ObligationUse], input: &str) -> Option<Value> {
+    for obligation in obligations {
+        let binding = |name: &str| obligation.bindings.get(name).map(String::as_str);
+        match obligation.provider.as_str() {
+            "sdk.lifecycle.bounded-future/v1" if binding("lifetime") == Some(input) => {
+                return Some(lifetime_input_schema());
+            }
+            "sdk.lifecycle.expiring-parent-child/v1"
+                if binding("child_lifetime") == Some(input) =>
+            {
+                return Some(lifetime_input_schema());
+            }
+            "sdk.auth.requested-scopes/v1" if binding("scopes") == Some(input) => {
+                return Some(scope_bindings_input_schema());
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn lifetime_input_schema() -> Value {
+    json!({
+        "type": "object",
+        "description": "A bounded lifetime whose RFC 3339 expiry must be in the future.",
+        "properties": {
+            "expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "RFC 3339 timestamp strictly in the future."
+            }
+        },
+        "required": ["expires_at"],
+        "additionalProperties": false
+    })
+}
+
+fn scope_bindings_input_schema() -> Value {
+    json!({
+        "type": "object",
+        "description": "Optional conjunctive visibility scopes; an empty object is private to the owner.",
+        "properties": {
+            "principal": {"type": ["string", "null"], "minLength": 1},
+            "team": {"type": ["string", "null"], "minLength": 1},
+            "project": {"type": ["string", "null"], "minLength": 1},
+            "extension": {
+                "anyOf": [
+                    {"type": "null"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "kind": {"type": "string", "minLength": 1},
+                            "value": {"type": "string", "minLength": 1}
+                        },
+                        "required": ["kind", "value"],
+                        "additionalProperties": false
+                    }
+                ]
+            }
+        },
         "additionalProperties": false
     })
 }
@@ -893,6 +965,33 @@ mod tests {
         assert_eq!(
             ConnectorServiceFactoryDescriptor::new(invalid),
             Err(ContributionError::DuplicateOperation("add-item".into()))
+        );
+    }
+
+    #[test]
+    fn obligation_inputs_publish_the_shapes_the_runtime_enforces() {
+        let obligations = vec![
+            ObligationUse {
+                provider: "sdk.lifecycle.bounded-future/v1".to_owned(),
+                bindings: BTreeMap::from([("lifetime".to_owned(), "lifetime".to_owned())]),
+            },
+            ObligationUse {
+                provider: "sdk.auth.requested-scopes/v1".to_owned(),
+                bindings: BTreeMap::from([("scopes".to_owned(), "scopes".to_owned())]),
+            },
+        ];
+
+        let lifetime = obligation_input_schema(&obligations, "lifetime").unwrap();
+        assert_eq!(lifetime["type"], "object");
+        assert_eq!(lifetime["required"], json!(["expires_at"]));
+        assert_eq!(lifetime["properties"]["expires_at"]["format"], "date-time");
+
+        let scopes = obligation_input_schema(&obligations, "scopes").unwrap();
+        assert_eq!(scopes["type"], "object");
+        assert_eq!(scopes["additionalProperties"], false);
+        assert_eq!(
+            scopes["properties"]["principal"]["type"],
+            json!(["string", "null"])
         );
     }
 }

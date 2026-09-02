@@ -1207,9 +1207,11 @@ fn validate_future(
     let candidate = command
         .get(field)
         .and_then(lifetime_instant)
-        .ok_or_else(|| ExecutionError::ObligationRefused("invalid_lifetime".into()))?;
-    if parse_instant(candidate)? <= parse_instant(&clock.now()?)? {
-        return Err(ExecutionError::ObligationRefused("invalid_lifetime".into()));
+        .ok_or_else(|| ExecutionError::InvalidInput(field.to_owned()))?;
+    let candidate = OffsetDateTime::parse(candidate, &Rfc3339)
+        .map_err(|_| ExecutionError::InvalidInput(field.to_owned()))?;
+    if candidate <= parse_instant(&clock.now()?)? {
+        return Err(ExecutionError::InvalidInput(field.to_owned()));
     }
     Ok(())
 }
@@ -1753,6 +1755,14 @@ mod tests {
 
     struct FixedIds;
 
+    struct FixedClock;
+
+    impl Clock for FixedClock {
+        fn now(&mut self) -> Result<String, ResourceError> {
+            Ok("2026-09-02T10:00:00Z".to_owned())
+        }
+    }
+
     impl IdGenerator for FixedIds {
         fn uuid_v7(&mut self) -> Result<String, ResourceError> {
             Ok("01991f7e-2d66-7000-8000-000000000001".to_owned())
@@ -1925,6 +1935,32 @@ mod tests {
                 key: "item-a".to_owned(),
             }
         );
+    }
+
+    #[test]
+    fn malformed_or_elapsed_bounded_lifetimes_are_invalid_input() {
+        let obligation = ObligationUse {
+            provider: "sdk.lifecycle.bounded-future/v1".to_owned(),
+            bindings: BTreeMap::from([("lifetime".to_owned(), "lifetime".to_owned())]),
+        };
+        for lifetime in [
+            serde_json::json!("persistent"),
+            serde_json::json!({"kind": "session"}),
+            serde_json::json!({"expires_at": "not-a-timestamp"}),
+            serde_json::json!({"expires_at": "2026-09-02T09:59:59Z"}),
+        ] {
+            let command = BTreeMap::from([("lifetime".to_owned(), lifetime)]);
+            assert!(matches!(
+                validate_future(&mut FixedClock, &obligation, &command),
+                Err(ExecutionError::InvalidInput(field)) if field == "lifetime"
+            ));
+        }
+
+        let valid = BTreeMap::from([(
+            "lifetime".to_owned(),
+            serde_json::json!({"expires_at": "2026-09-03T10:00:00Z"}),
+        )]);
+        assert!(validate_future(&mut FixedClock, &obligation, &valid).is_ok());
     }
 
     fn live_parent_authority_plan() -> ServicePlan {
