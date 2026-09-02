@@ -15,6 +15,10 @@ use std::collections::BTreeMap;
 use anyhow::{Context as _, Result};
 use ess_compiler::EssIr;
 use ess_gen::Artifact;
+use service_catalog::{
+    CatalogAuthentication, CatalogOperation, CatalogOperationEffect, CatalogOperationKind,
+    RealmPolicy as CatalogRealmPolicy, SERVICE_CATALOG_FORMAT, ServiceCatalog,
+};
 use service_connectors::ConnectorServiceFactoryDescriptor;
 use service_definition::ServiceDefinition;
 use service_runtime_ir::ServiceRuntimeIr;
@@ -35,6 +39,9 @@ pub const CLIENT_PLAN_PATH: &str = "client/plan.json";
 
 /// Canonical generated inert Connector contribution path.
 pub const CONNECTOR_CONTRIBUTION_PATH: &str = "connectors/contribution.json";
+
+/// Canonical generated catalog consumed by docs, its external factory, and application widgets.
+pub const SERVICE_CATALOG_PATH: &str = "catalog/service-catalog.json";
 
 /// Canonical generated executable realization-plan path.
 pub const REALIZATION_PLAN_PATH: &str = "runtime/realization-plan.json";
@@ -63,6 +70,8 @@ pub struct ServiceBuild {
     ///
     /// The composing product supplies only its explicit `ServiceDeployment` binding.
     pub connector_descriptor: ConnectorServiceFactoryDescriptor,
+    /// Versioned application catalog derived from ESS and the exact executable operation schemas.
+    pub service_catalog: ServiceCatalog,
     /// SDK-executable realization plan derived from ESS and the runtime IR.
     pub realization_plan: service_engine::ServicePlan,
     /// Complete exclusively owned generated output tree.
@@ -96,6 +105,9 @@ pub fn build_service(
         .context("deriving inert Connector contribution")?;
     let realization_plan = realization::compile(&ess.ir, &runtime_ir, &client_plan)
         .context("compiling executable service realization plan")?;
+    let service_catalog =
+        build_service_catalog(&ess, &client_plan, &realization_plan, &connector_descriptor)
+            .context("deriving service catalog")?;
 
     let mut artifacts = ArtifactTree::new();
     artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
@@ -112,12 +124,14 @@ pub fn build_service(
         CONNECTOR_CONTRIBUTION_PATH,
         connector_descriptor.to_canonical_json(),
     )?;
+    artifacts.insert(SERVICE_CATALOG_PATH, service_catalog.to_canonical_json())?;
 
     Ok(ServiceBuild {
         ess,
         runtime_ir,
         client_plan,
         connector_descriptor,
+        service_catalog,
         realization_plan,
         artifacts,
     })
@@ -146,4 +160,63 @@ pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
         )?;
     }
     Ok(build)
+}
+
+fn build_service_catalog(
+    ess: &EssBuild,
+    client: &ClientPlan,
+    plan: &service_engine::ServicePlan,
+    descriptor: &ConnectorServiceFactoryDescriptor,
+) -> Result<ServiceCatalog> {
+    let ess_catalog = ess_synth::web::browser_catalog(&ess.ir, &ess.plan);
+    let semantic_catalog = serde_json::from_str(ess_catalog.as_json())
+        .context("ESS browser catalog is canonical JSON")?;
+    let operations = client
+        .operations
+        .iter()
+        .map(|operation| {
+            let (kind, effect) = match operation.kind {
+                client::ClientOperationKind::Intent => {
+                    (CatalogOperationKind::Intent, CatalogOperationEffect::Write)
+                }
+                client::ClientOperationKind::Query => {
+                    (CatalogOperationKind::Query, CatalogOperationEffect::Read)
+                }
+            };
+            let contribution = descriptor
+                .contribution()
+                .operations
+                .iter()
+                .find(|candidate| candidate.operation == operation.operation)
+                .ok_or_else(|| anyhow::anyhow!("catalog operation lost Connector binding"))?;
+            let (input_schema, output_schema) =
+                service_connectors::operation_schemas(plan, contribution);
+            Ok(CatalogOperation {
+                name: operation.operation.clone(),
+                operation_ref: format!("{}.{}", client.service, operation.operation),
+                semantic_ref: operation.semantic_ref.clone(),
+                kind,
+                effect,
+                input_schema,
+                output_schema,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    ServiceCatalog::new(ServiceCatalog {
+        format: SERVICE_CATALOG_FORMAT.to_owned(),
+        service_ref: format!("service:{}", client.service),
+        display_name: client.service.replace('_', " "),
+        description: format!("Generated {} service", client.service.replace('_', " ")),
+        semantic_catalog,
+        authentication: CatalogAuthentication {
+            source: "session".to_owned(),
+            realm_policy: match client.realm_policy {
+                service_definition::RealmPolicy::Required => CatalogRealmPolicy::Required,
+                service_definition::RealmPolicy::Optional => CatalogRealmPolicy::Optional,
+                service_definition::RealmPolicy::Forbidden => CatalogRealmPolicy::Forbidden,
+            },
+        },
+        operations,
+    })
+    .context("service catalog is valid")
 }

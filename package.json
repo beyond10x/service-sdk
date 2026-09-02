@@ -1,0 +1,30 @@
+{
+  "name": "@b10x/service-console-vue",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./web/service-console/src/index.ts"
+  },
+  "files": [
+    "web/service-console/src"
+  ],
+  "scripts": {
+    "web:typecheck": "vue-tsc --noEmit -p web/service-console/tsconfig.json",
+    "web:test": "vitest run --config web/service-console/vite.config.ts",
+    "web:check": "pnpm web:typecheck && pnpm web:test"
+  },
+  "dependencies": {
+    "vue": "^3.5.21"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^26.1.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.0.6"
+  },
+  "packageManager": "pnpm@10.15.0"
+}

@@ -10,7 +10,7 @@ use service_builder::client::{ClientInputSource, ClientOperationKind};
 use service_builder::ess::EssSources;
 use service_builder::{
     CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, ESS_IR_PATH, REALIZATION_PLAN_PATH,
-    RUNTIME_IR_PATH, build_service,
+    RUNTIME_IR_PATH, SERVICE_CATALOG_PATH, build_service,
 };
 use service_definition::{RealmPolicy, ServiceDefinition};
 
@@ -177,6 +177,7 @@ fn assert_expected_artifacts(build: &service_builder::ServiceBuild) {
     assert!(paths.contains(&REALIZATION_PLAN_PATH));
     assert!(paths.contains(&CLIENT_PLAN_PATH));
     assert!(paths.contains(&CONNECTOR_CONTRIBUTION_PATH));
+    assert!(paths.contains(&SERVICE_CATALOG_PATH));
     assert!(paths.contains(&"ess/synthesis/plan.json"));
     assert!(
         paths
@@ -264,6 +265,7 @@ fn assert_client_and_connector_surfaces(build: &service_builder::ServiceBuild) {
                 .map(|input| (&input.name, &input.type_ref, input.optional))
                 .collect::<Vec<_>>()
         );
+        assert_catalog_operation(build, client, connector);
     }
 
     let reserved = [
@@ -292,6 +294,23 @@ fn assert_client_and_connector_surfaces(build: &service_builder::ServiceBuild) {
             "generated Connector surface contains reserved input {forbidden}: {connector_json}"
         );
     }
+}
+
+fn assert_catalog_operation(
+    build: &service_builder::ServiceBuild,
+    client: &service_builder::client::ClientOperation,
+    connector: &service_connectors::OperationContribution,
+) {
+    let catalog = build
+        .service_catalog
+        .operations
+        .iter()
+        .find(|catalog| catalog.name == client.operation)
+        .expect("catalog operation is present");
+    let (input_schema, output_schema) =
+        service_connectors::operation_schemas(&build.realization_plan, connector);
+    assert_eq!(catalog.input_schema, input_schema);
+    assert_eq!(catalog.output_schema, output_schema);
 }
 
 static NEXT_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
@@ -428,15 +447,22 @@ scenarios: [scenario.yaml]
     let rust = fs::read_to_string(output.join("rust/src/lib.rs")).unwrap();
     assert!(cargo.contains("rev = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""));
     assert!(cargo.contains("service-connectors"));
+    assert!(cargo.contains("service-catalog"));
     assert!(cargo.contains("service-conformance"));
     assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
     assert!(rust.contains("service_connectors::DurableEventStore"));
     assert!(!rust.contains("dyn connectors_service::ConnectorBackend"));
     assert!(rust.contains("service_engine::ServiceEngine"));
+    assert!(rust.contains("pub fn service_catalog()"));
     assert!(!rust.contains("Unimplemented"));
     assert!(!rust.contains("realm_id:"));
     assert!(output.join(ESS_IR_PATH).is_file());
     assert!(output.join(REALIZATION_PLAN_PATH).is_file());
+    assert!(output.join(SERVICE_CATALOG_PATH).is_file());
+    assert!(output.join("docs/src/App.vue").is_file());
+    let docs = fs::read_to_string(output.join("docs/src/App.vue")).unwrap();
+    assert!(docs.contains("createDemoServiceBinding"));
+    assert!(!docs.contains("realm_id"));
     assert!(output.join("conformance/scenario.yaml").is_file());
     let scenario_test =
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();

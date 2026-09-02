@@ -379,6 +379,17 @@ fn manifest(descriptor: &ConnectorServiceFactoryDescriptor, plan: &ServicePlan) 
     }
 }
 
+/// Exact Connector input and output schemas derived from the executable realization plan.
+///
+/// The service catalog generator calls this same seam so the browser form and Connector manifest
+/// cannot describe different inputs.
+pub fn operation_schemas(plan: &ServicePlan, operation: &OperationContribution) -> (Value, Value) {
+    (
+        input_schema(plan, operation),
+        output_schema(plan, operation),
+    )
+}
+
 fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value {
     let (inputs, obligations): (Option<&[service_engine::InputPlan]>, &[ObligationUse]) =
         match operation.kind {

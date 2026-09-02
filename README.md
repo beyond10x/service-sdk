@@ -11,7 +11,7 @@ service/1 package
   -> ESS SynthesisPlan
   -> validated service-runtime-ir/2 + versioned obligation catalog
   -> SDK-executable realization plan
-  -> generated Rust service, client plan, validated scenario fixtures, and ConnectorServiceFactory
+  -> generated Rust service, client plan, service-catalog/1, docs, validated scenarios, and external Connector factories
 ```
 
 The SDK never guesses business logic or redefines ESS-owned meaning. Every runtime gap must select a
@@ -24,11 +24,13 @@ handwritten runtime hooks.
 - `service-definition`: author-facing runtime annotations referencing ESS semantic names.
 - `service-obligations`: closed, versioned SDK implementations and complete-coverage checks.
 - `service-runtime-ir`: closed, digest-bound, validated runtime realization contract.
+- `service-catalog`: exact generated catalog plus a read-only external `ServiceCatalogFactory`; it uses the ordinary Connector composition seam and adds nothing to Connectors.
 - `service-runtime`: transport-independent authenticated intent and guarded Eventlog execution ports.
 - `service-engine`: executes generated realization plans and owns obligation ordering and behavior; deployment injects resource adapters only.
 - `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products register factories and inject deployment policy plus authority-fact resolution after authentication.
-- `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, executable scenario tests, Rust services, and Connector factories.
+- `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, executable scenario tests, Rust services, catalogs, standalone docs, and Connector factories.
 - `service-conformance`: proves runtime IR, client plans, inert Connector descriptors, and declared scenarios remain one exact operation contract through the generated Connector seam.
+- `@b10x/service-console-vue`: reusable generic operation, lifecycle, view and activity UI. Standalone generated docs inject its explicit demo binding; products inject a session-authenticated BFF binding.
 
 ## Authority rule
 

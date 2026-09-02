@@ -423,8 +423,8 @@ dependencies = [
 
 [[package]]
 name = "ess-compiler"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d072442875eb1cdee56d64b07f23041ad60cdd1f#d072442875eb1cdee56d64b07f23041ad60cdd1f"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -435,8 +435,8 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d072442875eb1cdee56d64b07f23041ad60cdd1f#d072442875eb1cdee56d64b07f23041ad60cdd1f"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -448,8 +448,8 @@ dependencies = [
 
 [[package]]
 name = "ess-gen"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d072442875eb1cdee56d64b07f23041ad60cdd1f#d072442875eb1cdee56d64b07f23041ad60cdd1f"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -462,8 +462,8 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d072442875eb1cdee56d64b07f23041ad60cdd1f#d072442875eb1cdee56d64b07f23041ad60cdd1f"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -473,8 +473,8 @@ dependencies = [
 
 [[package]]
 name = "ess-synth"
-version = "0.2.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d072442875eb1cdee56d64b07f23041ad60cdd1f#d072442875eb1cdee56d64b07f23041ad60cdd1f"
+version = "0.3.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -1224,7 +1224,7 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1235,6 +1235,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "service-catalog",
  "service-connectors",
  "service-definition",
  "service-engine",
@@ -1244,8 +1245,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "service-catalog"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "protocol",
+ "serde",
+ "serde_json",
+ "service",
+ "sha2 0.11.0",
+ "thiserror",
+]
+
+[[package]]
 name = "service-conformance"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -1264,7 +1279,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -1282,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ess-compiler",
  "serde",
@@ -1292,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "futures",
  "serde",
@@ -1304,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "eventlog-core",
  "hex",
@@ -1319,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1330,7 +1345,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "futures",
  "serde",
@@ -1340,7 +1355,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "ess-compiler",
  "ess-domain",

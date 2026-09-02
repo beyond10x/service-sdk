@@ -27,5 +27,10 @@ tasks:
     cmds:
       - aep artifact validate
 
+  web-check:
+    cmds:
+      - pnpm install --frozen-lockfile
+      - pnpm web:check
+
   check:
-    deps: [fmt-check, clippy, test, doc, aep-check]
+    deps: [fmt-check, clippy, test, doc, aep-check, web-check]

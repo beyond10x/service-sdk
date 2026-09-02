@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/service-builder",
+    "crates/service-catalog",
     "crates/service-conformance",
     "crates/service-connectors",
     "crates/service-definition",
@@ -13,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
@@ -38,10 +39,10 @@ eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8
 eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/2.
-ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "d072442875eb1cdee56d64b07f23041ad60cdd1f" }
-ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "d072442875eb1cdee56d64b07f23041ad60cdd1f" }
-ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "d072442875eb1cdee56d64b07f23041ad60cdd1f" }
-ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "d072442875eb1cdee56d64b07f23041ad60cdd1f" }
+ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
+ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
+ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
+ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
 
 [workspace.lints.rust]
 missing_docs = "warn"
