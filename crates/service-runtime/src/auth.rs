@@ -60,6 +60,67 @@ identity_type!(AuthorityId, "authority");
 identity_type!(UserId, "user");
 identity_type!(ExecutorId, "executor");
 identity_type!(RealmId, "realm");
+identity_type!(AgentId, "agent");
+identity_type!(AttemptId, "attempt");
+identity_type!(DelegationId, "delegation");
+identity_type!(GrantId, "grant");
+
+/// Receiver-verified provenance for one delegated agent execution.
+///
+/// This value is deliberately not deserializable. A trusted transport adapter must validate the
+/// delegation and its current grant revision before constructing it.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct VerifiedExecution {
+    agent: AgentId,
+    attempt: AttemptId,
+    delegation: DelegationId,
+    grant: GrantId,
+    grant_revision: u64,
+}
+
+impl VerifiedExecution {
+    /// Records delegation coordinates after their issuer and grant revision were checked.
+    pub fn after_verification(
+        agent: AgentId,
+        attempt: AttemptId,
+        delegation: DelegationId,
+        grant: GrantId,
+        grant_revision: u64,
+    ) -> Self {
+        Self {
+            agent,
+            attempt,
+            delegation,
+            grant,
+            grant_revision,
+        }
+    }
+
+    /// Returns the verified agent identity.
+    pub fn agent(&self) -> &AgentId {
+        &self.agent
+    }
+
+    /// Returns the verified Agent Platform attempt.
+    pub fn attempt(&self) -> &AttemptId {
+        &self.attempt
+    }
+
+    /// Returns the delegation record that admitted the execution.
+    pub fn delegation(&self) -> &DelegationId {
+        &self.delegation
+    }
+
+    /// Returns the authoritative grant reference.
+    pub fn grant(&self) -> &GrantId {
+        &self.grant
+    }
+
+    /// Returns the exact grant revision evaluated by the receiver.
+    pub const fn grant_revision(&self) -> u64 {
+        self.grant_revision
+    }
+}
 
 /// Identity claims produced by a trusted authentication adapter.
 ///
@@ -72,6 +133,7 @@ pub struct VerifiedIdentity {
     user: UserId,
     executor: Option<ExecutorId>,
     realm: Option<RealmId>,
+    execution: Option<VerifiedExecution>,
 }
 
 impl VerifiedIdentity {
@@ -89,6 +151,26 @@ impl VerifiedIdentity {
             user,
             executor,
             realm,
+            execution: None,
+        }
+    }
+
+    /// Records identity plus receiver-verified delegated execution provenance.
+    pub fn after_verification_with_execution(
+        tenant: TenantId,
+        authority: AuthorityId,
+        user: UserId,
+        executor: ExecutorId,
+        realm: Option<RealmId>,
+        execution: VerifiedExecution,
+    ) -> Self {
+        Self {
+            tenant,
+            authority,
+            user,
+            executor: Some(executor),
+            realm,
+            execution: Some(execution),
         }
     }
 }
@@ -129,6 +211,11 @@ impl VerifiedAuthContext {
     /// Returns the realm supplied by authentication, if one was supplied.
     pub fn realm(&self) -> Option<&RealmId> {
         self.0.realm.as_ref()
+    }
+
+    /// Returns verified delegated execution provenance, when this is an agent call.
+    pub fn execution(&self) -> Option<&VerifiedExecution> {
+        self.0.execution.as_ref()
     }
 }
 
@@ -255,8 +342,38 @@ mod tests {
         );
         let context = VerifiedAuthContext::from_verified(identity);
         assert_eq!(context.executor(), None);
+        assert_eq!(context.execution(), None);
         assert_eq!(context.user().as_str(), "user-a");
         assert_eq!(context.authority().as_str(), "authority-a");
+    }
+
+    #[test]
+    fn delegated_execution_keeps_attempt_and_grant_provenance() {
+        let execution = VerifiedExecution::after_verification(
+            AgentId::new("agent-a").unwrap(),
+            AttemptId::new("attempt-a").unwrap(),
+            DelegationId::new("delegation-a").unwrap(),
+            GrantId::new("grant-a").unwrap(),
+            17,
+        );
+        let context = VerifiedAuthContext::from_verified(
+            VerifiedIdentity::after_verification_with_execution(
+                TenantId::new("tenant-a").unwrap(),
+                AuthorityId::new("person-a").unwrap(),
+                UserId::new("person-a").unwrap(),
+                ExecutorId::new("agent-a").unwrap(),
+                None,
+                execution,
+            ),
+        );
+
+        let execution = context.execution().unwrap();
+        assert_eq!(context.executor().unwrap().as_str(), "agent-a");
+        assert_eq!(execution.agent().as_str(), "agent-a");
+        assert_eq!(execution.attempt().as_str(), "attempt-a");
+        assert_eq!(execution.delegation().as_str(), "delegation-a");
+        assert_eq!(execution.grant().as_str(), "grant-a");
+        assert_eq!(execution.grant_revision(), 17);
     }
 
     #[test]

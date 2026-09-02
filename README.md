@@ -25,7 +25,7 @@ handwritten runtime hooks.
 - `service-obligations`: closed, versioned SDK implementations and complete-coverage checks.
 - `service-runtime-ir`: closed, digest-bound, validated runtime realization contract.
 - `service-catalog`: exact generated catalog plus a read-only external `ServiceCatalogFactory`; it uses the ordinary Connector composition seam and adds nothing to Connectors.
-- `service-runtime`: transport-independent authenticated intent and guarded Eventlog execution ports.
+- `service-runtime`: transport-independent authenticated intent, guarded Eventlog execution, verified delegated-execution provenance, and restart-safe external-effect ports.
 - `service-engine`: executes generated realization plans and owns obligation ordering and behavior; deployment injects resource adapters only.
 - `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products register factories and inject deployment policy plus authority-fact resolution after authentication.
 - `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, executable scenario tests, Rust services, catalogs, standalone docs, and Connector factories.
@@ -65,7 +65,26 @@ product theme dependency, while composed products can apply one palette to the e
 
 Authentication chooses tenant, authority, user, optional executor, and optional realm before application decoding. Realm never appears in routes or operation arguments. Optional realm absence is represented as `None`; it is not rewritten to `"default"`.
 
+An authenticated adapter may additionally attach receiver-verified agent, attempt, delegation,
+grant, and grant-revision provenance. These values have no deserializable request representation;
+generated services can only receive them from the trusted transport context.
+
 Generated factories accept an authority-fact resolver supplied by the authenticated deployment. This keeps project, team, extension, and capability membership out of service inputs while allowing obligation providers to evaluate those facts. The built-in fallback resolves only the authenticated subject and groups already present in the verified context.
+
+## Paging and external effects
+
+Generated projection queries accept an optional `$page` transport envelope containing an opaque
+cursor and a limit from 1 through 1000. Existing unpaged calls retain their array result; paged
+calls return visible `items`, `next_cursor`, and an explicit `partial` flag. Aggregate event feeds
+are separately bound to a deployment-supplied stream authorizer and reject cursors from another
+Eventlog incarnation or aggregate.
+
+External side effects use `service-effect-plan/1`: preview seals normalized input, bindings,
+aggregate and resource revisions, downstream authority, grant revision, risk, and consequences
+into one digest and stable operation identity. The Eventlog effect journal durably prepares that
+plan before dispatch, gives workers bounded claims, and records success, refusal, failure, or an
+explicit unknown result. Recovery observes the downstream operation identity before dispatch and
+turns transport uncertainty into `unknown` instead of repeating an effect blindly.
 
 ## Development
 

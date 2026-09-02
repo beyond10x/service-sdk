@@ -25,7 +25,7 @@ use serde_json::{Value, json};
 use service_engine::{
     ExecutionError, InputSource, ObligationUse, RequestMetadata, ServiceEngine, ServicePlan,
 };
-use service_eventlog::EventlogService;
+use service_eventlog::{EventlogService, PageRequest};
 use service_runtime::{
     AuthorityId, ExecutorId, RealmId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
 };
@@ -80,6 +80,15 @@ impl AuthorityFactsResolver for PrincipalAuthorityFacts {
 
 /// Persisted contribution format.
 pub const CONTRIBUTION_FORMAT: &str = "service-connector-contribution/1";
+const PAGE_INPUT: &str = "$page";
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct QueryPageInput {
+    #[serde(default)]
+    cursor: Option<String>,
+    limit: usize,
+}
 
 /// One inert service contribution.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -406,7 +415,7 @@ fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value 
                     (Some(item.inputs.as_slice()), item.obligations.as_slice())
                 }),
         };
-    let properties = operation
+    let mut properties = operation
         .inputs
         .iter()
         .map(|input| {
@@ -437,6 +446,20 @@ fn input_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value 
             (input.name.clone(), schema)
         })
         .collect::<serde_json::Map<_, _>>();
+    if operation.kind == OperationKind::Query {
+        properties.insert(
+            PAGE_INPUT.to_owned(),
+            json!({
+                "type": "object",
+                "properties": {
+                    "cursor": {"type": "string", "minLength": 1},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 1000}
+                },
+                "required": ["limit"],
+                "additionalProperties": false
+            }),
+        );
+    }
     let required = operation
         .inputs
         .iter()
@@ -540,13 +563,28 @@ fn output_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value
                         .collect::<serde_json::Map<_, _>>()
                 })
                 .unwrap_or_default();
+            let item = json!({
+                "type": "object",
+                "properties": properties,
+                "additionalProperties": false
+            });
             json!({
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": properties,
-                    "additionalProperties": false
-                }
+                "anyOf": [
+                    {
+                        "type": "array",
+                        "items": item.clone()
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "items": {"type": "array", "items": item},
+                            "next_cursor": {"type": ["string", "null"]},
+                            "partial": {"type": "boolean"}
+                        },
+                        "required": ["items", "next_cursor", "partial"],
+                        "additionalProperties": false
+                    }
+                ]
             })
         }
     }
@@ -672,11 +710,27 @@ impl GeneratedBackend {
                 ),
                 AuthorityFactsError::Unavailable => unavailable(),
             })?;
-        let body = serde_json::to_vec(&request.input).map_err(|_| invalid_input())?;
         let operation_name = self
             .operation_name(&request.operation_ref)
             .ok_or_else(not_found)?;
-        let output = if self.runtime.plan().intents.contains_key(operation_name) {
+        let is_intent = self.runtime.plan().intents.contains_key(operation_name);
+        let mut input = request.input.clone();
+        let page = if is_intent {
+            None
+        } else {
+            input
+                .as_object_mut()
+                .ok_or_else(invalid_input)?
+                .remove(PAGE_INPUT)
+                .map(|value| {
+                    let page: QueryPageInput =
+                        serde_json::from_value(value).map_err(|_| invalid_input())?;
+                    PageRequest::new(page.cursor, page.limit).map_err(|_| invalid_input())
+                })
+                .transpose()?
+        };
+        let body = serde_json::to_vec(&input).map_err(|_| invalid_input())?;
+        let output = if is_intent {
             serde_json::to_value(
                 self.runtime
                     .intent(
@@ -688,6 +742,14 @@ impl GeneratedBackend {
                         operation_name,
                         &body,
                     )
+                    .await
+                    .map_err(|error| execution_error(&error))?,
+            )
+            .map_err(|_| unavailable())?
+        } else if let Some(page) = page {
+            serde_json::to_value(
+                self.runtime
+                    .query_page(&auth, facts, operation_name, &body, page)
                     .await
                     .map_err(|error| execution_error(&error))?,
             )

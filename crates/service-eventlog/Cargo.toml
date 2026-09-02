@@ -16,9 +16,14 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 time.workspace = true
+thiserror.workspace = true
 uuid.workspace = true
 service-engine = { path = "../service-engine" }
 service-runtime = { path = "../service-runtime" }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+eventlog-sqlite.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

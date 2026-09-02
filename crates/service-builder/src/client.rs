@@ -62,6 +62,21 @@ pub struct ClientOperation {
     pub inputs: Vec<ClientInput>,
     /// Typed result surface.
     pub result: ClientResult,
+    /// SDK transport pagination for projection queries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<ClientPagination>,
+}
+
+/// Transport-owned page controls added without becoming semantic query inputs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClientPagination {
+    /// Reserved Connector input envelope.
+    pub envelope: String,
+    /// Maximum accepted page size.
+    pub maximum_limit: usize,
+    /// Continuation tokens are opaque and bound to one projection partition.
+    pub opaque_cursor: bool,
 }
 
 /// Whether a client operation mutates or reads service state.
@@ -340,6 +355,7 @@ fn intent_operation(
         result: ClientResult::Intent {
             emitted_events: resolved.emitted_events.clone(),
         },
+        pagination: None,
     })
 }
 
@@ -379,6 +395,11 @@ fn query_operation(
         result: ClientResult::Query {
             fields: resolved.fields.clone(),
         },
+        pagination: Some(ClientPagination {
+            envelope: "$page".to_owned(),
+            maximum_limit: 1_000,
+            opaque_cursor: true,
+        }),
     })
 }
 

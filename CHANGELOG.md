@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Carry receiver-verified agent, attempt, delegation, and grant provenance alongside the existing
+  generated-service authentication context.
+- Add bounded projection pages and authorized aggregate event cursors on top of the organization
+  Eventlog implementation.
+- Add exact external-effect plans, an Eventlog-backed durable prepare/claim/complete journal, and
+  a recovery-first adapter contract that records uncertain outcomes instead of blind retries.
+
 ## 0.3.0 - 2026-09-02
 
 - Add a documented semantic CSS token contract so composed products can theme the generated Vue

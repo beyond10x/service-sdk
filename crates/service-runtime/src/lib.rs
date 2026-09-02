@@ -9,6 +9,7 @@ use std::pin::Pin;
 
 mod auth;
 mod content;
+mod effect;
 mod eventlog;
 mod execution;
 mod projection;
@@ -20,13 +21,19 @@ mod projection;
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 pub use auth::{
-    AuthorityId, ContextPolicyViolation, ExecutorId, InvalidIdentity, RealmId, RealmPolicy,
-    TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
+    AgentId, AttemptId, AuthorityId, ContextPolicyViolation, DelegationId, ExecutorId, GrantId,
+    InvalidIdentity, RealmId, RealmPolicy, TenantId, UserId, VerifiedAuthContext,
+    VerifiedExecution, VerifiedIdentity,
 };
 pub use content::{
     ContentAbandonReason, ContentAbandonRequest, ContentAcceptRequest, ContentDigest, ContentId,
     ContentLifecycle, ContentMetadataError, ContentPayload, ContentRef, ContentStageRequest,
     MediaType, StagedContent,
+};
+pub use effect::{
+    ClaimDisposition, EFFECT_PLAN_FORMAT, EffectAdapter, EffectClaim, EffectDispatchError,
+    EffectJournal, EffectObservation, EffectOutcome, EffectPlan, EffectPlanError, EffectRecord,
+    EffectRisk, EffectState, PreparedEffect, resume_effect,
 };
 pub use eventlog::{
     AppendDisposition, AppendError, AppendReceipt, EventEnvelope, EventHistory, EventId, EventLog,
