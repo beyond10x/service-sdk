@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1 - 2026-09-02
+
+- Align generated Connector factories, catalogs, and conformance execution with Connectors 0.4.4 so downstream runtimes share one exact service trait while consuming the hosted catalog and provider-profile update.
+
 ## 0.2.0 - 2026-09-02
 
 - Generate exact `service-catalog/1` documents from ESS's `ess-browser-catalog/1` and the same runtime schemas published by each domain Connector factory.
