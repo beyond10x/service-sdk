@@ -442,5 +442,17 @@ scenarios: [scenario.yaml]
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
     assert!(scenario_test.contains("run_connector_scenarios"));
     assert!(scenario_test.contains("conformance/scenario.yaml"));
+    let formatted = Command::new("rustfmt")
+        .arg("--edition")
+        .arg("2024")
+        .arg("--check")
+        .arg(output.join("rust/tests/generated_scenarios.rs"))
+        .output()
+        .expect("run rustfmt against generated scenario test");
+    assert!(
+        formatted.status.success(),
+        "generated scenario test is not rustfmt-clean: {}",
+        String::from_utf8_lossy(&formatted.stdout)
+    );
     assert!(!output.join("ess/synthesis/Cargo.toml").exists());
 }
