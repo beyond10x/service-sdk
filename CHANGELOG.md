@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 - 2026-09-02
+
+- Add a documented semantic CSS token contract so composed products can theme the generated Vue
+  service console without product-specific props or storage coupling.
+- Preserve accessible neutral fallbacks, inherited native control color scheme, and explicit focus,
+  status, code, and elevation styling for standalone generated documentation.
+
 ## 0.2.4 - 2026-09-02
 
 - Align generated factories, external service catalogs, and conformance with the generic Connector

@@ -32,6 +32,35 @@ handwritten runtime hooks.
 - `service-conformance`: proves runtime IR, client plans, inert Connector descriptors, and declared scenarios remain one exact operation contract through the generated Connector seam.
 - `@b10x/service-console-vue`: reusable generic operation, lifecycle, view and activity UI. Standalone generated docs inject its explicit demo binding; products inject a session-authenticated BFF binding.
 
+## Service console theming
+
+The Vue console inherits an optional semantic CSS contract from its host. A product may set these
+custom properties on any ancestor of `ServiceConsole`; missing values retain the console's neutral,
+system-aware defaults:
+
+| Token | Purpose |
+| --- | --- |
+| `--b10x-color-canvas` | Widget canvas |
+| `--b10x-color-surface` | Cards and controls |
+| `--b10x-color-surface-muted` | Operation navigation and quiet regions |
+| `--b10x-color-text` | Primary text |
+| `--b10x-color-text-muted` | Secondary text |
+| `--b10x-color-border` | Dividers and control borders |
+| `--b10x-color-accent` | Header, selected state, and primary action |
+| `--b10x-color-on-accent` | Content drawn on the accent |
+| `--b10x-color-success` | Successful activity |
+| `--b10x-color-warning` | Warning and demo surfaces |
+| `--b10x-color-danger` | Failed activity |
+| `--b10x-color-focus` | Keyboard focus ring |
+| `--b10x-color-code-surface` | Structured output background |
+| `--b10x-color-code-text` | Structured output foreground |
+| `--b10x-color-overlay` | Reserved for console overlays |
+| `--b10x-shadow-panel` | Widget and selected-panel elevation |
+
+The contract is deliberately preference-agnostic: the widget accepts no named theme, reads no host
+storage, and inherits native `color-scheme`. Generated standalone documentation therefore needs no
+product theme dependency, while composed products can apply one palette to the entire surface.
+
 ## Authority rule
 
 Authentication chooses tenant, authority, user, optional executor, and optional realm before application decoding. Realm never appears in routes or operation arguments. Optional realm absence is represented as `None`; it is not rewritten to `"default"`.

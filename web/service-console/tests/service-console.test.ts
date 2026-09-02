@@ -7,6 +7,7 @@ import {
   createDemoServiceBinding,
   type ServiceCatalog,
 } from "../src";
+import serviceConsoleSource from "../src/ServiceConsole.vue?raw";
 
 const catalog: ServiceCatalog = {
   format: "service-catalog/1",
@@ -87,6 +88,28 @@ describe("ServiceConsole", () => {
       output: [],
       connector_audit_ref: "demo:1",
     });
+  });
+
+  it("consumes the complete semantic theme contract without named themes", () => {
+    const tokens = [
+      "--b10x-color-canvas",
+      "--b10x-color-surface",
+      "--b10x-color-surface-muted",
+      "--b10x-color-text",
+      "--b10x-color-text-muted",
+      "--b10x-color-border",
+      "--b10x-color-accent",
+      "--b10x-color-on-accent",
+      "--b10x-color-success",
+      "--b10x-color-warning",
+      "--b10x-color-danger",
+      "--b10x-color-focus",
+      "--b10x-color-code-surface",
+      "--b10x-color-code-text",
+      "--b10x-shadow-panel",
+    ];
+    for (const token of tokens) expect(serviceConsoleSource).toContain(`var(${token},`);
+    expect(serviceConsoleSource).not.toMatch(/monokai|solarized|localStorage/i);
   });
 
   it("refuses authentication coordinates in a catalog form", () => {

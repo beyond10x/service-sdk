@@ -269,12 +269,15 @@ function controlType(schema: JsonSchema): string {
 
 <style scoped>
 .service-console {
-  color: #14201d;
-  background: #f5f3eb;
-  border: 1px solid #d9d5c7;
+  color: var(--b10x-color-text, #14201d);
+  background: var(--b10x-color-canvas, #f5f3eb);
+  border: 1px solid var(--b10x-color-border, #d9d5c7);
   border-radius: 20px;
+  box-shadow: var(--b10x-shadow-panel, none);
   overflow: hidden;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color-scheme: inherit;
+  accent-color: var(--b10x-color-accent, #176b5b);
 }
 .hero {
   display: flex;
@@ -282,8 +285,8 @@ function controlType(schema: JsonSchema): string {
   gap: 2rem;
   align-items: end;
   padding: 2rem;
-  background: #173d34;
-  color: #f8f4e7;
+  background: var(--b10x-color-accent, #173d34);
+  color: var(--b10x-color-on-accent, #f8f4e7);
 }
 .hero h1 {
   margin: 0.2rem 0;
@@ -295,23 +298,28 @@ function controlType(schema: JsonSchema): string {
   max-width: 55ch;
 }
 .hero code {
-  color: #d7ef95;
+  color: var(--b10x-color-on-accent, #d7ef95);
 }
 .eyebrow {
   margin: 0;
-  color: #6b8179;
+  color: var(--b10x-color-text-muted, #6b8179);
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 .hero .eyebrow {
-  color: #d7ef95;
+  color: var(--b10x-color-on-accent, #d7ef95);
 }
 .notice {
   padding: 0.8rem 2rem;
-  background: #fff0b8;
-  border-bottom: 1px solid #e0cc7d;
+  color: var(--b10x-color-text, #14201d);
+  background: color-mix(
+    in srgb,
+    var(--b10x-color-warning, #9a6a15) 16%,
+    var(--b10x-color-surface, #fff)
+  );
+  border-bottom: 1px solid var(--b10x-color-border, #d9d5c7);
 }
 .console-grid {
   display: grid;
@@ -323,8 +331,8 @@ function controlType(schema: JsonSchema): string {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem;
-  background: #ebe8de;
-  border-right: 1px solid #d9d5c7;
+  background: var(--b10x-color-surface-muted, #ebe8de);
+  border-right: 1px solid var(--b10x-color-border, #d9d5c7);
 }
 .operations button {
   display: grid;
@@ -338,14 +346,14 @@ function controlType(schema: JsonSchema): string {
   cursor: pointer;
 }
 .operations button.selected {
-  background: #fff;
-  border-color: #a7b6ae;
-  box-shadow: 0 4px 16px #173d3412;
+  background: var(--b10x-color-surface, #fff);
+  border-color: var(--b10x-color-accent, #176b5b);
+  box-shadow: var(--b10x-shadow-panel, 0 4px 16px #173d3412);
 }
 .operations small,
 .operation-form small,
 .activity small {
-  color: #6b8179;
+  color: var(--b10x-color-text-muted, #6b8179);
 }
 .operation-form {
   display: grid;
@@ -366,10 +374,19 @@ function controlType(schema: JsonSchema): string {
   width: 100%;
   box-sizing: border-box;
   padding: 0.7rem 0.8rem;
-  border: 1px solid #a7b6ae;
+  color: var(--b10x-color-text, #14201d);
+  border: 1px solid var(--b10x-color-border, #a7b6ae);
   border-radius: 8px;
-  background: #fff;
+  background: var(--b10x-color-surface, #fff);
   font: inherit;
+}
+.operation-form input:not([type="checkbox"]):focus-visible,
+.operation-form select:focus-visible,
+.operation-form textarea:focus-visible,
+.operations button:focus-visible,
+.run:focus-visible {
+  outline: 3px solid var(--b10x-color-focus, #4c9f8b);
+  outline-offset: 2px;
 }
 .confirmation {
   display: flex;
@@ -381,8 +398,8 @@ function controlType(schema: JsonSchema): string {
   padding: 0.75rem 1.1rem;
   border: 0;
   border-radius: 999px;
-  background: #d7ef95;
-  color: #173d34;
+  background: var(--b10x-color-accent, #176b5b);
+  color: var(--b10x-color-on-accent, #fff);
   font-weight: 800;
   cursor: pointer;
 }
@@ -395,12 +412,13 @@ function controlType(schema: JsonSchema): string {
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
   padding: 1.5rem 2rem;
-  border-top: 1px solid #d9d5c7;
+  border-top: 1px solid var(--b10x-color-border, #d9d5c7);
 }
 .model-card {
   padding: 1rem;
   margin: 0.75rem 0;
-  background: #fff;
+  background: var(--b10x-color-surface, #fff);
+  border: 1px solid var(--b10x-color-border, transparent);
   border-radius: 10px;
 }
 .model-card h3 {
@@ -408,20 +426,20 @@ function controlType(schema: JsonSchema): string {
 }
 .activity {
   padding: 1.5rem 2rem 2rem;
-  border-top: 1px solid #d9d5c7;
+  border-top: 1px solid var(--b10x-color-border, #d9d5c7);
 }
 .activity article {
   margin-top: 0.75rem;
   padding: 1rem;
-  background: #fff;
-  border-left: 4px solid #6b8179;
+  background: var(--b10x-color-surface, #fff);
+  border-left: 4px solid var(--b10x-color-text-muted, #6b8179);
   border-radius: 8px;
 }
 .activity article[data-status="succeeded"] {
-  border-color: #68a357;
+  border-color: var(--b10x-color-success, #487b3c);
 }
 .activity article[data-status="failed"] {
-  border-color: #c05249;
+  border-color: var(--b10x-color-danger, #ad3e35);
 }
 .activity article > div {
   display: flex;
@@ -431,12 +449,12 @@ function controlType(schema: JsonSchema): string {
 pre {
   overflow: auto;
   padding: 0.8rem;
-  background: #14201d;
-  color: #e7f4e5;
+  background: var(--b10x-color-code-surface, #14201d);
+  color: var(--b10x-color-code-text, #e7f4e5);
   border-radius: 6px;
 }
 .empty {
-  color: #6b8179;
+  color: var(--b10x-color-text-muted, #6b8179);
   font-style: italic;
 }
 @media (max-width: 760px) {
@@ -450,7 +468,7 @@ pre {
   }
   .operations {
     border-right: 0;
-    border-bottom: 1px solid #d9d5c7;
+    border-bottom: 1px solid var(--b10x-color-border, #d9d5c7);
   }
 }
 </style>
