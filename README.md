@@ -26,13 +26,15 @@ handwritten runtime hooks.
 - `service-runtime-ir`: closed, digest-bound, validated runtime realization contract.
 - `service-runtime`: transport-independent authenticated intent and guarded Eventlog execution ports.
 - `service-engine`: executes generated realization plans and owns obligation ordering and behavior; deployment injects resource adapters only.
-- `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products only register factories and supply deployment policy.
-- `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, fixtures, Rust services, and Connector factories.
-- `service-conformance`: proves runtime IR, client plans, and inert Connector descriptors remain one exact operation contract.
+- `service-connectors`: inert service contributions used by generated `ConnectorServiceFactory` implementations; products register factories and inject deployment policy plus authority-fact resolution after authentication.
+- `service-builder`: transactionally loads `service/1`, validates scenarios against its generated operation surface, compiles ESS/runtime IR, and emits deterministic plans, executable scenario tests, Rust services, and Connector factories.
+- `service-conformance`: proves runtime IR, client plans, inert Connector descriptors, and declared scenarios remain one exact operation contract through the generated Connector seam.
 
 ## Authority rule
 
 Authentication chooses tenant, authority, user, optional executor, and optional realm before application decoding. Realm never appears in routes or operation arguments. Optional realm absence is represented as `None`; it is not rewritten to `"default"`.
+
+Generated factories accept an authority-fact resolver supplied by the authenticated deployment. This keeps project, team, extension, and capability membership out of service inputs while allowing obligation providers to evaluate those facts. The built-in fallback resolves only the authenticated subject and groups already present in the verified context.
 
 ## Development
 

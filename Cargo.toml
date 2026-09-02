@@ -35,6 +35,7 @@ uuid = { version = "1", features = ["v7"] }
 
 # The organization persistence kit is the only generated-service event/projection/blob backend.
 eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
+eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/2.
 ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "d072442875eb1cdee56d64b07f23041ad60cdd1f" }

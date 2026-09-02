@@ -428,6 +428,7 @@ scenarios: [scenario.yaml]
     let rust = fs::read_to_string(output.join("rust/src/lib.rs")).unwrap();
     assert!(cargo.contains("rev = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""));
     assert!(cargo.contains("service-connectors"));
+    assert!(cargo.contains("service-conformance"));
     assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
     assert!(rust.contains("service_connectors::DurableEventStore"));
     assert!(!rust.contains("dyn connectors_service::ConnectorBackend"));
@@ -437,5 +438,9 @@ scenarios: [scenario.yaml]
     assert!(output.join(ESS_IR_PATH).is_file());
     assert!(output.join(REALIZATION_PLAN_PATH).is_file());
     assert!(output.join("conformance/scenario.yaml").is_file());
+    let scenario_test =
+        fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
+    assert!(scenario_test.contains("run_connector_scenarios"));
+    assert!(scenario_test.contains("conformance/scenario.yaml"));
     assert!(!output.join("ess/synthesis/Cargo.toml").exists());
 }

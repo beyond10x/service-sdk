@@ -108,6 +108,23 @@ struct ScenarioAuth {
     user: String,
     #[serde(default)]
     executor: Option<String>,
+    #[serde(default)]
+    facts: ScenarioFacts,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScenarioFacts {
+    #[serde(default)]
+    principals: BTreeSet<String>,
+    #[serde(default)]
+    teams: BTreeSet<String>,
+    #[serde(default)]
+    projects: BTreeSet<String>,
+    #[serde(default)]
+    extensions: BTreeSet<String>,
+    #[serde(default)]
+    capabilities: BTreeSet<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,6 +132,8 @@ struct ScenarioAuth {
 struct ScenarioIntent {
     intent: String,
     input: BTreeMap<String, Value>,
+    #[serde(default = "default_auth_fixture")]
+    using: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -130,12 +149,18 @@ struct ScenarioQuery {
     query: String,
     input: BTreeMap<String, Value>,
     count: usize,
+    #[serde(default = "default_auth_fixture")]
+    using: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ScenarioPartitions {
     partitions_are_distinct: [String; 2],
+}
+
+fn default_auth_fixture() -> String {
+    "auth".to_owned()
 }
 
 impl ServicePackage {
@@ -266,6 +291,7 @@ impl ScenarioDocument {
     fn validate_operations(&self, client: &ClientPlan, path: &str) -> Result<()> {
         for scenario in &self.scenarios {
             for intent in &scenario.when {
+                validate_auth_fixture(&scenario.given, path, &scenario.name, &intent.using)?;
                 validate_operation(
                     client,
                     path,
@@ -278,6 +304,7 @@ impl ScenarioDocument {
             for assertion in &scenario.then {
                 match assertion {
                     ScenarioAssertion::Query(query) => {
+                        validate_auth_fixture(&scenario.given, path, &scenario.name, &query.using)?;
                         validate_operation(
                             client,
                             path,
@@ -322,7 +349,32 @@ fn validate_auth(auth: &ScenarioAuth, path: &str, scenario: &str) -> Result<()> 
     {
         bail!("scenario {path:?} case {scenario:?} has an empty authentication coordinate");
     }
+    if auth
+        .facts
+        .principals
+        .iter()
+        .chain(&auth.facts.teams)
+        .chain(&auth.facts.projects)
+        .chain(&auth.facts.extensions)
+        .chain(&auth.facts.capabilities)
+        .any(|value| value.trim().is_empty())
+    {
+        bail!("scenario {path:?} case {scenario:?} has an empty authority fact");
+    }
     Ok(())
+}
+
+fn validate_auth_fixture(
+    given: &ScenarioGiven,
+    path: &str,
+    scenario: &str,
+    fixture: &str,
+) -> Result<()> {
+    if auth_fixture_exists(given, fixture) {
+        Ok(())
+    } else {
+        bail!("scenario {path:?} case {scenario:?} names unknown auth fixture {fixture:?}")
+    }
 }
 
 fn auth_fixture_exists(given: &ScenarioGiven, name: &str) -> bool {

@@ -10,14 +10,22 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+async-trait = "0.1"
+eventlog-sqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml.workspace = true
 service-builder = { path = "../service-builder" }
 service-connectors = { path = "../service-connectors" }
 service-runtime-ir = { path = "../service-runtime-ir" }
+thiserror.workspace = true
+
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "1bf84ea4d28995857176577226405943c50ae256" }
 
 [dev-dependencies]
 service-definition = { path = "../service-definition" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

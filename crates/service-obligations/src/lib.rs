@@ -118,6 +118,23 @@ const CATALOG: &[CatalogEntry] = &[
         ],
     },
     CatalogEntry {
+        provider: "sdk.derive.inherit-parent-authority/v2",
+        required_bindings: &[
+            "parent",
+            "child",
+            "parent_owner",
+            "parent_scopes",
+            "child_owner",
+            "child_scopes",
+        ],
+        optional_bindings: &[],
+        surfaces: &[
+            ObligationSurface::Intent,
+            ObligationSurface::Projection,
+            ObligationSurface::EventBinding,
+        ],
+    },
+    CatalogEntry {
         provider: "sdk.content.external-erasable/v1",
         required_bindings: &["content"],
         optional_bindings: &[],

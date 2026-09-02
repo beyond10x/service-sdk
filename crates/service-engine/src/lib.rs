@@ -1061,6 +1061,7 @@ async fn run_intent_obligations(
             "sdk.aggregate.event-sourced/v1"
             | "sdk.content.external-erasable/v1"
             | "sdk.derive.inherit-parent-authority/v1"
+            | "sdk.derive.inherit-parent-authority/v2"
             | "sdk.projection.auth-partitioned-visibility/v1"
             | "sdk.projection.hide-terminal-parent/v1" => {}
             "sdk.auth.owner-and-conjunctive-scopes/v1" => {
@@ -1358,7 +1359,10 @@ fn obligation_value(
     field: &str,
     state: &ProjectionState,
 ) -> Result<Value, ExecutionError> {
-    if provider != "sdk.derive.inherit-parent-authority/v1" {
+    if !matches!(
+        provider,
+        "sdk.derive.inherit-parent-authority/v1" | "sdk.derive.inherit-parent-authority/v2"
+    ) {
         return Err(ExecutionError::UnknownProvider(provider.to_owned()));
     }
     state
@@ -1448,6 +1452,34 @@ fn projection_rows_for_partition(
                         value.insert(field.clone(), field_value.clone());
                     }
                 }
+                if let Some(obligation) = view.obligations.iter().find(|obligation| {
+                    obligation.provider == "sdk.derive.inherit-parent-authority/v2"
+                }) {
+                    let parent = obligation
+                        .bindings
+                        .get("parent")
+                        .and_then(|parent| state.entities.get(parent))
+                        .and_then(|instances| instances.values().next());
+                    let inherited = parent.and_then(|parent| {
+                        let parent_owner = binding_field(obligation, "parent_owner")?;
+                        let parent_scopes = binding_field(obligation, "parent_scopes")?;
+                        let child_owner = binding_field(obligation, "child_owner")?;
+                        let child_scopes = binding_field(obligation, "child_scopes")?;
+                        Some((
+                            child_owner,
+                            parent.fields.get(parent_owner)?.clone(),
+                            child_scopes,
+                            parent.fields.get(parent_scopes)?.clone(),
+                        ))
+                    });
+                    let Some((child_owner, owner, child_scopes, scopes)) = inherited else {
+                        // Live inheritance fails closed: an inconsistent child never becomes a
+                        // projection row with stale authority copied at creation time.
+                        continue;
+                    };
+                    value.insert(child_owner.to_owned(), owner);
+                    value.insert(child_scopes.to_owned(), scopes);
+                }
                 rows.push(KeyedProjectionRow {
                     entity_key: entity_key.clone(),
                     row: ProjectionRow {
@@ -1461,6 +1493,14 @@ fn projection_rows_for_partition(
         }
     }
     rows
+}
+
+fn binding_field<'a>(obligation: &'a ObligationUse, name: &str) -> Option<&'a str> {
+    obligation
+        .bindings
+        .get(name)
+        .map(String::as_str)
+        .map(|path| path.rsplit_once('.').map_or(path, |(_, field)| field))
 }
 
 fn decode_inputs(
@@ -1884,6 +1924,150 @@ mod tests {
                 category: "item".to_owned(),
                 key: "item-a".to_owned(),
             }
+        );
+    }
+
+    fn live_parent_authority_plan() -> ServicePlan {
+        let inherit = InheritancePlan {
+            parent: "demo.List".to_owned(),
+            parent_owner: "owner".to_owned(),
+            parent_scopes: "scopes".to_owned(),
+            child_owner: "owner".to_owned(),
+            child_scopes: "scopes".to_owned(),
+        };
+        ServicePlan {
+            format: REALIZATION_PLAN_FORMAT.to_owned(),
+            service: "demo".to_owned(),
+            realm: PlanRealmPolicy::Optional,
+            ess_source_digest: "a".repeat(64),
+            obligation_catalog_digest: "b".repeat(64),
+            content: BTreeMap::new(),
+            intents: BTreeMap::new(),
+            queries: BTreeMap::new(),
+            reducers: BTreeMap::from([
+                (
+                    "demo.ListCreated".to_owned(),
+                    ReducerPlan {
+                        entity: "demo.List".to_owned(),
+                        identity_field: "list_id".to_owned(),
+                        effect: ReducerEffect::Create {
+                            initial_state: "Active".to_owned(),
+                        },
+                        fields: vec!["owner".to_owned(), "scopes".to_owned()],
+                        inherit: None,
+                    },
+                ),
+                (
+                    "demo.ItemAdded".to_owned(),
+                    ReducerPlan {
+                        entity: "demo.Item".to_owned(),
+                        identity_field: "item_id".to_owned(),
+                        effect: ReducerEffect::Create {
+                            initial_state: "Open".to_owned(),
+                        },
+                        fields: vec![
+                            "list_id".to_owned(),
+                            "owner".to_owned(),
+                            "scopes".to_owned(),
+                        ],
+                        inherit: Some(inherit),
+                    },
+                ),
+                (
+                    "demo.ListTransferred".to_owned(),
+                    ReducerPlan {
+                        entity: "demo.List".to_owned(),
+                        identity_field: "list_id".to_owned(),
+                        effect: ReducerEffect::Update,
+                        fields: vec!["owner".to_owned()],
+                        inherit: None,
+                    },
+                ),
+            ]),
+            views: BTreeMap::from([(
+                "demo.Items".to_owned(),
+                ViewPlan {
+                    source: "demo.Item".to_owned(),
+                    fields: vec![
+                        "item_id".to_owned(),
+                        "list_id".to_owned(),
+                        "owner".to_owned(),
+                        "scopes".to_owned(),
+                        "state".to_owned(),
+                    ],
+                    obligations: vec![ObligationUse {
+                        provider: "sdk.derive.inherit-parent-authority/v2".to_owned(),
+                        bindings: BTreeMap::from([
+                            ("parent".to_owned(), "demo.List".to_owned()),
+                            ("child".to_owned(), "demo.Item".to_owned()),
+                            ("parent_owner".to_owned(), "demo.List.owner".to_owned()),
+                            ("parent_scopes".to_owned(), "demo.List.scopes".to_owned()),
+                            ("child_owner".to_owned(), "demo.Item.owner".to_owned()),
+                            ("child_scopes".to_owned(), "demo.Item.scopes".to_owned()),
+                        ]),
+                    }],
+                },
+            )]),
+        }
+    }
+
+    #[test]
+    fn live_parent_authority_replaces_child_projection_authority_after_transfer() {
+        let mut plan = live_parent_authority_plan();
+        let scopes = serde_json::json!({
+            "principal": null,
+            "team": null,
+            "project": null,
+            "extension": null
+        });
+        let mut state = ProjectionState::default();
+        for event in [
+            DomainEvent {
+                name: "demo.ListCreated".to_owned(),
+                fields: BTreeMap::from([
+                    ("list_id".to_owned(), Value::String("list-a".to_owned())),
+                    ("owner".to_owned(), Value::String("person-a".to_owned())),
+                    ("scopes".to_owned(), scopes.clone()),
+                ]),
+            },
+            DomainEvent {
+                name: "demo.ItemAdded".to_owned(),
+                fields: BTreeMap::from([
+                    ("item_id".to_owned(), Value::String("item-a".to_owned())),
+                    ("list_id".to_owned(), Value::String("list-a".to_owned())),
+                ]),
+            },
+            DomainEvent {
+                name: "demo.ListTransferred".to_owned(),
+                fields: BTreeMap::from([
+                    ("list_id".to_owned(), Value::String("list-a".to_owned())),
+                    ("owner".to_owned(), Value::String("person-b".to_owned())),
+                ]),
+            },
+        ] {
+            reduce(&plan, &mut state, &event).expect("the event is valid");
+        }
+
+        let rows = projection_rows_for_partition(&plan, "tenant-a", None, &state);
+        let item = &rows
+            .iter()
+            .find(|row| row.row.view == "demo.Items")
+            .expect("the child row remains materialized")
+            .row
+            .value;
+        assert_eq!(item["owner"], Value::String("person-b".to_owned()));
+        assert_eq!(item["scopes"], scopes);
+
+        plan.views
+            .get_mut("demo.Items")
+            .expect("view exists")
+            .obligations[0]
+            .provider = "sdk.derive.inherit-parent-authority/v1".to_owned();
+        let legacy = projection_rows_for_partition(&plan, "tenant-a", None, &state);
+        assert_eq!(
+            legacy[0].row.value["owner"],
+            Value::String("person-a".to_owned()),
+            "v1 remains frozen as creation-time inheritance"
         );
     }
 }

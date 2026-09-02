@@ -5,6 +5,8 @@
 //! inputs, results, kinds, and effects. Authentication context remains outside every caller input;
 //! realm policy survives only as client-generation metadata.
 
+mod scenarios;
+
 use std::collections::{BTreeMap, btree_map::Entry};
 use std::fmt;
 
@@ -16,6 +18,8 @@ use service_connectors::{
     ConnectorServiceFactoryDescriptor, OperationContribution, OperationEffect, OperationKind,
 };
 use service_runtime_ir::ServiceRuntimeIr;
+
+pub use scenarios::{ScenarioConformanceError, run_connector_scenarios};
 
 /// Canonical serialized report format.
 pub const CONFORMANCE_REPORT_FORMAT: &str = "service-conformance-report/1";

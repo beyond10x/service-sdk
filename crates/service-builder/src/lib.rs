@@ -131,6 +131,10 @@ pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
         &build.realization_plan,
         &build.client_plan,
         &package.manifest.sdk,
+        package
+            .scenarios
+            .iter()
+            .map(|scenario| scenario.path.as_str()),
     );
     for (path, contents) in generated.files {
         build.artifacts.insert(path, contents)?;

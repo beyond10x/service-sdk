@@ -6,7 +6,8 @@ use service_builder::client::{ClientInput, ClientInputSource, ClientOperationKin
 use service_builder::ess::EssSources;
 use service_builder::{ServiceBuild, build_service};
 use service_conformance::{
-    CONFORMANCE_REPORT_FORMAT, ConformanceReport, ViolationCode, check, validate,
+    CONFORMANCE_REPORT_FORMAT, ConformanceReport, ViolationCode, check, run_connector_scenarios,
+    validate,
 };
 use service_connectors::{
     ConnectorServiceFactoryDescriptor, ContributionError, OperationEffect, OperationKind,
@@ -125,7 +126,7 @@ intents:
         field: owner
         source: { kind: context, value: current_authority }
     projections: [item_by_id]
-    obligations: [aggregate, bind_owner, content_lifecycle]
+    obligations: [aggregate, content_lifecycle]
 queries:
   - name: get_item
     view: demo.todo.ItemById
@@ -152,6 +153,39 @@ fn codes(report: &ConformanceReport) -> Vec<ViolationCode> {
         .iter()
         .map(|violation| violation.code)
         .collect()
+}
+
+#[tokio::test]
+async fn generated_scenarios_execute_through_the_connector_factory() {
+    let build = fixture();
+    let realization = build.realization_plan.to_canonical_json();
+    let contribution = build.connector_descriptor.to_canonical_json();
+    let scenario = r"
+format: service-scenarios/1
+service: demo_todo
+scenarios:
+  - name: invoke_and_keep_realms_distinct
+    given:
+      auth: { tenant: tenant-a, realm: null, authority: person-a, user: person-a }
+      other_auth: { tenant: tenant-a, realm: default, authority: person-a, user: person-a }
+    when:
+      - intent: add_item
+        input:
+          body: { media_type: text/plain, text: First item }
+          expected_version: 0
+          idempotency_key: add-item-1
+          item_id: 01991f7e-2d66-7000-8000-000000000001
+    then:
+      - partitions_are_distinct: [auth, other_auth]
+";
+
+    run_connector_scenarios(
+        &realization,
+        &contribution,
+        &[("scenarios/demo.yaml", scenario)],
+    )
+    .await
+    .expect("the generated Connector executes the declared intent and realm assertion");
 }
 
 #[test]
