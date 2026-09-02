@@ -66,6 +66,8 @@ tokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }}\n",
             ("rust/src/lib.rs".to_owned(), source),
             ("docs/package.json".to_owned(), docs_package_json(sdk)),
             ("docs/index.html".to_owned(), docs_index_html()),
+            ("docs/pnpm-workspace.yaml".to_owned(), docs_pnpm_workspace()),
+            ("docs/tsconfig.json".to_owned(), docs_tsconfig()),
             ("docs/vite.config.ts".to_owned(), docs_vite_config()),
             ("docs/src/main.ts".to_owned(), docs_main()),
             ("docs/src/App.vue".to_owned(), docs_app()),
@@ -563,11 +565,36 @@ fn docs_package_json(sdk: &SdkLock) -> String {
     "@b10x/service-console-vue": "git+{}#{}",
     "vue": "^3.5.0"
   }},
-  "devDependencies": {{"@vitejs/plugin-vue": "^6.0.0", "vite": "^7.0.0", "vue-tsc": "^3.0.0"}}
+  "devDependencies": {{
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.0.0"
+  }}
 }}
 "#,
         sdk.repository, sdk.revision
     )
+}
+
+fn docs_pnpm_workspace() -> String {
+    "allowBuilds:\n  esbuild: true\n".to_owned()
+}
+
+fn docs_tsconfig() -> String {
+    r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}
+"#
+    .to_owned()
 }
 
 fn docs_index_html() -> String {

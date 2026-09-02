@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 - 2026-09-02
+
+- Pin generated service documentation to the supported TypeScript 5 line and explicitly allow only
+  esbuild's install step, keeping standalone docs reproducible under current pnpm defaults.
+
 ## 0.2.1 - 2026-09-02
 
 - Align generated Connector factories, catalogs, and conformance execution with Connectors 0.4.4 so downstream runtimes share one exact service trait while consuming the hosted catalog and provider-profile update.

@@ -463,6 +463,13 @@ scenarios: [scenario.yaml]
     let docs = fs::read_to_string(output.join("docs/src/App.vue")).unwrap();
     assert!(docs.contains("createDemoServiceBinding"));
     assert!(!docs.contains("realm_id"));
+    let docs_package = fs::read_to_string(output.join("docs/package.json")).unwrap();
+    assert!(docs_package.contains("\"typescript\": \"^5.9.0\""));
+    assert_eq!(
+        fs::read_to_string(output.join("docs/pnpm-workspace.yaml")).unwrap(),
+        "allowBuilds:\n  esbuild: true\n"
+    );
+    assert!(output.join("docs/tsconfig.json").is_file());
     assert!(output.join("conformance/scenario.yaml").is_file());
     let scenario_test =
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
