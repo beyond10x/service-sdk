@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - 2026-09-03
+
+- Align generated-service Connector factories and conformance contracts with Connectors 0.5.2,
+  retaining delegated execution provenance across the released composition boundary.
+
 ## Unreleased
 
 - Align generated Connector factories and conformance with Connectors 0.5.0, preserving
