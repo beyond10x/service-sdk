@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use service_builder::client::{ClientInputSource, ClientOperationKind};
 use service_builder::ess::EssSources;
 use service_builder::{
-    CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, ESS_IR_PATH, REALIZATION_PLAN_PATH,
-    RUNTIME_IR_PATH, SERVICE_CATALOG_PATH, build_service,
+    CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, ESS_IR_PATH, HTTP_OPENAPI_PATH,
+    REALIZATION_PLAN_PATH, RUNTIME_IR_PATH, SERVICE_CATALOG_PATH, build_service,
 };
 use service_definition::{RealmPolicy, ServiceDefinition};
 
@@ -74,8 +74,9 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/2
+format: service-definition/3
 service: demo_todo
+delivery: { kind: identity_http, audience: urn:b10x:demo-todo }
 realm: optional
 content:
   - name: item_content
@@ -113,6 +114,7 @@ projections:
     obligations: [bind_owner, visibility]
 intents:
   - name: add_item
+    scope: items.manage
     command: demo.todo.AddItem
     stream_id: { kind: command_field, field: item_id }
     expected_version: { kind: operation_field, field: expected_version }
@@ -129,6 +131,7 @@ intents:
     obligations: [aggregate, bind_owner, content_lifecycle]
 queries:
   - name: get_item
+    scope: items.read
     view: demo.todo.ItemById
     projection: item_by_id
     selectors:
@@ -178,6 +181,7 @@ fn assert_expected_artifacts(build: &service_builder::ServiceBuild) {
     assert!(paths.contains(&CLIENT_PLAN_PATH));
     assert!(paths.contains(&CONNECTOR_CONTRIBUTION_PATH));
     assert!(paths.contains(&SERVICE_CATALOG_PATH));
+    assert!(paths.contains(&HTTP_OPENAPI_PATH));
     assert!(paths.contains(&"ess/synthesis/plan.json"));
     assert!(
         paths
@@ -206,6 +210,7 @@ fn assert_client_and_connector_surfaces(build: &service_builder::ServiceBuild) {
         .find(|operation| operation.operation == "add_item")
         .expect("intent is present");
     assert_eq!(intent.kind, ClientOperationKind::Intent);
+    assert_eq!(intent.scope, "items.manage");
     assert_eq!(intent.semantic_ref, "demo.todo.AddItem");
     assert_eq!(
         intent
@@ -236,6 +241,7 @@ fn assert_client_and_connector_surfaces(build: &service_builder::ServiceBuild) {
         .find(|operation| operation.operation == "get_item")
         .expect("query is present");
     assert_eq!(query.kind, ClientOperationKind::Query);
+    assert_eq!(query.scope, "items.read");
     assert_eq!(query.semantic_ref, "demo.todo.ItemById");
     assert_eq!(query.inputs.len(), 1);
     assert_eq!(query.inputs[0].name, "item_id");
@@ -388,6 +394,7 @@ fn cli_generate_then_check_detects_byte_drift() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn unified_package_emits_compilable_service_and_connector_factory_sources() {
     let temporary = TestDirectory::new();
     let ess = temporary.path().join("ess");
@@ -448,17 +455,26 @@ scenarios: [scenario.yaml]
     assert!(cargo.contains("rev = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""));
     assert!(cargo.contains("service-connectors"));
     assert!(cargo.contains("service-catalog"));
+    assert!(cargo.contains("service-http"));
     assert!(cargo.contains("service-conformance"));
     assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
     assert!(rust.contains("service_connectors::DurableEventStore"));
     assert!(!rust.contains("dyn connectors_service::ConnectorBackend"));
     assert!(rust.contains("service_engine::ServiceEngine"));
     assert!(rust.contains("pub fn service_catalog()"));
+    assert!(rust.contains("pub struct DemoClient"));
+    assert!(rust.contains("pub async fn add_item"));
+    assert!(rust.contains("pub async fn get_item"));
+    assert!(rust.contains("pub async fn http_router"));
     assert!(!rust.contains("Unimplemented"));
     assert!(!rust.contains("realm_id:"));
     assert!(output.join(ESS_IR_PATH).is_file());
     assert!(output.join(REALIZATION_PLAN_PATH).is_file());
     assert!(output.join(SERVICE_CATALOG_PATH).is_file());
+    let http_openapi = fs::read_to_string(output.join(HTTP_OPENAPI_PATH)).unwrap();
+    assert!(http_openapi.contains("urn:b10x:demo-todo"));
+    assert!(http_openapi.contains("items.manage"));
+    assert!(http_openapi.contains("items.read"));
     assert!(output.join("docs/src/App.vue").is_file());
     let docs = fs::read_to_string(output.join("docs/src/App.vue")).unwrap();
     assert!(docs.contains("createDemoServiceBinding"));

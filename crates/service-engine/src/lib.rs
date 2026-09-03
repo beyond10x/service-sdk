@@ -11,12 +11,13 @@ use std::pin::Pin;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use service_runtime::{RealmPolicy, VerifiedAuthContext};
+use sha2::{Digest as _, Sha256};
 use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 /// The realization-plan format executed by this engine.
-pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/1";
+pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/2";
 
 /// Allocation-explicit future returned by injected resource ports.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -29,6 +30,8 @@ pub struct ServicePlan {
     pub format: String,
     /// Stable service identity.
     pub service: String,
+    /// Explicit generated delivery boundary.
+    pub delivery: PlanDelivery,
     /// Exact optional-realm admission policy.
     pub realm: PlanRealmPolicy,
     /// Compiler-minted ESS semantic digest.
@@ -92,6 +95,19 @@ pub enum PlanRealmPolicy {
     Optional,
     /// Authentication must omit realm.
     Forbidden,
+}
+
+/// Public delivery boundary compiled into the executable plan.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PlanDelivery {
+    /// Identity-authenticated HTTP using one exact audience.
+    IdentityHttp {
+        /// Resource audience required by every generated operation.
+        audience: String,
+    },
+    /// Product-composed Connector factory only.
+    ComposedConnector,
 }
 
 impl PlanRealmPolicy {
@@ -197,6 +213,8 @@ pub struct ObligationUse {
 pub struct IntentPlan {
     /// ESS command identity.
     pub command: String,
+    /// Exact OAuth scope checked by the HTTP boundary before input decoding.
+    pub scope: String,
     /// Closed caller input inventory.
     pub inputs: Vec<InputPlan>,
     /// Aggregate stream key derivation.
@@ -219,6 +237,8 @@ pub struct IntentPlan {
 pub struct QueryPlan {
     /// ESS view identity.
     pub view: String,
+    /// Exact OAuth scope checked by the HTTP boundary before input decoding.
+    pub scope: String,
     /// Closed caller selector inventory.
     pub inputs: Vec<InputPlan>,
     /// SDK implementations applied to returned rows.
@@ -287,6 +307,47 @@ pub enum ValueSource {
         /// Provider-bound source field.
         field: String,
     },
+    /// Canonical value derived from the active graph in the folded aggregate.
+    GraphSnapshot {
+        /// Entity collection holding graph nodes.
+        nodes: String,
+        /// Entity collection holding graph edges.
+        edges: String,
+        /// Command field selecting the draft/partition.
+        partition: String,
+        /// Node field carrying the partition identity.
+        node_partition: String,
+        /// Edge field carrying the partition identity.
+        edge_partition: String,
+        /// Node identity field emitted into snapshot rows.
+        node_identity: String,
+        /// Edge identity field emitted into snapshot rows.
+        edge_identity: String,
+        /// Edge source-node field.
+        edge_source: String,
+        /// Edge target-node field.
+        edge_target: String,
+        /// Lifecycle state included in the published graph.
+        active_state: String,
+        /// Which canonical value the event field receives.
+        output: GraphSnapshotOutput,
+    },
+}
+
+/// Canonical graph value exposed to one generated event field.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphSnapshotOutput {
+    /// Ordered active node rows.
+    Nodes,
+    /// Ordered active edge rows.
+    Edges,
+    /// SHA-256 of the canonical node/edge object.
+    Digest,
+    /// Number of active nodes.
+    NodeCount,
+    /// Number of active edges.
+    EdgeCount,
 }
 
 /// Verified-context value available to generated event binding.
@@ -1171,19 +1232,21 @@ async fn run_intent_obligations(
                 }
             }
             "sdk.aggregate.nested-entity/v1" => {
-                let child = binding(obligation, "child")?;
-                let identity_field = binding(obligation, "child_identity")?;
-                let identity = command
-                    .get(identity_field)
-                    .ok_or_else(|| ExecutionError::MissingInput(identity_field.to_owned()))?;
-                let identity = scalar_string(identity, identity_field)?;
-                if !state
-                    .entities
-                    .get(child)
-                    .is_some_and(|instances| instances.contains_key(&identity))
-                {
-                    return Err(ExecutionError::ObligationRefused("not_found".into()));
-                }
+                require_nested_entity(state, obligation, command)?;
+            }
+            "sdk.graph.connect-dag/v1" => {
+                let source = command_binding_string(command, obligation, "source")?;
+                let target = command_binding_string(command, obligation, "target")?;
+                graph_materialization(state, obligation, command, Some((&source, &target)))?;
+            }
+            "sdk.graph.node-unreferenced/v1" => {
+                require_unreferenced_node(state, obligation, command)?;
+            }
+            "sdk.graph.publish-snapshot/v1" => {
+                graph_materialization(state, obligation, command, None)?;
+            }
+            "sdk.aggregate.owned-revision/v1" => {
+                require_owned_revision(state, obligation, command)?;
             }
             "sdk.lifecycle.expiring-parent-child/v1" => {
                 validate_lifetime(resources.clock, obligation, state, command)?;
@@ -1198,6 +1261,313 @@ async fn run_intent_obligations(
         }
     }
     Ok(())
+}
+
+fn require_nested_entity(
+    state: &ProjectionState,
+    obligation: &ObligationUse,
+    command: &BTreeMap<String, Value>,
+) -> Result<(), ExecutionError> {
+    let parent = binding(obligation, "parent")?;
+    let parent_key = command_binding_string(command, obligation, "parent_identity")?;
+    if !state
+        .entities
+        .get(parent)
+        .is_some_and(|instances| instances.contains_key(&parent_key))
+    {
+        return Err(ExecutionError::ObligationRefused("parent_not_found".into()));
+    }
+    if let Some(identity_field) = obligation.bindings.get("child_identity") {
+        let child = binding(obligation, "child")?;
+        let identity = command
+            .get(identity_field)
+            .ok_or_else(|| ExecutionError::MissingInput(identity_field.clone()))?;
+        let identity = scalar_string(identity, identity_field)?;
+        if !state
+            .entities
+            .get(child)
+            .is_some_and(|instances| instances.contains_key(&identity))
+        {
+            return Err(ExecutionError::ObligationRefused("not_found".into()));
+        }
+    }
+    Ok(())
+}
+
+fn require_unreferenced_node(
+    state: &ProjectionState,
+    obligation: &ObligationUse,
+    command: &BTreeMap<String, Value>,
+) -> Result<(), ExecutionError> {
+    let partition = command_binding_string(command, obligation, "partition")?;
+    let node = command_binding_string(command, obligation, "node")?;
+    let active = obligation
+        .bindings
+        .get("active_state")
+        .map_or("Active", String::as_str);
+    let node_exists = state
+        .entities
+        .get(binding(obligation, "nodes")?)
+        .and_then(|nodes| nodes.get(&node))
+        .is_some_and(|value| {
+            value.state == active
+                && field_string(
+                    value,
+                    binding(obligation, "node_partition").unwrap_or_default(),
+                ) == Some(partition.as_str())
+        });
+    if !node_exists {
+        return Err(ExecutionError::ObligationRefused("node_not_found".into()));
+    }
+    let edge_partition = binding(obligation, "edge_partition")?;
+    let edge_source = binding(obligation, "edge_source")?;
+    let edge_target = binding(obligation, "edge_target")?;
+    let referenced = state
+        .entities
+        .get(binding(obligation, "edges")?)
+        .into_iter()
+        .flat_map(|edges| edges.values())
+        .filter(|edge| {
+            edge.state == active && field_string(edge, edge_partition) == Some(partition.as_str())
+        })
+        .any(|edge| {
+            field_string(edge, edge_source) == Some(node.as_str())
+                || field_string(edge, edge_target) == Some(node.as_str())
+        });
+    if referenced {
+        Err(ExecutionError::ObligationRefused("node_referenced".into()))
+    } else {
+        Ok(())
+    }
+}
+
+fn require_owned_revision(
+    state: &ProjectionState,
+    obligation: &ObligationUse,
+    command: &BTreeMap<String, Value>,
+) -> Result<(), ExecutionError> {
+    let identity = command_binding_string(command, obligation, "revision_identity")?;
+    let revision = state
+        .entities
+        .get(binding(obligation, "revision")?)
+        .and_then(|revisions| revisions.get(&identity))
+        .ok_or_else(|| ExecutionError::ObligationRefused("revision_not_found".into()))?;
+    if let Some(allowed) = obligation.bindings.get("allowed")
+        && !allowed
+            .split(',')
+            .map(str::trim)
+            .any(|candidate| candidate == revision.state)
+    {
+        return Err(ExecutionError::ObligationRefused(
+            "revision_not_publishable".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn command_binding_string(
+    command: &BTreeMap<String, Value>,
+    obligation: &ObligationUse,
+    binding_name: &str,
+) -> Result<String, ExecutionError> {
+    let field = binding(obligation, binding_name)?;
+    let value = command
+        .get(field)
+        .ok_or_else(|| ExecutionError::MissingInput(field.to_owned()))?;
+    scalar_string(value, field)
+}
+
+fn field_string<'a>(entity: &'a EntityValue, field: &str) -> Option<&'a str> {
+    entity.fields.get(field).and_then(Value::as_str)
+}
+
+struct GraphMaterialization {
+    nodes: Vec<Value>,
+    edges: Vec<Value>,
+    digest: String,
+}
+
+fn graph_materialization(
+    state: &ProjectionState,
+    obligation: &ObligationUse,
+    command: &BTreeMap<String, Value>,
+    proposed: Option<(&str, &str)>,
+) -> Result<GraphMaterialization, ExecutionError> {
+    let partition = command_binding_string(command, obligation, "partition")?;
+    let active = obligation
+        .bindings
+        .get("active_state")
+        .map_or("Active", String::as_str);
+    let node_partition = binding(obligation, "node_partition")?;
+    let node_identity = binding(obligation, "node_identity")?;
+    let edge_partition = binding(obligation, "edge_partition")?;
+    let edge_identity = obligation
+        .bindings
+        .get("edge_identity")
+        .map_or("edge_id", String::as_str);
+    let edge_source = binding(obligation, "edge_source")?;
+    let edge_target = binding(obligation, "edge_target")?;
+
+    let nodes = state
+        .entities
+        .get(binding(obligation, "nodes")?)
+        .into_iter()
+        .flat_map(|nodes| nodes.iter())
+        .filter(|(_, node)| {
+            node.state == active && field_string(node, node_partition) == Some(partition.as_str())
+        })
+        .map(|(identity, node)| {
+            (
+                identity.clone(),
+                snapshot_row(node_identity, identity, node),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    if nodes.is_empty() {
+        return Err(ExecutionError::ObligationRefused("empty_graph".into()));
+    }
+    let max_nodes = bound_limit(obligation, "max_nodes", 500)?;
+    if nodes.len() > max_nodes {
+        return Err(ExecutionError::ObligationRefused("graph_too_large".into()));
+    }
+
+    let edges = state
+        .entities
+        .get(binding(obligation, "edges")?)
+        .into_iter()
+        .flat_map(|edges| edges.iter())
+        .filter(|(_, edge)| {
+            edge.state == active && field_string(edge, edge_partition) == Some(partition.as_str())
+        })
+        .map(|(identity, edge)| (identity.clone(), edge))
+        .collect::<BTreeMap<_, _>>();
+    let max_edges = bound_limit(obligation, "max_edges", 2_000)?;
+    if edges.len() + usize::from(proposed.is_some()) > max_edges {
+        return Err(ExecutionError::ObligationRefused("graph_too_large".into()));
+    }
+
+    let mut adjacency = nodes
+        .keys()
+        .map(|node| (node.clone(), BTreeSet::new()))
+        .collect::<BTreeMap<_, _>>();
+    let mut pairs = BTreeSet::new();
+    for edge in edges.values() {
+        let source = field_string(edge, edge_source)
+            .ok_or_else(|| ExecutionError::InvalidPlan(edge_source.to_owned()))?;
+        let target = field_string(edge, edge_target)
+            .ok_or_else(|| ExecutionError::InvalidPlan(edge_target.to_owned()))?;
+        insert_graph_edge(&mut adjacency, &mut pairs, source, target)?;
+    }
+    if let Some((source, target)) = proposed {
+        insert_graph_edge(&mut adjacency, &mut pairs, source, target)?;
+    }
+    if graph_has_cycle(&adjacency) {
+        return Err(ExecutionError::ObligationRefused("graph_cycle".into()));
+    }
+
+    let node_rows = nodes.into_values().collect::<Vec<_>>();
+    let edge_rows = edges
+        .into_iter()
+        .map(|(identity, edge)| snapshot_row(edge_identity, &identity, edge))
+        .collect::<Vec<_>>();
+    let canonical = serde_json::to_vec(&serde_json::json!({
+        "nodes": node_rows,
+        "edges": edge_rows,
+    }))
+    .map_err(|_| ExecutionError::InvalidPlan("graph snapshot".into()))?;
+    let digest = hex::encode(Sha256::digest(&canonical));
+    let value: Value = serde_json::from_slice(&canonical)
+        .map_err(|_| ExecutionError::InvalidPlan("graph snapshot".into()))?;
+    let object = value
+        .as_object()
+        .ok_or_else(|| ExecutionError::InvalidPlan("graph snapshot".into()))?;
+    Ok(GraphMaterialization {
+        nodes: object["nodes"].as_array().cloned().unwrap_or_default(),
+        edges: object["edges"].as_array().cloned().unwrap_or_default(),
+        digest,
+    })
+}
+
+fn snapshot_row(identity_field: &str, identity: &str, entity: &EntityValue) -> Value {
+    let mut row = entity.fields.clone();
+    row.insert(
+        identity_field.to_owned(),
+        Value::String(identity.to_owned()),
+    );
+    Value::Object(row.into_iter().collect())
+}
+
+fn bound_limit(
+    obligation: &ObligationUse,
+    name: &str,
+    default: usize,
+) -> Result<usize, ExecutionError> {
+    match obligation.bindings.get(name) {
+        Some(value) => value
+            .parse::<usize>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| {
+                ExecutionError::InvalidPlan(format!("{}.bindings.{name}", obligation.provider))
+            }),
+        None => Ok(default),
+    }
+}
+
+fn insert_graph_edge(
+    adjacency: &mut BTreeMap<String, BTreeSet<String>>,
+    pairs: &mut BTreeSet<(String, String)>,
+    source: &str,
+    target: &str,
+) -> Result<(), ExecutionError> {
+    if source == target {
+        return Err(ExecutionError::ObligationRefused("self_edge".into()));
+    }
+    if !adjacency.contains_key(source) || !adjacency.contains_key(target) {
+        return Err(ExecutionError::ObligationRefused("dangling_edge".into()));
+    }
+    if !pairs.insert((source.to_owned(), target.to_owned())) {
+        return Err(ExecutionError::ObligationRefused("duplicate_edge".into()));
+    }
+    adjacency
+        .get_mut(source)
+        .expect("source existence was checked")
+        .insert(target.to_owned());
+    Ok(())
+}
+
+fn graph_has_cycle(adjacency: &BTreeMap<String, BTreeSet<String>>) -> bool {
+    fn visit(
+        node: &str,
+        adjacency: &BTreeMap<String, BTreeSet<String>>,
+        visiting: &mut BTreeSet<String>,
+        visited: &mut BTreeSet<String>,
+    ) -> bool {
+        if visiting.contains(node) {
+            return true;
+        }
+        if visited.contains(node) {
+            return false;
+        }
+        visiting.insert(node.to_owned());
+        if adjacency
+            .get(node)
+            .into_iter()
+            .flatten()
+            .any(|target| visit(target, adjacency, visiting, visited))
+        {
+            return true;
+        }
+        visiting.remove(node);
+        visited.insert(node.to_owned());
+        false
+    }
+
+    let mut visiting = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    adjacency
+        .keys()
+        .any(|node| visit(node, adjacency, &mut visiting, &mut visited))
 }
 
 fn validate_lifetime(
@@ -1371,6 +1741,35 @@ fn produce_events(
                     entity,
                     field,
                 } => obligation_value(provider, entity, field, state)?,
+                ValueSource::GraphSnapshot {
+                    nodes,
+                    edges,
+                    partition,
+                    node_partition,
+                    edge_partition,
+                    node_identity,
+                    edge_identity,
+                    edge_source,
+                    edge_target,
+                    active_state,
+                    output,
+                } => graph_snapshot_value(
+                    state,
+                    command,
+                    GraphSnapshotBinding {
+                        nodes,
+                        edges,
+                        partition,
+                        node_partition,
+                        edge_partition,
+                        node_identity,
+                        edge_identity,
+                        edge_source,
+                        edge_target,
+                        active_state,
+                    },
+                    *output,
+                )?,
             };
             fields.insert(field.name.clone(), value);
         }
@@ -1387,6 +1786,57 @@ fn produce_events(
         reduce(service, &mut preview, event)?;
     }
     Ok(events)
+}
+
+#[derive(Clone, Copy)]
+struct GraphSnapshotBinding<'a> {
+    nodes: &'a str,
+    edges: &'a str,
+    partition: &'a str,
+    node_partition: &'a str,
+    edge_partition: &'a str,
+    node_identity: &'a str,
+    edge_identity: &'a str,
+    edge_source: &'a str,
+    edge_target: &'a str,
+    active_state: &'a str,
+}
+
+fn graph_snapshot_value(
+    state: &ProjectionState,
+    command: &BTreeMap<String, Value>,
+    binding: GraphSnapshotBinding<'_>,
+    output: GraphSnapshotOutput,
+) -> Result<Value, ExecutionError> {
+    let obligation = ObligationUse {
+        provider: "sdk.graph.publish-snapshot/v1".to_owned(),
+        bindings: BTreeMap::from([
+            ("nodes".to_owned(), binding.nodes.to_owned()),
+            ("edges".to_owned(), binding.edges.to_owned()),
+            ("partition".to_owned(), binding.partition.to_owned()),
+            (
+                "node_partition".to_owned(),
+                binding.node_partition.to_owned(),
+            ),
+            (
+                "edge_partition".to_owned(),
+                binding.edge_partition.to_owned(),
+            ),
+            ("node_identity".to_owned(), binding.node_identity.to_owned()),
+            ("edge_identity".to_owned(), binding.edge_identity.to_owned()),
+            ("edge_source".to_owned(), binding.edge_source.to_owned()),
+            ("edge_target".to_owned(), binding.edge_target.to_owned()),
+            ("active_state".to_owned(), binding.active_state.to_owned()),
+        ]),
+    };
+    let graph = graph_materialization(state, &obligation, command, None)?;
+    Ok(match output {
+        GraphSnapshotOutput::Nodes => Value::Array(graph.nodes),
+        GraphSnapshotOutput::Edges => Value::Array(graph.edges),
+        GraphSnapshotOutput::Digest => Value::String(graph.digest),
+        GraphSnapshotOutput::NodeCount => serde_json::json!(graph.nodes.len()),
+        GraphSnapshotOutput::EdgeCount => serde_json::json!(graph.edges.len()),
+    })
 }
 
 fn obligation_value(
@@ -1895,6 +2345,7 @@ mod tests {
         };
         let intent = IntentPlan {
             command: "demo.CreateAndUpdate".to_owned(),
+            scope: "demo.manage".to_owned(),
             inputs: Vec::new(),
             stream: StreamPlan::GeneratedUuidV7,
             expected_version: ExpectedVersionPlan::NoStream,
@@ -1909,6 +2360,7 @@ mod tests {
         let plan = ServicePlan {
             format: REALIZATION_PLAN_FORMAT.to_owned(),
             service: "demo".to_owned(),
+            delivery: PlanDelivery::ComposedConnector,
             realm: PlanRealmPolicy::Optional,
             ess_source_digest: "a".repeat(64),
             obligation_catalog_digest: "b".repeat(64),
@@ -1965,6 +2417,7 @@ mod tests {
     fn projection_rows_must_match_the_exact_hidden_partition_selector_and_shape() {
         let query = QueryPlan {
             view: "demo.ItemById".to_owned(),
+            scope: "demo.read".to_owned(),
             inputs: Vec::new(),
             obligations: Vec::new(),
         };
@@ -2080,6 +2533,7 @@ mod tests {
         ServicePlan {
             format: REALIZATION_PLAN_FORMAT.to_owned(),
             service: "demo".to_owned(),
+            delivery: PlanDelivery::ComposedConnector,
             realm: PlanRealmPolicy::Optional,
             ess_source_digest: "a".repeat(64),
             obligation_catalog_digest: "b".repeat(64),
@@ -2211,5 +2665,126 @@ mod tests {
             Value::String("person-a".to_owned()),
             "v1 remains frozen as creation-time inheritance"
         );
+    }
+
+    fn graph_obligation(provider: &str) -> ObligationUse {
+        ObligationUse {
+            provider: provider.to_owned(),
+            bindings: BTreeMap::from([
+                ("nodes".to_owned(), "demo.Node".to_owned()),
+                ("edges".to_owned(), "demo.Edge".to_owned()),
+                ("partition".to_owned(), "draft_id".to_owned()),
+                ("node_partition".to_owned(), "draft_id".to_owned()),
+                ("edge_partition".to_owned(), "draft_id".to_owned()),
+                ("node_identity".to_owned(), "node_id".to_owned()),
+                ("edge_identity".to_owned(), "edge_id".to_owned()),
+                ("edge_source".to_owned(), "source_node_id".to_owned()),
+                ("edge_target".to_owned(), "target_node_id".to_owned()),
+                ("source".to_owned(), "source_node_id".to_owned()),
+                ("target".to_owned(), "target_node_id".to_owned()),
+                ("node".to_owned(), "node_id".to_owned()),
+                ("active_state".to_owned(), "Active".to_owned()),
+            ]),
+        }
+    }
+
+    fn graph_state() -> ProjectionState {
+        let node = |kind: &str| EntityValue {
+            state: "Active".to_owned(),
+            fields: BTreeMap::from([
+                ("draft_id".to_owned(), Value::String("draft-a".to_owned())),
+                ("kind".to_owned(), Value::String(kind.to_owned())),
+            ]),
+        };
+        let edge = |source: &str, target: &str| EntityValue {
+            state: "Active".to_owned(),
+            fields: BTreeMap::from([
+                ("draft_id".to_owned(), Value::String("draft-a".to_owned())),
+                (
+                    "source_node_id".to_owned(),
+                    Value::String(source.to_owned()),
+                ),
+                (
+                    "target_node_id".to_owned(),
+                    Value::String(target.to_owned()),
+                ),
+            ]),
+        };
+        ProjectionState {
+            entities: BTreeMap::from([
+                (
+                    "demo.Node".to_owned(),
+                    BTreeMap::from([
+                        ("a".to_owned(), node("read")),
+                        ("b".to_owned(), node("compute")),
+                        ("c".to_owned(), node("complete")),
+                    ]),
+                ),
+                (
+                    "demo.Edge".to_owned(),
+                    BTreeMap::from([
+                        ("ab".to_owned(), edge("a", "b")),
+                        ("bc".to_owned(), edge("b", "c")),
+                    ]),
+                ),
+            ]),
+        }
+    }
+
+    #[test]
+    fn graph_obligations_refuse_cycles_duplicates_dangling_and_referenced_removal() {
+        let state = graph_state();
+        let command = BTreeMap::from([
+            ("draft_id".to_owned(), Value::String("draft-a".to_owned())),
+            ("node_id".to_owned(), Value::String("b".to_owned())),
+        ]);
+        let unreferenced = graph_obligation("sdk.graph.node-unreferenced/v1");
+        assert!(matches!(
+            require_unreferenced_node(&state, &unreferenced, &command),
+            Err(ExecutionError::ObligationRefused(code)) if code == "node_referenced"
+        ));
+
+        let connect = graph_obligation("sdk.graph.connect-dag/v1");
+        assert!(matches!(
+            graph_materialization(
+                &state,
+                &connect,
+                &command,
+                Some(("c", "a"))
+            ),
+            Err(ExecutionError::ObligationRefused(code)) if code == "graph_cycle"
+        ));
+        assert!(matches!(
+            graph_materialization(
+                &state,
+                &connect,
+                &command,
+                Some(("a", "b"))
+            ),
+            Err(ExecutionError::ObligationRefused(code)) if code == "duplicate_edge"
+        ));
+        assert!(matches!(
+            graph_materialization(
+                &state,
+                &connect,
+                &command,
+                Some(("a", "missing"))
+            ),
+            Err(ExecutionError::ObligationRefused(code)) if code == "dangling_edge"
+        ));
+    }
+
+    #[test]
+    fn published_graph_snapshot_is_deterministic_and_complete() {
+        let state = graph_state();
+        let command =
+            BTreeMap::from([("draft_id".to_owned(), Value::String("draft-a".to_owned()))]);
+        let obligation = graph_obligation("sdk.graph.publish-snapshot/v1");
+        let first = graph_materialization(&state, &obligation, &command, None).unwrap();
+        let second = graph_materialization(&state, &obligation, &command, None).unwrap();
+        assert_eq!(first.nodes.len(), 3);
+        assert_eq!(first.edges.len(), 2);
+        assert_eq!(first.digest, second.digest);
+        assert_eq!(first.digest.len(), 64);
     }
 }

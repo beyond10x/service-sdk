@@ -34,7 +34,7 @@ struct Inputs {
     /// Directory containing the ESS `system.yaml` and its YAML sources.
     #[arg(long, requires = "definition")]
     ess: Option<PathBuf>,
-    /// Strict `service-definition/2` YAML or JSON document.
+    /// Strict `service-definition/3` YAML or JSON document.
     #[arg(long, requires = "ess")]
     definition: Option<PathBuf>,
     /// Exclusively builder-owned generated output root.

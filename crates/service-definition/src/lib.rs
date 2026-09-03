@@ -12,7 +12,7 @@ use std::str::FromStr;
 use ess_compiler::refs::{CommandRef, DeclaredTypeRef, EventRef, ViewRef};
 
 /// The only service-definition format understood by this crate.
-pub const SERVICE_DEFINITION_FORMAT: &str = "service-definition/2";
+pub const SERVICE_DEFINITION_FORMAT: &str = "service-definition/3";
 
 /// A stable lowercase identifier within one service definition.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
@@ -173,6 +173,19 @@ pub enum RealmPolicy {
     Forbidden,
 }
 
+/// Supported public delivery boundary for one generated service.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ServiceDelivery {
+    /// Expose the generated operations through an Identity-authenticated HTTP service.
+    IdentityHttp {
+        /// Exact resource audience accepted by the generated server and requested by clients.
+        audience: String,
+    },
+    /// Expose the generated operations only through a product-composed Connector factory.
+    ComposedConnector,
+}
+
 /// Where an aggregate stream identity comes from.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -318,6 +331,8 @@ pub struct ContentBinding {
 pub struct IntentDefinition {
     /// Stable operation identity.
     pub name: DefinitionId,
+    /// Exact OAuth scope required before this operation's body is decoded.
+    pub scope: String,
     /// ESS semantic command.
     pub command: CommandRef,
     /// Aggregate stream identity source.
@@ -393,6 +408,8 @@ pub enum QueryDelivery {
 pub struct QueryDefinition {
     /// Stable operation identity.
     pub name: DefinitionId,
+    /// Exact OAuth scope required before this operation's body is decoded.
+    pub scope: String,
     /// ESS semantic view.
     pub view: ViewRef,
     /// Projection that materializes the view.
@@ -488,6 +505,8 @@ pub struct ServiceDefinition {
     pub format: String,
     /// Stable service identity.
     pub service: DefinitionId,
+    /// Explicit public delivery boundary; there is no implicit transport.
+    pub delivery: ServiceDelivery,
     /// Admission policy applied to authentication's optional realm.
     pub realm: RealmPolicy,
     /// Mutation operations.
@@ -525,6 +544,7 @@ impl ServiceDefinition {
     }
 
     /// Validates programmatically constructed definitions with the same rules as parsing.
+    #[allow(clippy::too_many_lines)]
     pub fn validate(&self) -> Result<(), DefinitionDiagnostics> {
         let mut diagnostics = Vec::new();
         if self.format != SERVICE_DEFINITION_FORMAT {
@@ -544,6 +564,7 @@ impl ServiceDefinition {
                 "a service must declare at least one intent or query",
             ));
         }
+        validate_delivery(&mut diagnostics, &self.delivery);
 
         let mut declarations = BTreeMap::<DefinitionId, &'static str>::new();
         let declaration_groups: [(&str, Vec<&DefinitionId>); 5] = [
@@ -605,6 +626,11 @@ impl ServiceDefinition {
             );
         }
         for (index, intent) in self.intents.iter().enumerate() {
+            validate_scope(
+                &mut diagnostics,
+                &format!("intents[{index}].scope"),
+                &intent.scope,
+            );
             validate_intent(
                 &mut diagnostics,
                 index,
@@ -615,6 +641,11 @@ impl ServiceDefinition {
             );
         }
         for (index, query) in self.queries.iter().enumerate() {
+            validate_scope(
+                &mut diagnostics,
+                &format!("queries[{index}].scope"),
+                &query.scope,
+            );
             validate_query(&mut diagnostics, index, query, &projections, &obligations);
         }
 
@@ -631,6 +662,44 @@ impl ServiceDefinition {
             .unwrap_or_else(|error| panic!("validated service definition serializes: {error}"));
         output.push('\n');
         output
+    }
+}
+
+fn validate_delivery(diagnostics: &mut Vec<DefinitionDiagnostic>, delivery: &ServiceDelivery) {
+    if let ServiceDelivery::IdentityHttp { audience } = delivery {
+        let valid = (3..=256).contains(&audience.len())
+            && audience.trim() == audience
+            && audience.is_ascii()
+            && audience
+                .bytes()
+                .all(|byte| !byte.is_ascii_whitespace() && !byte.is_ascii_control());
+        if !valid {
+            diagnostics.push(DefinitionDiagnostic::new(
+                DefinitionCode::InvalidValue,
+                "delivery.audience",
+                "Identity HTTP audience must be 3-256 visible ASCII characters without whitespace",
+            ));
+        }
+    }
+}
+
+fn validate_scope(diagnostics: &mut Vec<DefinitionDiagnostic>, path: &str, scope: &str) {
+    let valid = (3..=128).contains(&scope.len())
+        && scope
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase())
+        && scope.bytes().all(|byte| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'.' | b':' | b'-' | b'_')
+        });
+    if !valid {
+        diagnostics.push(DefinitionDiagnostic::new(
+            DefinitionCode::InvalidValue,
+            path,
+            "scope must be a 3-128 character lowercase OAuth scope token",
+        ));
     }
 }
 
@@ -1101,8 +1170,9 @@ mod tests {
     use super::*;
 
     const COMPLETE: &str = r"
-format: service-definition/2
+format: service-definition/3
 service: todo
+delivery: { kind: composed_connector }
 realm: optional
 content:
   - name: item_content
@@ -1128,6 +1198,7 @@ projections:
     obligations: [inherit_scope]
 intents:
   - name: create_item
+    scope: todo.manage
     command: todo.list.CreateItem
     stream_id: { kind: command_field, field: item_id }
     expected_version: { kind: no_stream }
@@ -1153,6 +1224,7 @@ intents:
     obligations: [inherit_scope]
 queries:
   - name: get_item
+    scope: todo.read
     view: todo.list.ItemById
     projection: item_by_id
     selectors:
@@ -1210,6 +1282,40 @@ queries:
         let errors = ServiceDefinition::from_yaml(&text).expect_err("unknown route must fail");
         assert_eq!(errors.diagnostics()[0].code, DefinitionCode::Syntax);
         assert!(errors.to_string().contains("unknown field `route`"));
+    }
+
+    #[test]
+    fn superseded_formats_and_invalid_http_authority_are_refused() {
+        let legacy = COMPLETE.replace("service-definition/3", "service-definition/2");
+        let errors = ServiceDefinition::from_yaml(&legacy).expect_err("v2 is not compatible");
+        assert!(
+            errors
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.code == DefinitionCode::UnsupportedFormat)
+        );
+
+        let invalid_scope = COMPLETE.replacen("scope: todo.manage", "scope: Todo Manage", 1);
+        let errors = ServiceDefinition::from_yaml(&invalid_scope).expect_err("scope is closed");
+        assert!(
+            errors
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.path == "intents[0].scope")
+        );
+
+        let invalid_audience = COMPLETE.replace(
+            "delivery: { kind: composed_connector }",
+            "delivery: { kind: identity_http, audience: 'urn: invalid' }",
+        );
+        let errors =
+            ServiceDefinition::from_yaml(&invalid_audience).expect_err("audience is closed");
+        assert!(
+            errors
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.path == "delivery.audience")
+        );
     }
 
     #[test]

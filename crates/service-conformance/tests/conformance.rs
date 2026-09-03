@@ -74,8 +74,9 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/2
+format: service-definition/3
 service: demo_todo
+delivery: { kind: composed_connector }
 realm: optional
 content:
   - name: item_content
@@ -113,6 +114,7 @@ projections:
     obligations: [bind_owner, visibility]
 intents:
   - name: add_item
+    scope: items.manage
     command: demo.todo.AddItem
     stream_id: { kind: command_field, field: item_id }
     expected_version: { kind: operation_field, field: expected_version }
@@ -129,6 +131,7 @@ intents:
     obligations: [aggregate, content_lifecycle]
 queries:
   - name: get_item
+    scope: items.read
     view: demo.todo.ItemById
     projection: item_by_id
     selectors:

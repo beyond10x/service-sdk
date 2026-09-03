@@ -1,0 +1,30 @@
+[package]
+name = "service-http"
+description = "Identity-authenticated HTTP delivery and client runtime for generated services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+axum.workspace = true
+bytes.workspace = true
+eventlog-core.workspace = true
+identity-client.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+service-engine = { path = "../service-engine" }
+service-eventlog = { path = "../service-eventlog" }
+service-runtime = { path = "../service-runtime" }
+thiserror.workspace = true
+
+[dev-dependencies]
+eventlog-sqlite.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

@@ -6,6 +6,7 @@
 
 pub mod client;
 pub mod ess;
+pub mod http;
 pub mod package;
 pub mod realization;
 pub mod tree;
@@ -45,6 +46,9 @@ pub const SERVICE_CATALOG_PATH: &str = "catalog/service-catalog.json";
 
 /// Canonical generated executable realization-plan path.
 pub const REALIZATION_PLAN_PATH: &str = "runtime/realization-plan.json";
+
+/// Canonical generated Identity HTTP `OpenAPI` path.
+pub const HTTP_OPENAPI_PATH: &str = "http/openapi.json";
 
 /// ESS-owned structural synthesis and projections for one compiled model.
 pub struct EssBuild {
@@ -125,6 +129,9 @@ pub fn build_service(
         connector_descriptor.to_canonical_json(),
     )?;
     artifacts.insert(SERVICE_CATALOG_PATH, service_catalog.to_canonical_json())?;
+    if let Some(openapi) = http::openapi(&client_plan) {
+        artifacts.insert(HTTP_OPENAPI_PATH, openapi)?;
+    }
 
     Ok(ServiceBuild {
         ess,

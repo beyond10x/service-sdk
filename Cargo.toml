@@ -8,13 +8,14 @@ members = [
     "crates/service-definition",
     "crates/service-engine",
     "crates/service-eventlog",
+    "crates/service-http",
     "crates/service-obligations",
     "crates/service-runtime",
     "crates/service-runtime-ir",
 ]
 
 [workspace.package]
-version = "0.3.4"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.91"
 license = "Apache-2.0"
@@ -24,6 +25,9 @@ publish = false
 
 [workspace.dependencies]
 anyhow = "1"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["json", "tokio"] }
+bytes = "1"
 clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -31,14 +35,17 @@ serde_yaml = "0.9"
 sha2 = "0.11"
 hex = "0.4"
 thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread"] }
 time = { version = "=0.3.36", features = ["formatting", "parsing"] }
 uuid = { version = "1", features = ["v7"] }
+
+identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23" }
 
 # The organization persistence kit is the only generated-service event/projection/blob backend.
 eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
 
-# Exact compiler/synthesis ownership boundary used by service-runtime-ir/2.
+# Exact compiler/synthesis ownership boundary used by service-runtime-ir/3.
 ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
 ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }
 ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "01f12c9d66cc8c4cb400ba786c1dcf268e0f752d" }

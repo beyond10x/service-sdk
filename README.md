@@ -71,11 +71,12 @@ realization hooks.
 
 ```text
 service/1 package
-  -> ESS fragments + service-definition/2 + scenarios + exact SDK lock
+  -> ESS fragments + service-definition/3 + scenarios + exact SDK lock
   -> compiler-minted EssIr and ESS SynthesisPlan
-  -> validated service-runtime-ir/2 + versioned obligation catalogue
+  -> validated service-runtime-ir/3 + versioned obligation catalogue
   -> SDK-executable realization plan
-  -> Rust service, client plan, service-catalog/1, docs, scenarios, and Connector factories
+  -> Rust service, typed Identity HTTP client, OpenAPI, service-catalog/1, docs,
+     scenarios, and Connector factories
 ```
 
 The workspace is split by responsibility:
@@ -86,6 +87,7 @@ The workspace is split by responsibility:
 - `service-runtime` supplies transport-independent authenticated execution and durable effects.
 - `service-engine` executes generated plans over deployment-injected resources.
 - `service-eventlog` provides the Eventlog-backed persistence adapter.
+- `service-http` provides the Identity-authenticated HTTP server and generated-client transport.
 - `service-connectors` exposes inert factories for composed Connector runtimes.
 - `service-catalog` publishes the generated operation catalogue.
 - `service-builder` generates and drift-checks the complete artifact tree.
@@ -98,6 +100,13 @@ Authentication establishes tenant, authority, user, optional executor, and optio
 application input is decoded. Realm is never accepted from a route, query, body, caller-controlled
 header, generated-client argument, or Connector coordinate. `None` and `Some("default")` remain
 distinct.
+
+An `identity_http` service definition declares one exact resource audience and every operation
+declares one exact OAuth scope. The generated server validates both at the Identity boundary before
+decoding application JSON; the generated client is permanently bound to that audience. A
+`composed_connector` service keeps the existing in-process Connector delivery instead. Version 0.4
+accepts only the new `/3` definition and runtime formats and intentionally provides no compatibility
+reader for prior generated artifacts.
 
 Accepted mutations pass through authenticated intent, authorization and validation, semantic
 command decision, guarded Eventlog append, reduction, and the declared projection guarantee.

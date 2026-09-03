@@ -16,11 +16,12 @@ use service_connectors::{
 };
 use service_definition::{
     ExpectedVersionSource, IdempotencySource, IntentDefinition, QueryDefinition, RealmPolicy,
+    ServiceDelivery,
 };
 use service_runtime_ir::{ResolvedIntent, ResolvedQuery, ServiceRuntimeIr};
 
 /// The only client-plan format emitted by this version of the builder.
-pub const CLIENT_PLAN_FORMAT: &str = "service-client-plan/1";
+pub const CLIENT_PLAN_FORMAT: &str = "service-client-plan/2";
 
 /// A complete transport-neutral service client surface.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,6 +31,8 @@ pub struct ClientPlan {
     pub format: String,
     /// Stable service identity.
     pub service: String,
+    /// Explicit generated delivery boundary.
+    pub delivery: ServiceDelivery,
     /// Exact compiler-minted ESS source digest.
     pub ess_source_digest: String,
     /// Admission policy carried as client-generation metadata, never as an operation input.
@@ -52,8 +55,10 @@ pub enum ClientAuthentication {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClientOperation {
-    /// Stable operation name from `service-definition/2`.
+    /// Stable operation name from `service-definition/3`.
     pub operation: String,
+    /// Exact OAuth scope required before request decoding.
+    pub scope: String,
     /// Exact ESS command or view reference.
     pub semantic_ref: String,
     /// Operation role.
@@ -115,7 +120,7 @@ pub enum ClientInputSource {
     Idempotency,
     /// Plaintext staged through a named external-content policy.
     Content {
-        /// Content-policy name from `service-definition/2`.
+        /// Content-policy name from `service-definition/3`.
         policy: String,
     },
     /// Query selector mapped to a resolved view field.
@@ -191,7 +196,27 @@ pub enum ClientPlanError {
     Connector(#[from] ContributionError),
 }
 
+/// A persisted client plan is malformed or from a superseded format.
+#[derive(Debug, thiserror::Error)]
+pub enum ClientPlanReadError {
+    /// Strict JSON decoding failed.
+    #[error("invalid generated client plan JSON")]
+    Json(#[source] serde_json::Error),
+    /// The format is not supported by this SDK release.
+    #[error("unsupported generated client plan format {0:?}")]
+    UnsupportedFormat(String),
+}
+
 impl ClientPlan {
+    /// Reads a strict persisted client plan and rejects superseded formats.
+    pub fn from_json(text: &str) -> Result<Self, ClientPlanReadError> {
+        let plan: Self = serde_json::from_str(text).map_err(ClientPlanReadError::Json)?;
+        if plan.format != CLIENT_PLAN_FORMAT {
+            return Err(ClientPlanReadError::UnsupportedFormat(plan.format));
+        }
+        Ok(plan)
+    }
+
     /// Derives the complete client surface from compiler-minted runtime IR.
     pub fn from_runtime(runtime: &ServiceRuntimeIr) -> Result<Self, ClientPlanError> {
         let definition = runtime.definition();
@@ -225,6 +250,7 @@ impl ClientPlan {
         Ok(Self {
             format: CLIENT_PLAN_FORMAT.to_owned(),
             service: definition.service.to_string(),
+            delivery: definition.delivery.clone(),
             ess_source_digest: runtime.ess_source_digest().to_owned(),
             realm_policy: definition.realm,
             authentication: ClientAuthentication::Session,
@@ -349,6 +375,7 @@ fn intent_operation(
     reject_authentication_inputs(operation, inputs.keys().map(String::as_str))?;
     Ok(ClientOperation {
         operation: operation.to_owned(),
+        scope: annotation.scope.clone(),
         semantic_ref: resolved.command.clone(),
         kind: ClientOperationKind::Intent,
         inputs: inputs.into_values().collect(),
@@ -389,6 +416,7 @@ fn query_operation(
     reject_authentication_inputs(operation, inputs.keys().map(String::as_str))?;
     Ok(ClientOperation {
         operation: operation.to_owned(),
+        scope: annotation.scope.clone(),
         semantic_ref: resolved.view.clone(),
         kind: ClientOperationKind::Query,
         inputs: inputs.into_values().collect(),
@@ -486,5 +514,22 @@ mod tests {
         assert!(is_optional("Optional<String>"));
         assert!(!is_optional("String"));
         assert!(!is_optional("List<Optional<String>>"));
+    }
+
+    #[test]
+    fn superseded_client_plan_format_is_refused() {
+        let plan = r#"{
+          "format":"service-client-plan/1",
+          "service":"demo",
+          "delivery":{"kind":"composed_connector"},
+          "ess_source_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "realm_policy":"optional",
+          "authentication":"session",
+          "operations":[]
+        }"#;
+        assert!(matches!(
+            ClientPlan::from_json(plan),
+            Err(ClientPlanReadError::UnsupportedFormat(format)) if format == "service-client-plan/1"
+        ));
     }
 }

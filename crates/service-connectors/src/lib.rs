@@ -1097,13 +1097,14 @@ mod tests {
     fn paged_query_schema_carries_nullable_authorized_revision() {
         let plan = service_engine::ServicePlan::from_json(
             r#"{
-              "format":"service-realization-plan/1",
+              "format":"service-realization-plan/2",
               "service":"todo",
+              "delivery":{"kind":"composed_connector"},
               "realm":"optional",
               "ess_source_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
               "obligation_catalog_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
               "content":{},"intents":{},
-              "queries":{"get":{"view":"todo.Item","inputs":[],"obligations":[]}},
+              "queries":{"get":{"view":"todo.Item","scope":"todo.read","inputs":[],"obligations":[]}},
               "reducers":{},
               "views":{"todo.Item":{"source":"todo.Item","fields":["id"],"obligations":[]}}
             }"#,

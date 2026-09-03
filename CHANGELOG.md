@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 - 2026-09-03
+
+- Add first-class `identity_http` delivery with an exact Identity audience, per-operation scopes,
+  generated typed Rust clients, an Axum server boundary, and deterministic OpenAPI 3.1 output.
+- Require `service-definition/3`, `service-runtime-ir/3`, `service-client-plan/2`, and
+  `service-realization-plan/2`; superseded generated contracts are rejected with no compatibility
+  path.
+- Add closed directed-graph obligations for node and edge mutation, acyclicity, referenced-node
+  protection, immutable publish snapshots, and deterministic graph digests.
+- Align generated Connector factories, catalogs, and conformance with Connectors 0.5.6 so composed
+  runtimes use one exact factory type.
+
 ## 0.3.4 - 2026-09-03
 
 - Publish the complete Service SDK source and history under Apache 2.0 so generated-service

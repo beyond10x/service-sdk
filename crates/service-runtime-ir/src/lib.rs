@@ -1,4 +1,4 @@
-//! Closed, persisted runtime realization IR derived from ESS and `service-definition/2`.
+//! Closed, persisted runtime realization IR derived from ESS and `service-definition/3`.
 //!
 //! The only constructor is [`compile`]. A persisted document can be read only through
 //! [`ServiceRuntimeIr::from_json_bound`], which recompiles it against the supplied compiler-minted
@@ -19,7 +19,7 @@ use service_obligations::ResolvedObligation;
 use sha2::{Digest as _, Sha256};
 
 /// The only persisted runtime-IR format understood by this crate.
-pub const RUNTIME_IR_FORMAT: &str = "service-runtime-ir/2";
+pub const RUNTIME_IR_FORMAT: &str = "service-runtime-ir/3";
 
 /// Security-sensitive admission order at every generated operation boundary.
 pub const ADMISSION_PIPELINE: [AdmissionStage; 4] = [

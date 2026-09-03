@@ -8,13 +8,14 @@ use ess_compiler::EssIr;
 use ess_compiler::ir::{ResolvedCondition, ResolvedEffect, ResolvedPayloadValue};
 use service_definition::{
     ContextValue, EventBindingSource, ExpectedVersionSource, IdempotencySource, RealmPolicy,
-    StreamIdSource,
+    ServiceDelivery, StreamIdSource,
 };
 use service_engine::{
-    ContentPolicyPlan, ContextSource, EventFieldPlan, ExpectedVersionPlan, IdempotencyPlan,
-    InheritancePlan, InputPlan, InputSource, IntentPlan, ObligationUse, OutcomePlan,
-    PlanRealmPolicy, ProducedEventPlan, QueryPlan, REALIZATION_PLAN_FORMAT, ReducerEffect,
-    ReducerPlan, ServicePlan, StreamPlan, ValueSource, ViewPlan,
+    ContentPolicyPlan, ContextSource, EventFieldPlan, ExpectedVersionPlan, GraphSnapshotOutput,
+    IdempotencyPlan, InheritancePlan, InputPlan, InputSource, IntentPlan, ObligationUse,
+    OutcomePlan, PlanDelivery, PlanRealmPolicy, ProducedEventPlan, QueryPlan,
+    REALIZATION_PLAN_FORMAT, ReducerEffect, ReducerPlan, ServicePlan, StreamPlan, ValueSource,
+    ViewPlan,
 };
 use service_runtime_ir::ServiceRuntimeIr;
 
@@ -31,7 +32,7 @@ impl RealizationArtifacts {
     /// Emits a service library, runtime constructor, client constants, and real Connector factory.
     pub fn generate<'a>(
         plan: &ServicePlan,
-        _client: &ClientPlan,
+        client: &ClientPlan,
         sdk: &SdkLock,
         scenario_paths: impl IntoIterator<Item = &'a str>,
     ) -> Self {
@@ -51,6 +52,13 @@ service-connectors = {{ git = \"{}\", rev = \"{}\" }}\n",
             "service-catalog = {{ git = \"{}\", rev = \"{}\" }}",
             sdk.repository, sdk.revision
         );
+        let _ = writeln!(
+            cargo,
+            "service-http = {{ git = \"{}\", rev = \"{}\" }}",
+            sdk.repository, sdk.revision
+        );
+        cargo
+            .push_str("serde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\n");
         if !scenario_paths.is_empty() {
             let _ = write!(
                 cargo,
@@ -60,7 +68,7 @@ tokio = {{ version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }}\n",
                 sdk.repository, sdk.revision
             );
         }
-        let source = rust_source(&module_name);
+        let source = rust_source(&module_name, client);
         let mut files = BTreeMap::from([
             ("rust/Cargo.toml".to_owned(), cargo),
             ("rust/src/lib.rs".to_owned(), source),
@@ -220,6 +228,7 @@ pub fn compile(
             name.to_string(),
             IntentPlan {
                 command: resolved.command.clone(),
+                scope: annotation.scope.clone(),
                 inputs: input_plans(client_operation, annotation)?,
                 stream: match &annotation.stream_id {
                     StreamIdSource::CommandField { field } => StreamPlan::CommandField {
@@ -273,6 +282,7 @@ pub fn compile(
             name.to_string(),
             QueryPlan {
                 view: resolved.view.clone(),
+                scope: annotation.scope.clone(),
                 inputs: input_plans_query(client_operation)?,
                 obligations: obligation_uses(runtime, &annotation.obligations)?,
             },
@@ -304,6 +314,12 @@ pub fn compile(
     Ok(ServicePlan {
         format: REALIZATION_PLAN_FORMAT.to_owned(),
         service: definition.service.to_string(),
+        delivery: match &definition.delivery {
+            ServiceDelivery::IdentityHttp { audience } => PlanDelivery::IdentityHttp {
+                audience: audience.clone(),
+            },
+            ServiceDelivery::ComposedConnector => PlanDelivery::ComposedConnector,
+        },
         realm: match definition.realm {
             RealmPolicy::Required => PlanRealmPolicy::Required,
             RealmPolicy::Optional => PlanRealmPolicy::Optional,
@@ -442,6 +458,43 @@ fn event_binding(
                 .obligations()
                 .get(name)
                 .ok_or_else(|| anyhow!("event binding obligation {name} is unresolved"))?;
+            if obligation.provider.as_str() == "sdk.graph.publish-snapshot/v1" {
+                let required = |binding: &str| {
+                    obligation
+                        .bindings
+                        .iter()
+                        .find(|(name, _)| name.as_str() == binding)
+                        .map(|(_, value)| value.clone())
+                        .ok_or_else(|| anyhow!("event binding obligation {name} lacks {binding}"))
+                };
+                let output = match target {
+                    "nodes" => GraphSnapshotOutput::Nodes,
+                    "edges" => GraphSnapshotOutput::Edges,
+                    "digest" => GraphSnapshotOutput::Digest,
+                    "node_count" => GraphSnapshotOutput::NodeCount,
+                    "edge_count" => GraphSnapshotOutput::EdgeCount,
+                    _ => bail!(
+                        "graph snapshot obligation {name} cannot derive event field {target:?}"
+                    ),
+                };
+                return Ok(ValueSource::GraphSnapshot {
+                    nodes: required("nodes")?,
+                    edges: required("edges")?,
+                    partition: required("partition")?,
+                    node_partition: required("node_partition")?,
+                    edge_partition: required("edge_partition")?,
+                    node_identity: required("node_identity")?,
+                    edge_identity: required("edge_identity")?,
+                    edge_source: required("edge_source")?,
+                    edge_target: required("edge_target")?,
+                    active_state: obligation
+                        .bindings
+                        .iter()
+                        .find(|(name, _)| name.as_str() == "active_state")
+                        .map_or_else(|| "Active".to_owned(), |(_, value)| value.clone()),
+                    output,
+                });
+            }
             let (entity_binding, field_binding) = if target.contains("scope") {
                 ("parent", "parent_scopes")
             } else {
@@ -499,7 +552,8 @@ fn is_parent_authority_provider(provider: &str) -> bool {
     )
 }
 
-fn rust_source(module_name: &str) -> String {
+fn rust_source(module_name: &str, client: &ClientPlan) -> String {
+    let http = generated_http_client(client);
     format!(
         r#"// generated by service-builder; do not edit
 //! Complete generated service and Connector contribution for `{module_name}`.
@@ -550,8 +604,215 @@ pub fn connector_factory_with_authority(
         authority,
     )
 }}
+
+{http}
 "#,
     )
+}
+
+fn generated_http_client(client: &ClientPlan) -> String {
+    let ServiceDelivery::IdentityHttp { audience } = &client.delivery else {
+        return "// This service selected composed Connector delivery; no HTTP client is emitted."
+            .to_owned();
+    };
+    let client_name = format!("{}Client", pascal_case(&client.service));
+    let mut declarations = String::new();
+    let mut methods = String::new();
+    for operation in &client.operations {
+        let operation_type = pascal_case(&operation.operation);
+        let input_type = format!("{operation_type}Input");
+        let method = rust_identifier(&operation.operation);
+        let _ = writeln!(
+            declarations,
+            "#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]\n#[serde(deny_unknown_fields)]\npub struct {input_type} {{"
+        );
+        for input in &operation.inputs {
+            let field = rust_identifier(&input.name);
+            if field != input.name {
+                let _ = writeln!(declarations, "    #[serde(rename = {:?})]", input.name);
+            }
+            if input.optional {
+                declarations
+                    .push_str("    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n");
+            }
+            let _ = writeln!(
+                declarations,
+                "    pub {field}: {},",
+                rust_type(&input.type_ref, input.optional)
+            );
+        }
+        declarations.push_str("}\n\n");
+
+        match &operation.result {
+            crate::client::ClientResult::Intent { .. } => {
+                let _ = writeln!(
+                    methods,
+                    "    pub async fn {method}(&self, credential: &service_http::AccessCredential, input: &{input_type}) -> Result<service_http::MutationReceipt, service_http::ClientError> {{\n        self.inner.intent(credential, {:?}, input).await\n    }}\n",
+                    operation.operation
+                );
+            }
+            crate::client::ClientResult::Query { fields } => {
+                let row_type = format!("{operation_type}Row");
+                let _ = writeln!(
+                    declarations,
+                    "#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]\n#[serde(deny_unknown_fields)]\npub struct {row_type} {{"
+                );
+                for (name, type_ref) in fields {
+                    let field = rust_identifier(name);
+                    if field != *name {
+                        let _ = writeln!(declarations, "    #[serde(rename = {name:?})]");
+                    }
+                    let optional = type_ref.starts_with("Optional<");
+                    if optional {
+                        declarations.push_str("    #[serde(default)]\n");
+                    }
+                    let _ = writeln!(
+                        declarations,
+                        "    pub {field}: {},",
+                        rust_type(type_ref, optional)
+                    );
+                }
+                declarations.push_str("}\n\n");
+                let _ = writeln!(
+                    methods,
+                    "    pub async fn {method}(&self, credential: &service_http::AccessCredential, input: &{input_type}, page: service_http::Page) -> Result<service_http::QueryPage<{row_type}>, service_http::ClientError> {{\n        self.inner.query(credential, {:?}, input, page).await\n    }}\n",
+                    operation.operation
+                );
+            }
+        }
+    }
+    format!(
+        r"/// Exact Identity resource audience compiled into this service.
+pub const HTTP_AUDIENCE: &str = {audience:?};
+
+/// Creates the generated Identity-authenticated server router.
+pub async fn http_router(
+    store: Arc<dyn service_connectors::DurableEventStore>,
+    identity_origin: &str,
+) -> Result<service_http::HttpRouter, service_http::ServerError> {{
+    let service = service().map_err(service_http::ServerError::Plan)?;
+    service_http::IdentityHttpService::initialize(store, service, identity_origin)
+        .await
+        .map(service_http::IdentityHttpService::router)
+}}
+
+{declarations}
+/// Typed client for the generated `{service}` operation inventory.
+#[derive(Clone, Debug)]
+pub struct {client_name} {{
+    inner: service_http::ServiceHttpClient,
+}}
+
+impl {client_name} {{
+    /// Binds the client to one exact service origin and generated audience.
+    pub fn new(origin: &str) -> Result<Self, service_http::ClientError> {{
+        service_http::ServiceHttpClient::new(origin, HTTP_AUDIENCE)
+            .map(|inner| Self {{ inner }})
+    }}
+
+{methods}}}
+",
+        service = client.service
+    )
+}
+
+fn pascal_case(value: &str) -> String {
+    value
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut characters = part.chars();
+            characters.next().map_or_else(String::new, |first| {
+                first.to_ascii_uppercase().to_string() + characters.as_str()
+            })
+        })
+        .collect()
+}
+
+fn rust_identifier(value: &str) -> String {
+    let mut output = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '_' {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    if output.is_empty() || output.as_bytes()[0].is_ascii_digit() {
+        output.insert(0, '_');
+    }
+    if matches!(
+        output.as_str(),
+        "as" | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+    ) {
+        format!("r#{output}")
+    } else {
+        output
+    }
+}
+
+fn rust_type(type_ref: &str, optional: bool) -> String {
+    let base = type_ref
+        .strip_prefix("Optional<")
+        .and_then(|value| value.strip_suffix('>'))
+        .unwrap_or(type_ref);
+    let rendered = if let Some(inner) = base
+        .strip_prefix("List<")
+        .and_then(|value| value.strip_suffix('>'))
+    {
+        format!("Vec<{}>", rust_type(inner, false))
+    } else {
+        match base {
+            "Integer" => "i64".to_owned(),
+            "Decimal" => "f64".to_owned(),
+            "Boolean" => "bool".to_owned(),
+            "String" | "Uuid" | "Timestamp" | "DateTime" => "String".to_owned(),
+            _ => "serde_json::Value".to_owned(),
+        }
+    };
+    if optional {
+        format!("Option<{rendered}>")
+    } else {
+        rendered
+    }
 }
 
 fn docs_package_json(sdk: &SdkLock) -> String {

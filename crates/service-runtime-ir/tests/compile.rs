@@ -73,8 +73,9 @@ views:
 ";
 
 const DEFINITION: &str = r"
-format: service-definition/2
+format: service-definition/3
 service: demo_todo
+delivery: { kind: composed_connector }
 realm: optional
 content:
   - name: item_content
@@ -112,6 +113,7 @@ projections:
     obligations: [bind_owner, visibility]
 intents:
   - name: add_item
+    scope: items.manage
     command: demo.todo.AddItem
     stream_id: { kind: command_field, field: item_id }
     expected_version: { kind: no_stream }
@@ -137,6 +139,7 @@ intents:
     obligations: [aggregate, bind_owner, content_lifecycle]
 queries:
   - name: get_item
+    scope: items.read
     view: demo.todo.ItemById
     projection: item_by_id
     selectors:
@@ -189,7 +192,8 @@ fn canonical_roundtrip_binds_exact_ess_and_synthesis_and_loses_no_annotations() 
     assert_eq!(first.definition(), &definition);
 
     for annotation in [
-        "service-definition/2",
+        "service-definition/3",
+        "composed_connector",
         "demo_todo",
         "optional",
         "item_content",
@@ -202,6 +206,7 @@ fn canonical_roundtrip_binds_exact_ess_and_synthesis_and_loses_no_annotations() 
         "item_by_id",
         "inline_transactional",
         "add_item",
+        "items.manage",
         "demo.todo.AddItem",
         "item_id",
         "no_stream",
@@ -214,6 +219,7 @@ fn canonical_roundtrip_binds_exact_ess_and_synthesis_and_loses_no_annotations() 
         "content_ref",
         "demo.todo.ItemAdded",
         "get_item",
+        "items.read",
         "owner",
         "ascending",
         "read_your_writes",
@@ -232,8 +238,8 @@ fn persisted_ir_is_closed_and_recompiled_before_acceptance() {
     let canonical = runtime.to_canonical_json();
 
     let unknown = canonical.replacen(
-        "\"format\": \"service-runtime-ir/2\"",
-        "\"format\": \"service-runtime-ir/2\",\n  \"route\": \"/realms/default\"",
+        "\"format\": \"service-runtime-ir/3\"",
+        "\"format\": \"service-runtime-ir/3\",\n  \"route\": \"/realms/default\"",
         1,
     );
     let error = ServiceRuntimeIr::from_json_bound(&unknown, &ir, &plan)

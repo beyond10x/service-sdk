@@ -103,6 +103,61 @@ const CATALOG: &[CatalogEntry] = &[
         surfaces: &[ObligationSurface::Intent],
     },
     CatalogEntry {
+        provider: "sdk.graph.connect-dag/v1",
+        required_bindings: &[
+            "nodes",
+            "edges",
+            "partition",
+            "node_partition",
+            "edge_partition",
+            "node_identity",
+            "edge_source",
+            "edge_target",
+            "source",
+            "target",
+        ],
+        optional_bindings: &["active_state", "max_nodes", "max_edges"],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
+        provider: "sdk.graph.node-unreferenced/v1",
+        required_bindings: &[
+            "nodes",
+            "edges",
+            "partition",
+            "node_partition",
+            "edge_partition",
+            "node_identity",
+            "edge_source",
+            "edge_target",
+            "node",
+        ],
+        optional_bindings: &["active_state"],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
+        provider: "sdk.graph.publish-snapshot/v1",
+        required_bindings: &[
+            "nodes",
+            "edges",
+            "partition",
+            "node_partition",
+            "edge_partition",
+            "node_identity",
+            "edge_identity",
+            "edge_source",
+            "edge_target",
+        ],
+        optional_bindings: &["active_state", "max_nodes", "max_edges"],
+        surfaces: &[ObligationSurface::Intent, ObligationSurface::EventBinding],
+    },
+    CatalogEntry {
+        provider: "sdk.aggregate.owned-revision/v1",
+        required_bindings: &["revision", "revision_identity"],
+        optional_bindings: &["allowed"],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
         provider: "sdk.derive.inherit-parent-authority/v1",
         required_bindings: &[
             "parent_owner",
@@ -466,8 +521,9 @@ mod tests {
     use super::*;
 
     const COMPLETE: &str = r"
-format: service-definition/2
+format: service-definition/3
 service: notes
+delivery: { kind: composed_connector }
 realm: optional
 obligations:
   - name: aggregate
@@ -485,6 +541,7 @@ projections:
     obligations: [visibility]
 intents:
   - name: create_note
+    scope: notes.manage
     command: notes.note.CreateNote
     stream_id: { kind: generated_uuid_v7 }
     expected_version: { kind: no_stream }
@@ -493,6 +550,7 @@ intents:
     obligations: [aggregate]
 queries:
   - name: get_note
+    scope: notes.read
     view: notes.note.NoteById
     projection: note_by_id
     selectors: [{ parameter: note_id, view_field: note_id }]
