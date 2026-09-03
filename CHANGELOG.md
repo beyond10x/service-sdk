@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 - 2026-09-03
+
+- Emit rustfmt-clean generated Identity HTTP client code for empty request DTOs and services with a
+  larger operation inventory.
+
 ## 0.4.0 - 2026-09-03
 
 - Add first-class `identity_http` delivery with an exact Identity audience, per-operation scopes,

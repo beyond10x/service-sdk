@@ -495,13 +495,15 @@ scenarios: [scenario.yaml]
         .arg("--edition")
         .arg("2024")
         .arg("--check")
+        .arg(output.join("rust/src/lib.rs"))
         .arg(output.join("rust/tests/generated_scenarios.rs"))
         .output()
         .expect("run rustfmt against generated scenario test");
     assert!(
         formatted.status.success(),
-        "generated scenario test is not rustfmt-clean: {}",
-        String::from_utf8_lossy(&formatted.stdout)
+        "generated Rust is not rustfmt-clean:\n{}{}",
+        String::from_utf8_lossy(&formatted.stdout),
+        String::from_utf8_lossy(&formatted.stderr)
     );
     assert!(!output.join("ess/synthesis/Cargo.toml").exists());
 }

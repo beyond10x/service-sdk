@@ -610,6 +610,7 @@ pub fn connector_factory_with_authority(
     )
 }
 
+#[allow(clippy::too_many_lines)]
 fn generated_http_client(client: &ClientPlan) -> String {
     let ServiceDelivery::IdentityHttp { audience } = &client.delivery else {
         return "// This service selected composed Connector delivery; no HTTP client is emitted."
@@ -622,32 +623,40 @@ fn generated_http_client(client: &ClientPlan) -> String {
         let operation_type = pascal_case(&operation.operation);
         let input_type = format!("{operation_type}Input");
         let method = rust_identifier(&operation.operation);
-        let _ = writeln!(
-            declarations,
-            "#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]\n#[serde(deny_unknown_fields)]\npub struct {input_type} {{"
-        );
-        for input in &operation.inputs {
-            let field = rust_identifier(&input.name);
-            if field != input.name {
-                let _ = writeln!(declarations, "    #[serde(rename = {:?})]", input.name);
-            }
-            if input.optional {
-                declarations
-                    .push_str("    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n");
-            }
+        if operation.inputs.is_empty() {
             let _ = writeln!(
                 declarations,
-                "    pub {field}: {},",
-                rust_type(&input.type_ref, input.optional)
+                "#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]\n#[serde(deny_unknown_fields)]\npub struct {input_type} {{}}\n"
             );
+        } else {
+            let _ = writeln!(
+                declarations,
+                "#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]\n#[serde(deny_unknown_fields)]\npub struct {input_type} {{"
+            );
+            for input in &operation.inputs {
+                let field = rust_identifier(&input.name);
+                if field != input.name {
+                    let _ = writeln!(declarations, "    #[serde(rename = {:?})]", input.name);
+                }
+                if input.optional {
+                    declarations.push_str(
+                        "    #[serde(default, skip_serializing_if = \"Option::is_none\")]\n",
+                    );
+                }
+                let _ = writeln!(
+                    declarations,
+                    "    pub {field}: {},",
+                    rust_type(&input.type_ref, input.optional)
+                );
+            }
+            declarations.push_str("}\n\n");
         }
-        declarations.push_str("}\n\n");
 
         match &operation.result {
             crate::client::ClientResult::Intent { .. } => {
                 let _ = writeln!(
                     methods,
-                    "    pub async fn {method}(&self, credential: &service_http::AccessCredential, input: &{input_type}) -> Result<service_http::MutationReceipt, service_http::ClientError> {{\n        self.inner.intent(credential, {:?}, input).await\n    }}\n",
+                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n    ) -> Result<service_http::MutationReceipt, service_http::ClientError> {{\n        self.inner.intent(credential, {:?}, input).await\n    }}",
                     operation.operation
                 );
             }
@@ -675,12 +684,14 @@ fn generated_http_client(client: &ClientPlan) -> String {
                 declarations.push_str("}\n\n");
                 let _ = writeln!(
                     methods,
-                    "    pub async fn {method}(&self, credential: &service_http::AccessCredential, input: &{input_type}, page: service_http::Page) -> Result<service_http::QueryPage<{row_type}>, service_http::ClientError> {{\n        self.inner.query(credential, {:?}, input, page).await\n    }}\n",
+                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n        page: service_http::Page,\n    ) -> Result<service_http::QueryPage<{row_type}>, service_http::ClientError> {{\n        self.inner.query(credential, {:?}, input, page).await\n    }}",
                     operation.operation
                 );
             }
         }
     }
+    let declarations = declarations.trim_end();
+    let methods = methods.trim_end();
     format!(
         r"/// Exact Identity resource audience compiled into this service.
 pub const HTTP_AUDIENCE: &str = {audience:?};
@@ -697,6 +708,7 @@ pub async fn http_router(
 }}
 
 {declarations}
+
 /// Typed client for the generated `{service}` operation inventory.
 #[derive(Clone, Debug)]
 pub struct {client_name} {{
@@ -706,12 +718,11 @@ pub struct {client_name} {{
 impl {client_name} {{
     /// Binds the client to one exact service origin and generated audience.
     pub fn new(origin: &str) -> Result<Self, service_http::ClientError> {{
-        service_http::ServiceHttpClient::new(origin, HTTP_AUDIENCE)
-            .map(|inner| Self {{ inner }})
+        service_http::ServiceHttpClient::new(origin, HTTP_AUDIENCE).map(|inner| Self {{ inner }})
     }}
 
-{methods}}}
-",
+{methods}
+}}",
         service = client.service
     )
 }

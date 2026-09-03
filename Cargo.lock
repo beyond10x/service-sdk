@@ -1666,7 +1666,7 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1688,7 +1688,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "hex",
@@ -1702,7 +1702,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -1721,7 +1721,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -1739,7 +1739,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "ess-compiler",
  "serde",
@@ -1749,7 +1749,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "futures",
  "hex",
@@ -1763,7 +1763,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "eventlog-core",
  "eventlog-sqlite",
@@ -1781,7 +1781,7 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "axum",
  "bytes",
@@ -1800,7 +1800,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1811,7 +1811,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "futures",
  "serde",
@@ -1822,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "ess-compiler",
  "ess-domain",
