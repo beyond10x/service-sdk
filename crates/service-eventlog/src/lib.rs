@@ -1,7 +1,7 @@
 //! SDK resource adapters over the organization Eventlog kit.
 //!
 //! The adapter is generic over Eventlog's one `EventStore` port, so a deployment chooses its
-//! existing SQLite or PostgreSQL implementation without changing generated service code.
+//! existing `SQLite` or `PostgreSQL` implementation without changing generated service code.
 
 #![forbid(unsafe_code)]
 

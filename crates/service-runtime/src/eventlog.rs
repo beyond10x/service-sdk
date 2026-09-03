@@ -578,7 +578,7 @@ pub enum AppendError<E> {
 
 /// Asynchronous persistence port required by aggregate execution.
 ///
-/// The boxed-future shape keeps the port object-safe and lets SQLite, PostgreSQL, or other
+/// The boxed-future shape keeps the port object-safe and lets `SQLite`, `PostgreSQL`, or other
 /// adapters use their existing asynchronous execution model without coupling this crate to an
 /// executor or an event-log implementation.
 pub trait EventLog<E>: Send {
