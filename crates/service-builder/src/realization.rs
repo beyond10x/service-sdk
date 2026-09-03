@@ -656,7 +656,7 @@ fn generated_http_client(client: &ClientPlan) -> String {
             crate::client::ClientResult::Intent { .. } => {
                 let _ = writeln!(
                     methods,
-                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n    ) -> Result<service_http::MutationReceipt, service_http::ClientError> {{\n        self.inner.intent(credential, {:?}, input).await\n    }}",
+                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n    ) -> Result<service_http::MutationReceipt, service_http::ClientError> {{\n        let operation = {:?};\n        self.inner.intent(credential, operation, input).await\n    }}",
                     operation.operation
                 );
             }
@@ -684,7 +684,7 @@ fn generated_http_client(client: &ClientPlan) -> String {
                 declarations.push_str("}\n\n");
                 let _ = writeln!(
                     methods,
-                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n        page: service_http::Page,\n    ) -> Result<service_http::QueryPage<{row_type}>, service_http::ClientError> {{\n        self.inner.query(credential, {:?}, input, page).await\n    }}",
+                    "    pub async fn {method}(\n        &self,\n        credential: &service_http::AccessCredential,\n        input: &{input_type},\n        page: service_http::Page,\n    ) -> Result<service_http::QueryPage<{row_type}>, service_http::ClientError> {{\n        let operation = {:?};\n        self.inner.query(credential, operation, input, page).await\n    }}",
                     operation.operation
                 );
             }

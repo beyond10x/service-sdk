@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2 - 2026-09-03
+
+- Canonically wrap every generated HTTP client call chain so formatting is independent of service
+  and operation name length.
+
 ## 0.4.1 - 2026-09-03
 
 - Emit rustfmt-clean generated Identity HTTP client code for empty request DTOs and services with a
