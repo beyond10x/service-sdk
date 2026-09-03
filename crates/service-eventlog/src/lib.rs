@@ -82,6 +82,8 @@ pub enum PageRequestError {
 pub struct QueryPage {
     /// Visible rows from this bounded raw projection window.
     pub items: Vec<BTreeMap<String, Value>>,
+    /// Exact authorized aggregate version when every visible row belongs to one stream.
+    pub through_version: Option<u64>,
     /// Opaque cursor for the next raw window, or `None` at the end.
     pub next_cursor: Option<String>,
     /// True when more raw rows remain, including rows withheld by authorization.
@@ -321,13 +323,25 @@ impl EventlogService {
             clock: &mut clock,
             ids: &mut ids,
         };
-        let items = self
+        let rows = self
             .engine
-            .query(&mut resources, context, operation, body)
+            .query_rows(&mut resources, context, operation, body)
             .await?;
         let next_cursor = projections.next_cursor.take();
+        let through_version = match single_authorized_stream(&rows) {
+            Some(service_stream) => {
+                let stream = durable_stream(service_stream)
+                    .map_err(|_| service_engine::ExecutionError::Resource(ResourceError))?;
+                self.store
+                    .stream_version(&stream)
+                    .await
+                    .map_err(|_| service_engine::ExecutionError::Resource(ResourceError))?
+            }
+            None => None,
+        };
         Ok(QueryPage {
-            items,
+            items: rows.into_iter().map(|row| row.value).collect(),
+            through_version,
             partial: next_cursor.is_some(),
             next_cursor,
         })
@@ -599,7 +613,14 @@ impl Projector for ServiceProjector {
                     "a redacted generated-service event cannot drive a projection".to_owned(),
                 ));
             }
-            let (realm, _, _) = decode_stream_id(&event.stream_id)?;
+            let (realm, category, key) = decode_stream_id(&event.stream_id)?;
+            let source_stream = ServiceStream {
+                service: self.engine.plan().service.clone(),
+                tenant: event.tenant.as_str().to_owned(),
+                realm: realm.clone(),
+                category,
+                key,
+            };
             let state_key = event.stream_id.clone();
             let previous = store
                 .get(self.layout.state, &event.tenant, &state_key)
@@ -657,10 +678,11 @@ impl Projector for ServiceProjector {
                     })?,
                 )
                 .await?;
-            for row in self
-                .engine
-                .projection_rows(event.tenant.as_str(), realm.as_deref(), &next)
+            for mut row in
+                self.engine
+                    .projection_rows(event.tenant.as_str(), realm.as_deref(), &next)
             {
+                row.row.source_stream = Some(source_stream.clone());
                 store
                     .upsert(
                         self.layout.rows,
@@ -1203,6 +1225,15 @@ fn durable_stream(stream: &ServiceStream) -> Result<StreamId, EventLogError> {
     )
 }
 
+fn single_authorized_stream(
+    rows: &[service_engine::AuthorizedProjectionRow],
+) -> Option<&ServiceStream> {
+    let first = rows.first()?.source_stream.as_ref()?;
+    rows.iter()
+        .all(|row| row.source_stream.as_ref() == Some(first))
+        .then_some(first)
+}
+
 fn stream_type(service: &str) -> String {
     format!("generated-service:{service}")
 }
@@ -1362,6 +1393,34 @@ mod tests {
             Err(PageRequestError::Limit)
         );
         assert_eq!(PageRequest::new(None, 10).unwrap().limit(), 10);
+    }
+
+    #[test]
+    fn query_revision_is_available_only_for_one_authorized_aggregate() {
+        let stream = ServiceStream {
+            service: "agentide".to_owned(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            category: "agentide-session".to_owned(),
+            key: "session-a".to_owned(),
+        };
+        let row = |source_stream| service_engine::AuthorizedProjectionRow {
+            value: BTreeMap::new(),
+            source_stream,
+        };
+
+        assert_eq!(
+            single_authorized_stream(&[row(Some(stream.clone())), row(Some(stream.clone()))]),
+            Some(&stream)
+        );
+        assert!(single_authorized_stream(&[row(None)]).is_none());
+
+        let mut other = stream.clone();
+        other.key = "session-b".to_owned();
+        assert!(
+            single_authorized_stream(&[row(Some(stream)), row(Some(other))]).is_none(),
+            "a mixed-aggregate page must not publish either stream version"
+        );
     }
 
     #[test]

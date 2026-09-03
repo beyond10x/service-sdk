@@ -500,8 +500,20 @@ pub struct ProjectionRow {
     pub tenant: String,
     /// Hidden exact optional realm partition.
     pub realm: Option<String>,
+    /// Hidden aggregate source used for authorized revision and event-feed resolution.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_stream: Option<ServiceStream>,
     /// Public row value.
     pub value: BTreeMap<String, Value>,
+}
+
+/// One projection row after partition, shape, selector, and authority checks.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthorizedProjectionRow {
+    /// Public row value.
+    pub value: BTreeMap<String, Value>,
+    /// Hidden aggregate source, when the projection adapter can establish it.
+    pub source_stream: Option<ServiceStream>,
 }
 
 /// Projection row paired with its source entity identity for deterministic adapter keys.
@@ -879,6 +891,22 @@ impl ServiceEngine {
         operation: &str,
         body: &[u8],
     ) -> Result<Vec<BTreeMap<String, Value>>, ExecutionError> {
+        self.query_rows(resources, context, operation, body)
+            .await
+            .map(|rows| rows.into_iter().map(|row| row.value).collect())
+    }
+
+    /// Executes an authenticated query while retaining hidden aggregate source metadata.
+    ///
+    /// Callers must never serialize `source_stream` as application data. It exists so trusted
+    /// transports can resolve the exact revision of an already-authorized aggregate.
+    pub async fn query_rows(
+        &self,
+        resources: &mut ServiceResources<'_>,
+        context: &VerifiedAuthContext,
+        operation: &str,
+        body: &[u8],
+    ) -> Result<Vec<AuthorizedProjectionRow>, ExecutionError> {
         self.plan.realm.runtime().enforce(context)?;
         let plan = self
             .plan
@@ -915,7 +943,10 @@ impl ServiceEngine {
         for row in rows {
             validate_projection_row(context, plan, view, &selectors, &row)?;
             if query_visible(resources.authority, context, plan, &row.value).await? {
-                visible.push(row.value);
+                visible.push(AuthorizedProjectionRow {
+                    value: row.value,
+                    source_stream: row.source_stream,
+                });
             }
         }
         Ok(visible)
@@ -1488,6 +1519,7 @@ fn projection_rows_for_partition(
                         view: view_name.clone(),
                         tenant: tenant.to_owned(),
                         realm: realm.map(str::to_owned),
+                        source_stream: None,
                         value,
                     },
                 });
@@ -1899,6 +1931,7 @@ mod tests {
             view: query.view.clone(),
             tenant: "tenant-a".to_owned(),
             realm: None,
+            source_stream: None,
             value: selectors.clone(),
         };
 
