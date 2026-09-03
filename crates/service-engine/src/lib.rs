@@ -943,9 +943,12 @@ impl ServiceEngine {
         for row in rows {
             validate_projection_row(context, plan, view, &selectors, &row)?;
             if query_visible(resources.authority, context, plan, &row.value).await? {
+                let source_stream = row.source_stream.or_else(|| {
+                    projection_source_from_value(&self.plan, context, view, &row.value)
+                });
                 visible.push(AuthorizedProjectionRow {
                     value: row.value,
-                    source_stream: row.source_stream,
+                    source_stream,
                 });
             }
         }
@@ -1430,6 +1433,50 @@ fn validate_projection_row(
     } else {
         Err(ExecutionError::InvalidProjection)
     }
+}
+
+fn projection_source_from_value(
+    service: &ServicePlan,
+    context: &VerifiedAuthContext,
+    view: &ViewPlan,
+    value: &BTreeMap<String, Value>,
+) -> Option<ServiceStream> {
+    let mut candidates = BTreeSet::new();
+    for intent in service.intents.values() {
+        let category = intent
+            .obligations
+            .iter()
+            .find(|item| item.provider == "sdk.aggregate.event-sourced/v1")
+            .and_then(|item| item.bindings.get("category"))
+            .map_or("aggregate", String::as_str);
+        for produced in &intent.outcome.events {
+            let Some(reducer) = service.reducers.get(&produced.event) else {
+                continue;
+            };
+            if reducer.entity != view.source {
+                continue;
+            }
+            let key_field = match &intent.stream {
+                StreamPlan::CommandField { field } => field,
+                StreamPlan::GeneratedUuidV7 => &reducer.identity_field,
+            };
+            if let Some(key) = value.get(key_field).and_then(Value::as_str) {
+                candidates.insert((category.to_owned(), key.to_owned()));
+            }
+        }
+    }
+    let mut candidates = candidates.into_iter();
+    let (category, key) = candidates.next()?;
+    if candidates.next().is_some() {
+        return None;
+    }
+    Some(ServiceStream {
+        service: service.service.clone(),
+        tenant: context.tenant().as_str().to_owned(),
+        realm: context.realm().map(|realm| realm.as_str().to_owned()),
+        category,
+        key,
+    })
 }
 
 fn context_value(context: &VerifiedAuthContext, source: ContextSource) -> Value {
@@ -1948,6 +1995,32 @@ mod tests {
             validate_projection_row(&context(None), &query, &view, &selectors, &extra),
             Err(ExecutionError::InvalidProjection)
         ));
+    }
+
+    #[test]
+    fn legacy_projection_rows_recover_their_aggregate_source_from_the_plan() {
+        let (mut plan, intent) = two_event_plan();
+        plan.intents.insert("create".to_owned(), intent);
+        let view = ViewPlan {
+            source: "demo.Item".to_owned(),
+            fields: vec!["id".to_owned(), "value".to_owned()],
+            obligations: Vec::new(),
+        };
+        let value = BTreeMap::from([
+            ("id".to_owned(), Value::String("item-a".to_owned())),
+            ("value".to_owned(), Value::String("updated".to_owned())),
+        ]);
+
+        assert_eq!(
+            projection_source_from_value(&plan, &context(None), &view, &value),
+            Some(ServiceStream {
+                service: "demo".to_owned(),
+                tenant: "tenant-a".to_owned(),
+                realm: None,
+                category: "aggregate".to_owned(),
+                key: "item-a".to_owned(),
+            })
+        );
     }
 
     #[test]
