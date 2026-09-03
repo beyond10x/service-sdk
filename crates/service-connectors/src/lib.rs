@@ -580,10 +580,11 @@ fn output_schema(plan: &ServicePlan, operation: &OperationContribution) -> Value
                         "type": "object",
                         "properties": {
                             "items": {"type": "array", "items": item},
+                            "through_version": {"type": ["integer", "null"], "minimum": 1},
                             "next_cursor": {"type": ["string", "null"]},
                             "partial": {"type": "boolean"}
                         },
-                        "required": ["items", "next_cursor", "partial"],
+                        "required": ["items", "through_version", "next_cursor", "partial"],
                         "additionalProperties": false
                     }
                 ]
@@ -1089,6 +1090,44 @@ mod tests {
         assert_eq!(
             scopes["properties"]["principal"]["type"],
             json!(["string", "null"])
+        );
+    }
+
+    #[test]
+    fn paged_query_schema_carries_nullable_authorized_revision() {
+        let plan = service_engine::ServicePlan::from_json(
+            r#"{
+              "format":"service-realization-plan/1",
+              "service":"todo",
+              "realm":"optional",
+              "ess_source_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "obligation_catalog_digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "content":{},"intents":{},
+              "queries":{"get":{"view":"todo.Item","inputs":[],"obligations":[]}},
+              "reducers":{},
+              "views":{"todo.Item":{"source":"todo.Item","fields":["id"],"obligations":[]}}
+            }"#,
+        )
+        .unwrap();
+        let operation = OperationContribution {
+            operation: "get".into(),
+            semantic_ref: "todo.Item".into(),
+            kind: OperationKind::Query,
+            effect: OperationEffect::Read,
+            inputs: Vec::new(),
+        };
+        let (_, output) = operation_schemas(&plan, &operation);
+        let paged = &output["anyOf"][1];
+        assert_eq!(
+            paged["properties"]["through_version"]["type"],
+            json!(["integer", "null"])
+        );
+        assert!(
+            paged["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|field| field == "through_version")
         );
     }
 
