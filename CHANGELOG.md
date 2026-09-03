@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.4 - 2026-09-03
+
+- Publish the complete Service SDK source and history under Apache 2.0 so generated-service
+  consumers can build from exact public Git revisions.
+- Add a public developer quickstart, contribution and security guidance, repository CI, and the
+  documentation surface metadata needed for organization-owned delivery.
+
 ## 0.3.3 - 2026-09-03
 
 - Return the exact authorized aggregate revision with bounded single-stream projection pages,
