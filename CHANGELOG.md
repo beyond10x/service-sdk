@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3 - 2026-09-03
+
+- Return the exact authorized aggregate revision with bounded single-stream projection pages,
+  while leaving mixed, empty, and source-less pages explicitly unknown.
+- Recover aggregate source metadata for projections written before source tracking was introduced,
+  without exposing that hidden metadata as application data.
+
 ## 0.3.2 - 2026-09-03
 
 - Align generated-service Connector factories, catalogs, and conformance contracts with
@@ -12,8 +19,6 @@
 
 ## Unreleased
 
-- Return the exact authorized aggregate revision with bounded single-stream projection pages,
-  while leaving mixed, empty, and source-less pages explicitly unknown.
 - Align generated Connector factories and conformance with Connectors 0.5.0, preserving
   receiver-verified agent, attempt, delegation, and grant provenance through service execution.
 - Carry receiver-verified agent, attempt, delegation, and grant provenance alongside the existing
