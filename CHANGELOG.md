@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 - 2026-09-03
+
+- Align generated-service Connector factories, catalogs, and conformance contracts with
+  Connectors 0.5.3 so composed runtimes share one exact factory trait.
+
 ## 0.3.1 - 2026-09-03
 
 - Align generated-service Connector factories and conformance contracts with Connectors 0.5.2,
