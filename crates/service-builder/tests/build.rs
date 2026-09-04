@@ -448,6 +448,9 @@ release:
   build_base:
     repository: docker.io/library/rust
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  runtime_base:
+    repository: gcr.io/distroless/cc-debian12
+    digest: sha256:1111111111111111111111111111111111111111111111111111111111111111
 ",
     )
     .expect("write package fixture");
@@ -512,6 +515,9 @@ release:
     assert!(output.join("deployment/build.ir.json").is_file());
     assert!(output.join("deployment/runtime.ir.json").is_file());
     assert!(output.join("deployment/buildkit/Dockerfile.ess").is_file());
+    let dockerfile = fs::read_to_string(output.join("deployment/buildkit/Dockerfile.ess")).unwrap();
+    assert!(dockerfile.contains("FROM gcr.io/distroless/cc-debian12@sha256:"));
+    assert!(dockerfile.contains("/usr/local/bin/demo-generated-service"));
     assert!(output.join("deployment/chart/Chart.yaml").is_file());
     let scenario_test =
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
