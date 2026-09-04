@@ -66,7 +66,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -177,8 +177,8 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "catalog"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -187,14 +187,14 @@ dependencies = [
 
 [[package]]
 name = "catalog-reader"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 
 [[package]]
 name = "cc"
-version = "1.4.4"
+version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ad534f4357a5264cce5019c989cf66a4f0dc4e0d1b1d15f8aacec0ff7360273"
+checksum = "005ec2760ca554fae18df7a11195552ec576cd665632a881bc011d5bb2fd4d80"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -254,7 +254,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -271,16 +271,16 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "connector-address"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "connector-resolve"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -294,8 +294,8 @@ dependencies = [
 
 [[package]]
 name = "connector-secrets"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -308,8 +308,8 @@ dependencies = [
 
 [[package]]
 name = "connector-state"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "thiserror",
 ]
@@ -439,13 +439,13 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
 name = "domain"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -499,7 +499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -638,9 +638,9 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.11"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d45db016d36b838f563236e9193d0ee6ce38f3f68b6c94e914b4929c96bbb890"
+checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 
 [[package]]
 name = "foldhash"
@@ -723,7 +723,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1239,8 +1239,8 @@ dependencies = [
 
 [[package]]
 name = "protocol"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "domain",
  "schemars 1.2.2",
@@ -1321,7 +1321,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1391,7 +1391,7 @@ checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1485,7 +1485,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1581,7 +1581,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals 0.30.0",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1621,7 +1621,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1643,7 +1643,7 @@ checksum = "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -1697,8 +1697,8 @@ dependencies = [
 
 [[package]]
 name = "service"
-version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
+version = "0.6.2"
+source = "git+https://github.com/beyond10x/connectors.git?rev=03d7fc146c2e11f56ae6fb12e5da578821e2be15#03d7fc146c2e11f56ae6fb12e5da578821e2be15"
 dependencies = [
  "async-trait",
  "base64",
@@ -1717,7 +1717,7 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "clap",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "async-trait",
  "hex",
@@ -1757,7 +1757,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -1776,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -1794,7 +1794,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "ess-compiler",
  "serde",
@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "futures",
  "hex",
@@ -1818,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "eventlog-core",
  "eventlog-sqlite",
@@ -1836,7 +1836,7 @@ dependencies = [
 
 [[package]]
 name = "service-host"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "axum",
@@ -1848,7 +1848,7 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "axum",
  "bytes",
@@ -1867,7 +1867,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "serde",
  "serde_json",
@@ -1878,7 +1878,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "futures",
  "serde",
@@ -1889,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -2011,9 +2011,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.4"
+version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6275cddf4610d1775e6d1fe9469b2e77d0f39fd98fb7450901b821e0c53649f"
+checksum = "12df2e0110f65b775f769bb17ef989067a1d931b2eb822bd4346631eeada89f9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2057,7 +2057,7 @@ checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -2103,9 +2103,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.12.0"
+version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb4ebadaa0af04fab11ae01eb5f9fdb5f9c5b875506e210e71c07873528baa7f"
+checksum = "4cf0ded5c4e56918d8f8a339e1bb67d038d3bc6d144ac407904015ba2e4cde9b"
 dependencies = [
  "tinyvec_macros",
 ]
@@ -2140,14 +2140,14 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
 name = "tokio-rustls"
-version = "0.26.4"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1729aa945f29d91ba541258c8df89027d5792d85a8841fb65e8bf0f4ede4ef61"
+checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
 dependencies = [
  "rustls",
  "tokio",
@@ -2597,7 +2597,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.4",
+ "syn 3.0.5",
 ]
 
 [[package]]
