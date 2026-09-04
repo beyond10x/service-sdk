@@ -525,7 +525,10 @@ release:
     assert!(cargo.contains("service-connectors"));
     assert!(cargo.contains("service-catalog"));
     assert!(cargo.contains("service-http"));
-    assert!(cargo.contains("service-host"));
+    assert!(cargo.contains("service-host = { git ="));
+    assert!(cargo.contains("optional = true"));
+    assert!(cargo.contains("default = [\"standalone-host\"]"));
+    assert!(cargo.contains("required-features = [\"standalone-host\"]"));
     assert!(cargo.contains("service-conformance"));
     assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
     assert!(rust.contains("service_connectors::DurableEventStore"));

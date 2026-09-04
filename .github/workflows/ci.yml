@@ -48,9 +48,16 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
-          cargo install --git https://github.com/beyond10x/aep \
-            --tag 0.52.0 \
-            --locked --bin aep aep-cli
+          aep_version=0.52.0
+          aep_asset="aep-${aep_version}-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --silent --show-error --location --remote-name \
+            "https://github.com/beyond10x/aep/releases/download/${aep_version}/${aep_asset}"
+          curl --fail --silent --show-error --location \
+            "https://github.com/beyond10x/aep/releases/download/${aep_version}/SHA256SUMS" \
+            | grep " ${aep_asset}$" \
+            | sha256sum --check --strict
+          tar --extract --gzip --file "$aep_asset" --strip-components=1
+          install -m 0755 aep "$CARGO_HOME/bin/aep"
 
       - name: Run the complete repository gate
         run: task check

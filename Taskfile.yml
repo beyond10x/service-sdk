@@ -36,9 +36,9 @@ tasks:
     cmds:
       - test -x .github/actions/release-component/release.sh
       - bash -n .github/actions/release-component/release.sh
-      - rg -q 'generate release bundle' .github/actions/release-component/release.sh
-      - rg -q 'cosign sign' .github/actions/release-component/release.sh
-      - "! rg -n 'ghcr\\.io|beyond10x/(workflow|todo|aep-service)' .github/actions/release-component"
+      - grep -q 'generate release bundle' .github/actions/release-component/release.sh
+      - grep -q 'cosign sign' .github/actions/release-component/release.sh
+      - "! grep -R -n -E 'ghcr\\.io|beyond10x/(workflow|todo|aep-service)' .github/actions/release-component"
 
   check:
     deps: [fmt-check, clippy, test, doc, aep-check, web-check, release-action-check]

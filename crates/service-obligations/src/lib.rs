@@ -202,6 +202,12 @@ const CATALOG: &[CatalogEntry] = &[
         surfaces: &[ObligationSurface::Projection, ObligationSurface::Query],
     },
     CatalogEntry {
+        provider: "sdk.projection.conjunctive-scopes-visibility/v1",
+        required_bindings: &["scopes"],
+        optional_bindings: &["parent", "terminal_states"],
+        surfaces: &[ObligationSurface::Projection, ObligationSurface::Query],
+    },
+    CatalogEntry {
         provider: "sdk.projection.hide-terminal-parent/v1",
         required_bindings: &["parent", "parent_identity"],
         optional_bindings: &["terminal_states"],
