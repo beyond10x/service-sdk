@@ -1158,6 +1158,7 @@ async fn run_intent_obligations(
             | "sdk.derive.inherit-parent-authority/v1"
             | "sdk.derive.inherit-parent-authority/v2"
             | "sdk.projection.auth-partitioned-visibility/v1"
+            | "sdk.projection.conjunctive-scopes-visibility/v1"
             | "sdk.projection.hide-terminal-parent/v1" => {}
             "sdk.auth.owner-and-conjunctive-scopes/v1" => {
                 let entity = bound_entity(state, obligation, "owner")?;
@@ -1694,6 +1695,18 @@ async fn query_visible(
                     .ok_or_else(|| ExecutionError::InvalidPlan("projection scopes".into()))?;
                 if !authority
                     .allows(context, AuthorityCheck::OwnerAndScopes { owner, scopes })
+                    .await?
+                {
+                    return Ok(false);
+                }
+            }
+            "sdk.projection.conjunctive-scopes-visibility/v1" => {
+                let scopes = row
+                    .get(binding(obligation, "scopes")?)
+                    .cloned()
+                    .ok_or_else(|| ExecutionError::InvalidPlan("projection scopes".into()))?;
+                if !authority
+                    .allows(context, AuthorityCheck::RequestedScopes { scopes })
                     .await?
                 {
                     return Ok(false);

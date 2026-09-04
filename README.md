@@ -121,6 +121,13 @@ command decision, guarded Eventlog append, reduction, and the declared projectio
 External effects use digest-sealed, durable plans and record uncertain transport outcomes rather
 than repeating them blindly.
 
+Aggregate ownership and projection visibility are separate decisions. Services use
+`sdk.auth.owner-and-conjunctive-scopes/v1` to keep mutations owner-bound. A shared read model may
+instead select `sdk.projection.conjunctive-scopes-visibility/v1`: Eventlog still partitions every
+query by the Identity-derived tenant and exact optional realm, while the row is visible to any
+principal admitted by all populated scope axes. Reading a shared row never confers mutation
+authority.
+
 See [SECURITY.md](SECURITY.md) for private vulnerability reporting and
 [CONTRIBUTING.md](CONTRIBUTING.md) before proposing a change.
 

@@ -1381,6 +1381,63 @@ mod tests {
         })));
     }
 
+    #[tokio::test]
+    async fn scoped_read_visibility_does_not_confer_aggregate_ownership() {
+        let mut authority = VerifiedAuthority::new(AuthorityFacts {
+            principals: BTreeSet::from(["person:bob".to_owned()]),
+            teams: BTreeSet::from(["engineering".to_owned()]),
+            ..AuthorityFacts::default()
+        });
+        let context = VerifiedAuthContext::from_verified(VerifiedIdentity::after_verification(
+            ServiceTenantId::new("tenant-a").unwrap(),
+            AuthorityId::new("person:bob").unwrap(),
+            UserId::new("person:bob").unwrap(),
+            None,
+            None,
+        ));
+        let admitted = serde_json::json!({
+            "principal": null,
+            "team": "engineering",
+            "project": null,
+            "extension": null
+        });
+
+        assert!(
+            authority
+                .allows(
+                    &context,
+                    AuthorityCheck::RequestedScopes {
+                        scopes: admitted.clone(),
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert!(
+            !authority
+                .allows(
+                    &context,
+                    AuthorityCheck::OwnerAndScopes {
+                        owner: Value::String("person:alice".to_owned()),
+                        scopes: admitted,
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert!(
+            !authority
+                .allows(
+                    &context,
+                    AuthorityCheck::RequestedScopes {
+                        scopes: serde_json::json!({"team": "security"}),
+                    },
+                )
+                .await
+                .unwrap()
+        );
+    }
+
     #[test]
     fn page_requests_refuse_empty_cursors_and_unbounded_limits() {
         assert_eq!(PageRequest::new(None, 0), Err(PageRequestError::Limit));
