@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 - 2026-09-04
+
+- Execute generated Helm packaging from the repository root copied into the ESS build graph, so
+  independently released components can publish their generated charts.
+
 ## 0.5.2 - 2026-09-04
 
 - Allow each service package to pin a separate minimal OCI runtime base, copying only the generated

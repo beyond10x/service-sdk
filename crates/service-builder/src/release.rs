@@ -230,6 +230,7 @@ fn build_yaml(service: &str, release: &ReleasePackage) -> String {
             "kind": "run",
             "base": "build-source",
             "argv": ["tar", "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-czf", chart_archive, "-C", chart_path, "."],
+            "workdir": "/src",
         }),
         json!({"id": "chart-archive", "kind": "artifact", "from": "chart-package", "path": chart_archive}),
     ]);

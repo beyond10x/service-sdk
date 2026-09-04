@@ -518,6 +518,7 @@ release:
     let dockerfile = fs::read_to_string(output.join("deployment/buildkit/Dockerfile.ess")).unwrap();
     assert!(dockerfile.contains("FROM gcr.io/distroless/cc-debian12@sha256:"));
     assert!(dockerfile.contains("/usr/local/bin/demo-generated-service"));
+    assert!(dockerfile.contains("WORKDIR /src\nRUN --network=none [\"tar\""));
     assert!(output.join("deployment/chart/Chart.yaml").is_file());
     let scenario_test =
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
