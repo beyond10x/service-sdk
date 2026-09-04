@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5 - 2026-09-04
+
+- Align generated Connector factories and conformance with Connectors 0.5.11 so OAuth refresh
+  responses that omit an unchanged scope remain usable without splitting the composed runtime's
+  factory type graph.
+
 ## 0.5.4 - 2026-09-04
 
 - Add a reusable, configuration-neutral GitHub Action that drives generated service conformance,
