@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use service_builder::client::{ClientInputSource, ClientOperationKind};
 use service_builder::ess::EssSources;
+use service_builder::package::SdkLock;
+use service_builder::realization::RealizationArtifacts;
 use service_builder::{
     CLIENT_PLAN_PATH, CONNECTOR_CONTRIBUTION_PATH, ESS_IR_PATH, HTTP_OPENAPI_PATH,
     REALIZATION_PLAN_PATH, RUNTIME_IR_PATH, SERVICE_CATALOG_PATH, build_service,
@@ -177,6 +179,99 @@ fn one_runtime_ir_derives_identical_client_and_connector_surfaces() {
     );
     assert_expected_artifacts(&first);
     assert_client_and_connector_surfaces(&first);
+}
+
+#[test]
+fn realization_plan_carries_optional_projection_fields_from_ess() {
+    let ess = ESS
+        .replace(
+            "      - { name: owner, type: demo.todo.OwnerRef }\nentities:",
+            "      - { name: owner, type: demo.todo.OwnerRef }\n      - { name: active_revision_id, type: Optional<demo.todo.ItemId> }\nentities:",
+        )
+        .replace(
+            "      - { name: owner, type: demo.todo.OwnerRef }\n    lifecycle:",
+            "      - { name: owner, type: demo.todo.OwnerRef }\n      - { name: active_revision_id, type: Optional<demo.todo.ItemId> }\n    lifecycle:",
+        );
+    let sources = EssSources::new(BTreeMap::from([("system.yaml".to_owned(), ess)]))
+        .expect("fixture sources are valid");
+    let definition = ServiceDefinition::from_yaml(DEFINITION).expect("fixture definition is valid");
+
+    let build = build_service(&sources, &definition).expect("service builds");
+    let view = build
+        .realization_plan
+        .views
+        .get("demo.todo.ItemById")
+        .expect("the projection view is realized");
+
+    assert_eq!(build.realization_plan.format, "service-realization-plan/3");
+    assert!(view.fields.contains(&"active_revision_id".to_owned()));
+    assert_eq!(
+        view.field_types["active_revision_id"],
+        "Optional<demo.todo.ItemId>"
+    );
+    assert_eq!(
+        view.optional_fields,
+        ["active_revision_id".to_owned()].into_iter().collect()
+    );
+    let mut masquerading_legacy_plan = serde_json::to_value(&build.realization_plan)
+        .expect("the current realization plan serializes");
+    masquerading_legacy_plan["format"] =
+        serde_json::Value::String("service-realization-plan/2".to_owned());
+    assert!(
+        service_engine::ServicePlan::from_json(
+            &serde_json::to_string(&masquerading_legacy_plan)
+                .expect("the altered realization plan serializes"),
+        )
+        .is_err(),
+        "new field metadata must not masquerade under the legacy format"
+    );
+}
+
+#[test]
+fn realization_plan_only_marks_outer_optional_projection_fields_as_absentable() {
+    let ess = ESS
+        .replace(
+            "      - { name: owner, type: demo.todo.OwnerRef }\nentities:",
+            "      - { name: owner, type: demo.todo.OwnerRef }\n      - { name: maybe_labels, type: Optional<List<String>> }\n      - { name: labels_with_gaps, type: List<Optional<String>> }\nentities:",
+        )
+        .replace(
+            "      - { name: owner, type: demo.todo.OwnerRef }\n    lifecycle:",
+            "      - { name: owner, type: demo.todo.OwnerRef }\n      - { name: maybe_labels, type: Optional<List<String>> }\n      - { name: labels_with_gaps, type: List<Optional<String>> }\n    lifecycle:",
+        );
+    let sources = EssSources::new(BTreeMap::from([("system.yaml".to_owned(), ess)]))
+        .expect("fixture sources are valid");
+    let definition = ServiceDefinition::from_yaml(DEFINITION).expect("fixture definition is valid");
+
+    let build = build_service(&sources, &definition).expect("service builds");
+    let view = build
+        .realization_plan
+        .views
+        .get("demo.todo.ItemById")
+        .expect("the projection view is realized");
+
+    assert_eq!(
+        view.optional_fields,
+        ["maybe_labels".to_owned()].into_iter().collect()
+    );
+
+    let generated = RealizationArtifacts::generate(
+        &build.realization_plan,
+        &build.client_plan,
+        &SdkLock {
+            repository: "https://github.com/beyond10x/service-sdk.git".to_owned(),
+            revision: "a".repeat(40),
+        },
+        [],
+    );
+    let source = &generated.files["rust/src/lib.rs"];
+    assert!(
+        source.contains("pub maybe_labels: Option<Vec<String>>"),
+        "the generated HTTP client must decode an omitted outer optional collection"
+    );
+    assert!(
+        source.contains("pub labels_with_gaps: Vec<Option<String>>"),
+        "nested Optional values must remain optional inside generated collection types"
+    );
 }
 
 fn assert_expected_artifacts(build: &service_builder::ServiceBuild) {

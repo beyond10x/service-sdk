@@ -359,6 +359,13 @@ pub fn compile(
             ViewPlan {
                 source: view.source.to_string(),
                 fields: view.fields.iter().map(|field| field.name.clone()).collect(),
+                field_types: projection.fields.clone(),
+                optional_fields: projection
+                    .fields
+                    .iter()
+                    .filter(|(_, type_ref)| type_ref.starts_with("Optional<"))
+                    .map(|(name, _)| name.clone())
+                    .collect(),
                 obligations: obligation_uses(runtime, &annotation.obligations)?,
             },
         );
@@ -854,10 +861,10 @@ fn rust_identifier(value: &str) -> String {
 }
 
 fn rust_type(type_ref: &str, optional: bool) -> String {
-    let base = type_ref
+    let declared_optional = type_ref
         .strip_prefix("Optional<")
-        .and_then(|value| value.strip_suffix('>'))
-        .unwrap_or(type_ref);
+        .and_then(|value| value.strip_suffix('>'));
+    let base = declared_optional.unwrap_or(type_ref);
     let rendered = if let Some(inner) = base
         .strip_prefix("List<")
         .and_then(|value| value.strip_suffix('>'))
@@ -872,7 +879,7 @@ fn rust_type(type_ref: &str, optional: bool) -> String {
             _ => "serde_json::Value".to_owned(),
         }
     };
-    if optional {
+    if optional || declared_optional.is_some() {
         format!("Option<{rendered}>")
     } else {
         rendered

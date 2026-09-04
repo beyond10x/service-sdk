@@ -17,7 +17,9 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 /// The realization-plan format executed by this engine.
-pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/2";
+pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/3";
+
+const LEGACY_REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/2";
 
 /// Allocation-explicit future returned by injected resource ports.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -64,7 +66,7 @@ impl ServicePlan {
     /// Parses strict generated JSON and verifies its immutable format and digests.
     pub fn from_json(text: &str) -> Result<Self, PlanError> {
         let plan: Self = serde_json::from_str(text).map_err(PlanError::Json)?;
-        if plan.format != REALIZATION_PLAN_FORMAT {
+        if plan.format != REALIZATION_PLAN_FORMAT && plan.format != LEGACY_REALIZATION_PLAN_FORMAT {
             return Err(PlanError::UnsupportedFormat(plan.format));
         }
         if !is_digest(&plan.ess_source_digest) || !is_digest(&plan.obligation_catalog_digest) {
@@ -72,6 +74,28 @@ impl ServicePlan {
         }
         if plan.service.trim().is_empty() {
             return Err(PlanError::EmptyService);
+        }
+        for (view_name, view) in &plan.views {
+            let declared_fields = view.fields.iter().cloned().collect::<BTreeSet<_>>();
+            let typed_fields = view.field_types.keys().cloned().collect::<BTreeSet<_>>();
+            if plan.format == LEGACY_REALIZATION_PLAN_FORMAT {
+                if !view.field_types.is_empty() || !view.optional_fields.is_empty() {
+                    return Err(PlanError::InvalidView(view_name.clone()));
+                }
+                continue;
+            }
+            let typed_optional_fields = view
+                .field_types
+                .iter()
+                .filter(|(_, type_ref)| outer_optional_type(type_ref))
+                .map(|(field, _)| field.clone())
+                .collect::<BTreeSet<_>>();
+            if declared_fields.len() != view.fields.len()
+                || typed_fields != declared_fields
+                || view.optional_fields != typed_optional_fields
+            {
+                return Err(PlanError::InvalidView(view_name.clone()));
+            }
         }
         Ok(plan)
     }
@@ -427,6 +451,12 @@ pub struct ViewPlan {
     pub source: String,
     /// Public row fields.
     pub fields: Vec<String>,
+    /// Canonical ESS type spelling for every public row field.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub field_types: BTreeMap<String, String>,
+    /// Public row fields that may be absent from the ESS object shape.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub optional_fields: BTreeSet<String>,
     /// SDK implementations governing materialization and visibility.
     pub obligations: Vec<ObligationUse>,
 }
@@ -1883,11 +1913,15 @@ fn validate_projection_row(
     let exact_partition = row.view == query.view
         && row.tenant == context.tenant().as_str()
         && row.realm.as_deref() == context.realm().map(service_runtime::RealmId::as_str);
-    let exact_shape = row.value.len() == view.fields.len()
+    let exact_shape = row.value.keys().all(|field| view.fields.contains(field))
         && view
             .fields
             .iter()
-            .all(|field| row.value.contains_key(field));
+            .all(|field| view.optional_fields.contains(field) || row.value.contains_key(field))
+        && view
+            .optional_fields
+            .iter()
+            .all(|field| !matches!(row.value.get(field), Some(Value::Null)));
     let exact_selection = selectors
         .iter()
         .all(|(field, expected)| row.value.get(field) == Some(expected));
@@ -2218,6 +2252,13 @@ fn is_digest(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
+fn outer_optional_type(type_ref: &str) -> bool {
+    type_ref
+        .strip_prefix("Optional<")
+        .and_then(|inner| inner.strip_suffix('>'))
+        .is_some_and(|inner| !inner.is_empty())
+}
+
 /// Generated plan could not be admitted.
 #[derive(Debug, Error)]
 pub enum PlanError {
@@ -2233,6 +2274,9 @@ pub enum PlanError {
     /// A semantic or catalog digest is malformed.
     #[error("realization plan digest is malformed")]
     InvalidDigest,
+    /// A view's field inventory, canonical types, and optionality disagree.
+    #[error("realization plan view {0:?} has inconsistent field metadata")]
+    InvalidView(String),
 }
 
 /// Value-free resource adapter refusal.
@@ -2293,11 +2337,87 @@ pub enum ExecutionError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::executor::block_on;
     use service_runtime::{AuthorityId, RealmId, TenantId, UserId, VerifiedIdentity};
 
     struct FixedIds;
 
     struct FixedClock;
+
+    struct UnusedEvents;
+
+    impl EventStore for UnusedEvents {
+        fn load<'a>(
+            &'a mut self,
+            _stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<LoadedStream, ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+
+        fn append(
+            &mut self,
+            _request: AppendRequest,
+        ) -> BoxFuture<'_, Result<AppendReceipt, ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+    }
+
+    struct QueryRows(Vec<ProjectionRow>);
+
+    impl ProjectionStore for QueryRows {
+        fn project(&mut self, _write: ProjectionWrite) -> BoxFuture<'_, Result<(), ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+
+        fn query(
+            &mut self,
+            _read: ProjectionRead,
+        ) -> BoxFuture<'_, Result<Vec<ProjectionRow>, ResourceError>> {
+            Box::pin(std::future::ready(Ok(self.0.clone())))
+        }
+    }
+
+    struct UnusedContent;
+
+    impl ContentStore for UnusedContent {
+        fn stage<'a>(
+            &'a mut self,
+            _context: &'a VerifiedAuthContext,
+            _policy: &'a str,
+            _idempotency_key: &'a str,
+            _payload: ContentPayload<'a>,
+        ) -> BoxFuture<'a, Result<StagedContent, ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+
+        fn accept<'a>(
+            &'a mut self,
+            _context: &'a VerifiedAuthContext,
+            _token: String,
+        ) -> BoxFuture<'a, Result<(), ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+
+        fn abandon<'a>(
+            &'a mut self,
+            _context: &'a VerifiedAuthContext,
+            _token: String,
+        ) -> BoxFuture<'a, Result<(), ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+    }
+
+    struct AllowAuthority;
+
+    impl AuthorityEvaluator for AllowAuthority {
+        fn allows<'a>(
+            &'a mut self,
+            _context: &'a VerifiedAuthContext,
+            _check: AuthorityCheck,
+        ) -> BoxFuture<'a, Result<bool, ResourceError>> {
+            Box::pin(std::future::ready(Ok(true)))
+        }
+    }
 
     impl Clock for FixedClock {
         fn now(&mut self) -> Result<String, ResourceError> {
@@ -2437,6 +2557,8 @@ mod tests {
         let view = ViewPlan {
             source: "demo.Item".to_owned(),
             fields: vec!["id".to_owned()],
+            field_types: BTreeMap::from([("id".to_owned(), "String".to_owned())]),
+            optional_fields: BTreeSet::new(),
             obligations: Vec::new(),
         };
         let selectors = BTreeMap::from([("id".to_owned(), Value::String("item-a".to_owned()))]);
@@ -2470,6 +2592,11 @@ mod tests {
         let view = ViewPlan {
             source: "demo.Item".to_owned(),
             fields: vec!["id".to_owned(), "value".to_owned()],
+            field_types: BTreeMap::from([
+                ("id".to_owned(), "String".to_owned()),
+                ("value".to_owned(), "String".to_owned()),
+            ]),
+            optional_fields: BTreeSet::new(),
             obligations: Vec::new(),
         };
         let value = BTreeMap::from([
@@ -2604,6 +2731,14 @@ mod tests {
                         "scopes".to_owned(),
                         "state".to_owned(),
                     ],
+                    field_types: BTreeMap::from([
+                        ("item_id".to_owned(), "String".to_owned()),
+                        ("list_id".to_owned(), "String".to_owned()),
+                        ("owner".to_owned(), "String".to_owned()),
+                        ("scopes".to_owned(), "String".to_owned()),
+                        ("state".to_owned(), "String".to_owned()),
+                    ]),
+                    optional_fields: BTreeSet::new(),
                     obligations: vec![ObligationUse {
                         provider: "sdk.derive.inherit-parent-authority/v2".to_owned(),
                         bindings: BTreeMap::from([
@@ -2677,6 +2812,322 @@ mod tests {
             legacy[0].row.value["owner"],
             Value::String("person-a".to_owned()),
             "v1 remains frozen as creation-time inheritance"
+        );
+    }
+
+    #[test]
+    fn optional_projection_fields_may_be_absent_without_weakening_required_shape() {
+        let view_name = "demo.Definitions".to_owned();
+        let view = ViewPlan {
+            source: "demo.Definition".to_owned(),
+            fields: vec!["id".to_owned(), "active_revision_id".to_owned()],
+            field_types: BTreeMap::from([
+                ("id".to_owned(), "String".to_owned()),
+                (
+                    "active_revision_id".to_owned(),
+                    "Optional<String>".to_owned(),
+                ),
+            ]),
+            optional_fields: BTreeSet::from(["active_revision_id".to_owned()]),
+            obligations: Vec::new(),
+        };
+        let plan = ServicePlan {
+            format: REALIZATION_PLAN_FORMAT.to_owned(),
+            service: "demo".to_owned(),
+            delivery: PlanDelivery::ComposedConnector,
+            realm: PlanRealmPolicy::Optional,
+            ess_source_digest: "a".repeat(64),
+            obligation_catalog_digest: "b".repeat(64),
+            content: BTreeMap::new(),
+            intents: BTreeMap::new(),
+            queries: BTreeMap::new(),
+            reducers: BTreeMap::new(),
+            views: BTreeMap::from([(view_name.clone(), view.clone())]),
+        };
+        let state = ProjectionState {
+            entities: BTreeMap::from([(
+                "demo.Definition".to_owned(),
+                BTreeMap::from([(
+                    "definition-a".to_owned(),
+                    EntityValue {
+                        state: "Active".to_owned(),
+                        fields: BTreeMap::from([(
+                            "id".to_owned(),
+                            Value::String("definition-a".to_owned()),
+                        )]),
+                    },
+                )]),
+            )]),
+        };
+        let query = QueryPlan {
+            view: view_name,
+            scope: "demo.read".to_owned(),
+            inputs: Vec::new(),
+            obligations: Vec::new(),
+        };
+
+        let mut row = projection_rows_for_partition(&plan, "tenant-a", None, &state)
+            .pop()
+            .expect("the existing definition materializes")
+            .row;
+        assert!(!row.value.contains_key("active_revision_id"));
+        validate_projection_row(&context(None), &query, &view, &BTreeMap::new(), &row)
+            .expect("an existing stored row may omit its declared optional field");
+
+        row.value.remove("id");
+        assert!(matches!(
+            validate_projection_row(&context(None), &query, &view, &BTreeMap::new(), &row),
+            Err(ExecutionError::InvalidProjection)
+        ));
+    }
+
+    #[test]
+    fn absent_optional_projection_fields_do_not_match_present_selectors() {
+        let view = ViewPlan {
+            source: "demo.Definition".to_owned(),
+            fields: vec!["id".to_owned(), "active_revision_id".to_owned()],
+            field_types: BTreeMap::from([
+                ("id".to_owned(), "String".to_owned()),
+                (
+                    "active_revision_id".to_owned(),
+                    "Optional<String>".to_owned(),
+                ),
+            ]),
+            optional_fields: BTreeSet::from(["active_revision_id".to_owned()]),
+            obligations: Vec::new(),
+        };
+        let query = QueryPlan {
+            view: "demo.Definitions".to_owned(),
+            scope: "demo.read".to_owned(),
+            inputs: Vec::new(),
+            obligations: Vec::new(),
+        };
+        let row = ProjectionRow {
+            view: query.view.clone(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            source_stream: None,
+            value: BTreeMap::from([("id".to_owned(), Value::String("definition-a".to_owned()))]),
+        };
+        let selectors = BTreeMap::from([(
+            "active_revision_id".to_owned(),
+            Value::String("revision-a".to_owned()),
+        )]);
+
+        assert!(matches!(
+            validate_projection_row(&context(None), &query, &view, &selectors, &row),
+            Err(ExecutionError::InvalidProjection)
+        ));
+    }
+
+    #[test]
+    fn optional_projection_fields_use_absence_instead_of_explicit_null() {
+        let view = ViewPlan {
+            source: "demo.Definition".to_owned(),
+            fields: vec!["id".to_owned(), "active_revision_id".to_owned()],
+            field_types: BTreeMap::from([
+                ("id".to_owned(), "String".to_owned()),
+                (
+                    "active_revision_id".to_owned(),
+                    "Optional<String>".to_owned(),
+                ),
+            ]),
+            optional_fields: BTreeSet::from(["active_revision_id".to_owned()]),
+            obligations: Vec::new(),
+        };
+        let query = QueryPlan {
+            view: "demo.Definitions".to_owned(),
+            scope: "demo.read".to_owned(),
+            inputs: Vec::new(),
+            obligations: Vec::new(),
+        };
+        let row = ProjectionRow {
+            view: query.view.clone(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            source_stream: None,
+            value: BTreeMap::from([
+                ("id".to_owned(), Value::String("definition-a".to_owned())),
+                ("active_revision_id".to_owned(), Value::Null),
+            ]),
+        };
+
+        assert!(matches!(
+            validate_projection_row(&context(None), &query, &view, &BTreeMap::new(), &row),
+            Err(ExecutionError::InvalidProjection)
+        ));
+    }
+
+    #[test]
+    fn realization_plans_without_optional_field_metadata_remain_readable() {
+        let (mut plan, _) = two_event_plan();
+        plan.views.insert(
+            "demo.Items".to_owned(),
+            ViewPlan {
+                source: "demo.Item".to_owned(),
+                fields: vec!["id".to_owned()],
+                field_types: BTreeMap::from([("id".to_owned(), "String".to_owned())]),
+                optional_fields: BTreeSet::new(),
+                obligations: Vec::new(),
+            },
+        );
+        let mut encoded = serde_json::to_value(plan).expect("plan serializes");
+        encoded["format"] = Value::String(LEGACY_REALIZATION_PLAN_FORMAT.to_owned());
+        encoded["views"]["demo.Items"]
+            .as_object_mut()
+            .expect("view is an object")
+            .remove("optional_fields");
+        encoded["views"]["demo.Items"]
+            .as_object_mut()
+            .expect("view is an object")
+            .remove("field_types");
+
+        let decoded = ServicePlan::from_json(
+            &serde_json::to_string(&encoded).expect("legacy plan JSON serializes"),
+        )
+        .expect("a plan emitted before optional field metadata remains readable");
+
+        assert!(decoded.views["demo.Items"].optional_fields.is_empty());
+    }
+
+    #[test]
+    fn optional_projection_rows_survive_the_complete_generated_query_path() {
+        let (mut plan, _) = two_event_plan();
+        let view_name = "demo.Definitions".to_owned();
+        plan.views.insert(
+            view_name.clone(),
+            ViewPlan {
+                source: "demo.Definition".to_owned(),
+                fields: vec!["id".to_owned(), "active_revision_id".to_owned()],
+                field_types: BTreeMap::from([
+                    ("id".to_owned(), "String".to_owned()),
+                    (
+                        "active_revision_id".to_owned(),
+                        "Optional<String>".to_owned(),
+                    ),
+                ]),
+                optional_fields: BTreeSet::from(["active_revision_id".to_owned()]),
+                obligations: Vec::new(),
+            },
+        );
+        plan.queries.insert(
+            "list_definitions".to_owned(),
+            QueryPlan {
+                view: view_name.clone(),
+                scope: "demo.read".to_owned(),
+                inputs: Vec::new(),
+                obligations: Vec::new(),
+            },
+        );
+        let value = BTreeMap::from([("id".to_owned(), Value::String("definition-a".to_owned()))]);
+        let mut events = UnusedEvents;
+        let mut projections = QueryRows(vec![ProjectionRow {
+            view: view_name,
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            source_stream: None,
+            value: value.clone(),
+        }]);
+        let mut content = UnusedContent;
+        let mut authority = AllowAuthority;
+        let mut clock = FixedClock;
+        let mut ids = FixedIds;
+        let mut resources = ServiceResources {
+            events: &mut events,
+            projections: &mut projections,
+            content: &mut content,
+            authority: &mut authority,
+            clock: &mut clock,
+            ids: &mut ids,
+        };
+
+        let rows = block_on(ServiceEngine::new(plan).query(
+            &mut resources,
+            &context(None),
+            "list_definitions",
+            b"{}",
+        ))
+        .expect("the generated query admits an absent optional projection field");
+
+        assert_eq!(rows, vec![value]);
+        assert_eq!(
+            serde_json::to_value(rows).expect("query rows serialize"),
+            serde_json::json!([{"id": "definition-a"}])
+        );
+    }
+
+    #[test]
+    fn realization_plans_reject_optional_metadata_for_unknown_fields() {
+        let (mut plan, _) = two_event_plan();
+        plan.views.insert(
+            "demo.Items".to_owned(),
+            ViewPlan {
+                source: "demo.Item".to_owned(),
+                fields: vec!["id".to_owned()],
+                field_types: BTreeMap::from([("id".to_owned(), "String".to_owned())]),
+                optional_fields: BTreeSet::from(["not_a_public_field".to_owned()]),
+                obligations: Vec::new(),
+            },
+        );
+
+        assert!(
+            ServicePlan::from_json(&plan.to_canonical_json()).is_err(),
+            "optional metadata outside the declared row shape must be rejected"
+        );
+    }
+
+    #[test]
+    fn realization_plans_do_not_allow_forged_optionality_to_weaken_required_fields() {
+        let (mut plan, _) = two_event_plan();
+        plan.views.insert(
+            "demo.Items".to_owned(),
+            ViewPlan {
+                source: "demo.Item".to_owned(),
+                fields: vec!["id".to_owned(), "required_value".to_owned()],
+                field_types: BTreeMap::from([
+                    ("id".to_owned(), "String".to_owned()),
+                    ("required_value".to_owned(), "String".to_owned()),
+                ]),
+                optional_fields: BTreeSet::from(["required_value".to_owned()]),
+                obligations: Vec::new(),
+            },
+        );
+
+        assert!(
+            ServicePlan::from_json(&plan.to_canonical_json()).is_err(),
+            "the runtime plan must bind optionality to generated ESS type information"
+        );
+    }
+
+    #[test]
+    fn optional_projection_metadata_serializes_deterministically() {
+        let (mut plan, _) = two_event_plan();
+        plan.views.insert(
+            "demo.Items".to_owned(),
+            ViewPlan {
+                source: "demo.Item".to_owned(),
+                fields: vec![
+                    "id".to_owned(),
+                    "z_optional".to_owned(),
+                    "a_optional".to_owned(),
+                ],
+                field_types: BTreeMap::from([
+                    ("id".to_owned(), "String".to_owned()),
+                    ("z_optional".to_owned(), "Optional<String>".to_owned()),
+                    ("a_optional".to_owned(), "Optional<String>".to_owned()),
+                ]),
+                optional_fields: BTreeSet::from(["z_optional".to_owned(), "a_optional".to_owned()]),
+                obligations: Vec::new(),
+            },
+        );
+
+        let first = plan.to_canonical_json();
+        let second = plan.to_canonical_json();
+        assert_eq!(first, second);
+        let encoded: Value = serde_json::from_str(&first).expect("canonical plan is JSON");
+        assert_eq!(
+            encoded["views"]["demo.Items"]["optional_fields"],
+            serde_json::json!(["a_optional", "z_optional"])
         );
     }
 
