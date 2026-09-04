@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0 - 2026-09-04
+
+- Generate an executable service entry point backed by the reusable `service-host` lifecycle and
+  SQLite Eventlog adapter, removing handwritten process hosts from generated-service repositories.
+- Compile optional `service/1` release coordinates through ESS 0.13 into canonical component,
+  realization, build, and runtime IR plus executable BuildKit inputs and a configuration-neutral
+  Helm chart.
+- Include every release input in the generated-tree ownership manifest so CI refuses drift before
+  publishing a component bundle.
+
 ## 0.4.2 - 2026-09-03
 
 - Canonically wrap every generated HTTP client call chain so formatting is independent of service
