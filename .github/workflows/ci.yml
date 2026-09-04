@@ -49,8 +49,8 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
           cargo install --git https://github.com/beyond10x/aep \
-            --rev 1c4e614829cfa9a35e9b809c44855bd3c8aefd9d \
-            --locked --bin aep protocol-cli
+            --tag 0.52.0 \
+            --locked --bin aep aep-cli
 
       - name: Run the complete repository gate
         run: task check
