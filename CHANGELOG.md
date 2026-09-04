@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2026-09-04
+
+- Upgrade to ESS 0.13.1 so generated configuration-neutral charts pass Helm lint before private
+  environment bindings are supplied.
+
 ## 0.5.0 - 2026-09-04
 
 - Generate an executable service entry point backed by the reusable `service-host` lifecycle and
