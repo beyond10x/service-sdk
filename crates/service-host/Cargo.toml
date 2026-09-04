@@ -1,0 +1,21 @@
+[package]
+name = "service-host"
+description = "Operational host for generated Identity-authenticated services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+axum.workspace = true
+eventlog-sqlite.workspace = true
+service-connectors = { path = "../service-connectors" }
+service-http = { path = "../service-http" }
+tokio.workspace = true
+
+[lints]
+workspace = true

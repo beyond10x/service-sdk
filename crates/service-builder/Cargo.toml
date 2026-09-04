@@ -13,12 +13,16 @@ publish.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 ess-compiler.workspace = true
+ess-deployment.workspace = true
 ess-domain.workspace = true
 ess-gen.workspace = true
+ess-realization.workspace = true
 ess-synth.workspace = true
+hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
+semver.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 service-catalog = { path = "../service-catalog" }

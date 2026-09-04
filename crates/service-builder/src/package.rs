@@ -35,6 +35,34 @@ pub struct SemanticPackage {
     pub sources: Vec<String>,
 }
 
+/// One immutable OCI base used by the ESS build graph.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildBase {
+    /// Registry repository without a mutable tag or embedded digest.
+    pub repository: String,
+    /// Exact `sha256:` manifest or index digest.
+    pub digest: String,
+}
+
+/// Repository-owned coordinates needed to generate an independent release unit.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReleasePackage {
+    /// Canonical generated tree relative to the repository root.
+    #[serde(default = "default_generated_root")]
+    pub generated_root: String,
+    /// OCI repository that receives the service image, without tag or digest.
+    pub image_repository: String,
+    /// Component and generated chart version for this source release.
+    pub version: String,
+    /// Exact build environment used by the generated ESS build graph.
+    pub build_base: BuildBase,
+    /// Persistent Eventlog volume size projected into the component chart.
+    #[serde(default = "default_storage_size")]
+    pub storage_size: String,
+}
+
 /// Human-authored, transactional service package manifest.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -52,6 +80,9 @@ pub struct ServicePackageManifest {
     /// Declarative scenario documents relative to the package directory.
     #[serde(default)]
     pub scenarios: Vec<String>,
+    /// Independent component release configuration. Its presence enables ESS release generation.
+    #[serde(default)]
+    pub release: Option<ReleasePackage>,
 }
 
 /// Complete package input loaded before any output is produced.
@@ -161,6 +192,14 @@ struct ScenarioPartitions {
 
 fn default_auth_fixture() -> String {
     "auth".to_owned()
+}
+
+fn default_generated_root() -> String {
+    "generated".to_owned()
+}
+
+fn default_storage_size() -> String {
+    "1Gi".to_owned()
 }
 
 impl ServicePackage {
@@ -477,6 +516,43 @@ fn validate_manifest(manifest: &ServicePackageManifest) -> Result<()> {
         if !paths.insert(path) {
             bail!("package path {path:?} is declared more than once");
         }
+    }
+    if let Some(release) = &manifest.release {
+        validate_relative(&release.generated_root)?;
+        if release.image_repository.trim().is_empty()
+            || release.image_repository.contains('@')
+            || release
+                .image_repository
+                .rsplit('/')
+                .next()
+                .is_some_and(|segment| segment.contains(':'))
+        {
+            bail!("release.image_repository must be a registry repository without tag or digest");
+        }
+        if release.build_base.repository.trim().is_empty()
+            || release.build_base.repository.contains('@')
+            || release
+                .build_base
+                .repository
+                .rsplit('/')
+                .next()
+                .is_some_and(|segment| segment.contains(':'))
+        {
+            bail!("release.build_base.repository must not contain a tag or digest");
+        }
+        if !release.build_base.digest.starts_with("sha256:")
+            || release.build_base.digest.len() != 71
+            || !release.build_base.digest[7..]
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            bail!("release.build_base.digest must be an exact lowercase sha256 digest");
+        }
+        if release.storage_size.trim().is_empty() {
+            bail!("release.storage_size must not be empty");
+        }
+        semver::Version::parse(&release.version)
+            .context("release.version must be a semantic version")?;
     }
     Ok(())
 }

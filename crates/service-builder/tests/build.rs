@@ -71,6 +71,16 @@ views:
     source: demo.todo.Item
     shape: demo.todo.ItemRow
     consistency: read_your_writes
+components:
+  - component: demo-service
+    summary: Owns demo todo items.
+    owns:
+      domains: [demo.todo]
+    accepts:
+      commands: [demo.todo.AddItem]
+    publishes:
+      events: [demo.todo.ItemAdded]
+    reached_by: network
 ";
 
 const DEFINITION: &str = r"
@@ -432,6 +442,12 @@ semantic:
   sources: [system.yaml]
 runtime: runtime.yaml
 scenarios: [scenario.yaml]
+release:
+  image_repository: ghcr.io/example/demo
+  version: 0.1.0
+  build_base:
+    repository: docker.io/library/rust
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
 ",
     )
     .expect("write package fixture");
@@ -456,6 +472,7 @@ scenarios: [scenario.yaml]
     assert!(cargo.contains("service-connectors"));
     assert!(cargo.contains("service-catalog"));
     assert!(cargo.contains("service-http"));
+    assert!(cargo.contains("service-host"));
     assert!(cargo.contains("service-conformance"));
     assert!(rust.contains("service_connectors::GeneratedConnectorFactory"));
     assert!(rust.contains("service_connectors::DurableEventStore"));
@@ -466,6 +483,10 @@ scenarios: [scenario.yaml]
     assert!(rust.contains("pub async fn add_item"));
     assert!(rust.contains("pub async fn get_item"));
     assert!(rust.contains("pub async fn http_router"));
+    let main = fs::read_to_string(output.join("rust/src/main.rs")).unwrap();
+    assert!(main.contains("service_host::run_sqlite"));
+    assert!(main.contains("\"DEMO\""));
+    assert!(main.contains("/var/lib/demo/demo.sqlite3"));
     assert!(!rust.contains("Unimplemented"));
     assert!(!rust.contains("realm_id:"));
     assert!(output.join(ESS_IR_PATH).is_file());
@@ -487,6 +508,11 @@ scenarios: [scenario.yaml]
     );
     assert!(output.join("docs/tsconfig.json").is_file());
     assert!(output.join("conformance/scenario.yaml").is_file());
+    assert!(output.join("deployment/component.ir.json").is_file());
+    assert!(output.join("deployment/build.ir.json").is_file());
+    assert!(output.join("deployment/runtime.ir.json").is_file());
+    assert!(output.join("deployment/buildkit/Dockerfile.ess").is_file());
+    assert!(output.join("deployment/chart/Chart.yaml").is_file());
     let scenario_test =
         fs::read_to_string(output.join("rust/tests/generated_scenarios.rs")).unwrap();
     assert!(scenario_test.contains("run_connector_scenarios"));
@@ -496,6 +522,7 @@ scenarios: [scenario.yaml]
         .arg("2024")
         .arg("--check")
         .arg(output.join("rust/src/lib.rs"))
+        .arg(output.join("rust/src/main.rs"))
         .arg(output.join("rust/tests/generated_scenarios.rs"))
         .output()
         .expect("run rustfmt against generated scenario test");

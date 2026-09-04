@@ -9,6 +9,7 @@ pub mod ess;
 pub mod http;
 pub mod package;
 pub mod realization;
+pub mod release;
 pub mod tree;
 
 use std::collections::BTreeMap;
@@ -157,6 +158,16 @@ pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
             .iter()
             .map(|scenario| scenario.path.as_str()),
     );
+    if let Some(release) = release::ReleaseArtifacts::generate(
+        package,
+        &build.ess,
+        &build.realization_plan,
+        &generated.files,
+    )? {
+        for (path, contents) in release.files {
+            build.artifacts.insert(path, contents)?;
+        }
+    }
     for (path, contents) in generated.files {
         build.artifacts.insert(path, contents)?;
     }

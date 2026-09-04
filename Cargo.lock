@@ -504,8 +504,8 @@ dependencies = [
 
 [[package]]
 name = "ess-compiler"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -515,9 +515,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-deployment"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
+dependencies = [
+ "ess-compiler",
+ "ess-realization",
+ "semver",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+ "thiserror",
+]
+
+[[package]]
 name = "ess-domain"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -529,12 +544,13 @@ dependencies = [
 
 [[package]]
 name = "ess-gen"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
 dependencies = [
  "ess-compiler",
  "ess-domain",
  "ess-primitives",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -543,8 +559,8 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -553,9 +569,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-realization"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
+dependencies = [
+ "ess-compiler",
+ "ess-domain",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "ess-synth"
-version = "0.3.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=01f12c9d66cc8c4cb400ba786c1dcf268e0f752d#01f12c9d66cc8c4cb400ba786c1dcf268e0f752d"
+version = "0.13.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=cce19ce7bce41e9799c9bc703c0c7c72eff16217#cce19ce7bce41e9799c9bc703c0c7c72eff16217"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -1222,6 +1251,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
+dependencies = [
+ "bitflags",
+ "memchr",
+ "pulldown-cmark-escape",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
+
+[[package]]
 name = "quinn"
 version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1542,6 +1589,10 @@ name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
+dependencies = [
+ "serde",
+ "serde_core",
+]
 
 [[package]]
 name = "serde"
@@ -1666,14 +1717,18 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "clap",
  "ess-compiler",
+ "ess-deployment",
  "ess-domain",
  "ess-gen",
+ "ess-realization",
  "ess-synth",
+ "hex",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1688,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "hex",
@@ -1702,7 +1757,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -1721,7 +1776,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -1739,7 +1794,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "ess-compiler",
  "serde",
@@ -1749,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "futures",
  "hex",
@@ -1763,7 +1818,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "eventlog-core",
  "eventlog-sqlite",
@@ -1780,8 +1835,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "service-host"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "eventlog-sqlite",
+ "service-connectors",
+ "service-http",
+ "tokio",
+]
+
+[[package]]
 name = "service-http"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "axum",
  "bytes",
@@ -1800,7 +1867,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1811,7 +1878,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "futures",
  "serde",
@@ -1822,7 +1889,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -1861,6 +1928,16 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "signal-hook-registry"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b"
+dependencies = [
+ "errno",
+ "libc",
+]
 
 [[package]]
 name = "signature"
@@ -2049,6 +2126,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
@@ -2152,6 +2230,12 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "unicase"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-ident"
