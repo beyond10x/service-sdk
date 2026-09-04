@@ -50,7 +50,7 @@ jobs:
           corepack prepare pnpm@10.15.0 --activate
           cargo install --git https://github.com/beyond10x/aep \
             --tag 0.52.0 \
-            --locked --bin aep aep-cli
+            --locked --force --bin aep aep-cli
 
       - name: Run the complete repository gate
         run: task check

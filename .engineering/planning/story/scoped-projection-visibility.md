@@ -10,6 +10,8 @@ relations:
 - serves: vision:composable-services
 scope:
 - confidence: cited
+  path: .github/workflows/ci.yml
+- confidence: cited
   path: CHANGELOG.md
 - confidence: cited
   path: Cargo.lock
@@ -27,7 +29,7 @@ scope:
   path: crates/service-obligations
 - confidence: cited
   path: crates/service-runtime-ir
-revision: 5
+revision: 6
 ---
 ## Outcome
 
