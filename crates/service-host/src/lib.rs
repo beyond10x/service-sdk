@@ -1,7 +1,7 @@
 //! Reusable process host for generated Identity-authenticated services.
 //!
 //! Generated packages supply only their compiled router. This crate owns the operational shell:
-//! environment loading, durable SQLite initialization, listener lifecycle, and graceful shutdown.
+//! environment loading, durable `SQLite` initialization, listener lifecycle, and graceful shutdown.
 
 #![forbid(unsafe_code)]
 
@@ -61,7 +61,7 @@ impl HostConfig {
     }
 }
 
-/// Runs one generated service with its SDK-owned SQLite persistence adapter.
+/// Runs one generated service with its SDK-owned `SQLite` persistence adapter.
 pub fn run_sqlite<Factory, RouterFuture>(
     environment_prefix: &str,
     default_database_path: &str,

@@ -20,16 +20,20 @@ scope:
 - confidence: cited
   path: README.md
 - confidence: cited
+  path: Taskfile.yml
+- confidence: cited
   path: crates/service-definition
 - confidence: cited
   path: crates/service-engine
 - confidence: cited
   path: crates/service-eventlog
 - confidence: cited
+  path: crates/service-host
+- confidence: cited
   path: crates/service-obligations
 - confidence: cited
   path: crates/service-runtime-ir
-revision: 6
+revision: 7
 ---
 ## Outcome
 
