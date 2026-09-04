@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Align every generated Connector factory and catalog dependency with the current Connectors
+  default-branch service identity so an independently promoted runtime composes without duplicate
+  trait types.
+
 ## 0.5.8 - 2026-09-04
 
 - Preserve optional projection-field metadata in realization plans so generated services accept

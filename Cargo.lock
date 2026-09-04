@@ -178,7 +178,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 [[package]]
 name = "catalog"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -188,7 +188,7 @@ dependencies = [
 [[package]]
 name = "catalog-reader"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 
 [[package]]
 name = "cc"
@@ -272,7 +272,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 [[package]]
 name = "connector-address"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "thiserror",
 ]
@@ -280,7 +280,7 @@ dependencies = [
 [[package]]
 name = "connector-resolve"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -295,7 +295,7 @@ dependencies = [
 [[package]]
 name = "connector-secrets"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -309,7 +309,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "thiserror",
 ]
@@ -445,7 +445,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -499,7 +499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1240,7 +1240,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "domain",
  "schemars 1.2.2",
@@ -1321,7 +1321,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1485,7 +1485,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1698,7 +1698,7 @@ dependencies = [
 [[package]]
 name = "service"
 version = "0.5.11"
-source = "git+https://github.com/beyond10x/connectors.git?rev=c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0#c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0"
+source = "git+https://github.com/beyond10x/connectors.git?rev=54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a#54f4d6d00ff92c1a2fba0f06ea1dbecf44cdf12a"
 dependencies = [
  "async-trait",
  "base64",
