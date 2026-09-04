@@ -1,0 +1,64 @@
+name: Release generated ESS component
+description: Build, attest, verify, bundle, and publish a generated service through ESS.
+
+inputs:
+  service:
+    description: Stable ESS system and service identifier.
+    required: true
+  version:
+    description: Exact semantic release version expected in service.yaml and the Git tag.
+    required: true
+  ess-revision:
+    description: Exact released ESS Git commit installed by the component gate.
+    required: true
+  chart-namespace:
+    description: OCI namespace that receives the generated Helm chart.
+    required: true
+  evidence-repository:
+    description: OCI repository that receives release evidence.
+    required: true
+  bundle-repository:
+    description: OCI repository that receives the canonical ESS component bundle.
+    required: true
+  registry:
+    description: OCI registry hostname.
+    required: true
+  registry-username:
+    description: OCI registry login.
+    required: true
+  registry-token:
+    description: OCI registry token.
+    required: true
+  pnpm-version:
+    description: pnpm used by generated console conformance.
+    required: false
+    default: 10.15.0
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@d1031067263f94b142dd6c0ce24c5eb9d02d52a0
+      with:
+        toolchain: "1.97.0"
+        components: rustfmt
+    - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+    - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6
+    - uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac
+    - uses: anchore/sbom-action/download-syft@f8bdd1d8ac5e901a77a92f111440fdb1b593736b
+    - uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52
+    - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-token }}
+    - name: Build and publish exact ESS release
+      shell: bash
+      env:
+        COMPONENT_SERVICE: ${{ inputs.service }}
+        COMPONENT_VERSION: ${{ inputs.version }}
+        ESS_REVISION: ${{ inputs.ess-revision }}
+        CHART_NAMESPACE: ${{ inputs.chart-namespace }}
+        EVIDENCE_REPOSITORY: ${{ inputs.evidence-repository }}
+        BUNDLE_REPOSITORY: ${{ inputs.bundle-repository }}
+        PNPM_VERSION: ${{ inputs.pnpm-version }}
+      run: "$GITHUB_ACTION_PATH/release.sh"
