@@ -32,5 +32,13 @@ tasks:
       - pnpm install --frozen-lockfile
       - pnpm web:check
 
+  release-action-check:
+    cmds:
+      - test -x .github/actions/release-component/release.sh
+      - bash -n .github/actions/release-component/release.sh
+      - rg -q 'generate release bundle' .github/actions/release-component/release.sh
+      - rg -q 'cosign sign' .github/actions/release-component/release.sh
+      - "! rg -n 'ghcr\\.io|beyond10x/(workflow|todo|aep-service)' .github/actions/release-component"
+
   check:
-    deps: [fmt-check, clippy, test, doc, aep-check, web-check]
+    deps: [fmt-check, clippy, test, doc, aep-check, web-check, release-action-check]

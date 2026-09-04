@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4 - 2026-09-04
+
+- Add a reusable, configuration-neutral GitHub Action that drives generated service conformance,
+  ESS BuildKit execution, Sigstore signatures, SBOM and provenance evidence, release verification,
+  and canonical OCI component-bundle publication from each component repository.
+
 ## 0.5.3 - 2026-09-04
 
 - Execute generated Helm packaging from the repository root copied into the ESS build graph, so
