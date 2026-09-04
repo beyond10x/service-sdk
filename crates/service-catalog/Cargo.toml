@@ -17,8 +17,8 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 
-connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "e162cbf4fa45f5938545798fc667cea9f21de85f" }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "e162cbf4fa45f5938545798fc667cea9f21de85f" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "c4e8ea44cd760c5469c01cccaf87d7835d5e0cc0" }
 
 [lints]
 workspace = true
