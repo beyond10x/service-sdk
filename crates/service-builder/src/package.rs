@@ -58,6 +58,9 @@ pub struct ReleasePackage {
     pub version: String,
     /// Exact build environment used by the generated ESS build graph.
     pub build_base: BuildBase,
+    /// Optional minimal runtime root filesystem. When absent, the build environment is retained.
+    #[serde(default)]
+    pub runtime_base: Option<BuildBase>,
     /// Persistent Eventlog volume size projected into the component chart.
     #[serde(default = "default_storage_size")]
     pub storage_size: String,
@@ -529,24 +532,30 @@ fn validate_manifest(manifest: &ServicePackageManifest) -> Result<()> {
         {
             bail!("release.image_repository must be a registry repository without tag or digest");
         }
-        if release.build_base.repository.trim().is_empty()
-            || release.build_base.repository.contains('@')
-            || release
-                .build_base
-                .repository
-                .rsplit('/')
-                .next()
-                .is_some_and(|segment| segment.contains(':'))
-        {
-            bail!("release.build_base.repository must not contain a tag or digest");
-        }
-        if !release.build_base.digest.starts_with("sha256:")
-            || release.build_base.digest.len() != 71
-            || !release.build_base.digest[7..]
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
-            bail!("release.build_base.digest must be an exact lowercase sha256 digest");
+        for (name, base) in std::iter::once(("build_base", &release.build_base)).chain(
+            release
+                .runtime_base
+                .as_ref()
+                .map(|base| ("runtime_base", base)),
+        ) {
+            if base.repository.trim().is_empty()
+                || base.repository.contains('@')
+                || base
+                    .repository
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|segment| segment.contains(':'))
+            {
+                bail!("release.{name}.repository must not contain a tag or digest");
+            }
+            if !base.digest.starts_with("sha256:")
+                || base.digest.len() != 71
+                || !base.digest[7..]
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            {
+                bail!("release.{name}.digest must be an exact lowercase sha256 digest");
+            }
         }
         if release.storage_size.trim().is_empty() {
             bail!("release.storage_size must not be empty");

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2 - 2026-09-04
+
+- Allow each service package to pin a separate minimal OCI runtime base, copying only the generated
+  executable out of the Rust build stage instead of shipping the compiler and source tree.
+
 ## 0.5.1 - 2026-09-04
 
 - Upgrade to ESS 0.13.1 so generated configuration-neutral charts pass Helm lint before private

@@ -184,37 +184,60 @@ fn build_yaml(service: &str, release: &ReleasePackage) -> String {
     let crate_name = format!("{service}-generated-service");
     let chart_path = format!("{}/deployment/chart", release.generated_root);
     let chart_archive = format!("/tmp/{service}-chart.tgz");
+    let executable = format!("/build/target/release/{crate_name}");
+    let mut nodes = vec![
+        json!({"id": "build-base", "kind": "oci_base", "reference": release.build_base.repository, "digest": release.build_base.digest}),
+        json!({"id": "repository", "kind": "source", "path": ".", "destination": "/src"}),
+        json!({"id": "build-source", "kind": "copy", "base": "build-base", "from": "repository", "source": "/src", "destination": "/src"}),
+        json!({
+            "id": "compile",
+            "kind": "run",
+            "base": "build-source",
+            "argv": ["cargo", "build", "--release", "--manifest-path", format!("/src/{}/rust/Cargo.toml", release.generated_root)],
+            "workdir": "/src",
+            "environment": {"CARGO_TARGET_DIR": "/build/target"},
+            "network": "sandbox",
+        }),
+    ];
+    let runtime_root = if let Some(base) = &release.runtime_base {
+        nodes.push(json!({"id": "runtime-base", "kind": "oci_base", "reference": base.repository, "digest": base.digest}));
+        nodes.push(json!({
+            "id": "runtime-root",
+            "kind": "copy",
+            "base": "runtime-base",
+            "from": "compile",
+            "source": executable,
+            "destination": format!("/usr/local/bin/{crate_name}"),
+        }));
+        "runtime-root"
+    } else {
+        "compile"
+    };
+    let entrypoint = if release.runtime_base.is_some() {
+        format!("/usr/local/bin/{crate_name}")
+    } else {
+        executable
+    };
+    nodes.extend([
+        json!({
+            "id": "runtime-image",
+            "kind": "image",
+            "rootfs": runtime_root,
+            "config": {"entrypoint": [entrypoint], "workdir": "/var/lib/service"},
+        }),
+        json!({
+            "id": "chart-package",
+            "kind": "run",
+            "base": "build-source",
+            "argv": ["tar", "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-czf", chart_archive, "-C", chart_path, "."],
+        }),
+        json!({"id": "chart-archive", "kind": "artifact", "from": "chart-package", "path": chart_archive}),
+    ]);
     render_yaml(&json!({
         "format": "ess-build/1",
         "build": format!("{service}-build"),
         "platforms": [{"os": "linux", "architecture": "amd64"}],
-        "nodes": [
-            {"id": "build-base", "kind": "oci_base", "reference": release.build_base.repository, "digest": release.build_base.digest},
-            {"id": "repository", "kind": "source", "path": ".", "destination": "/src"},
-            {"id": "build-source", "kind": "copy", "base": "build-base", "from": "repository", "source": "/src", "destination": "/src"},
-            {
-                "id": "compile",
-                "kind": "run",
-                "base": "build-source",
-                "argv": ["cargo", "build", "--release", "--manifest-path", format!("/src/{}/rust/Cargo.toml", release.generated_root)],
-                "workdir": "/src",
-                "environment": {"CARGO_TARGET_DIR": "/build/target"},
-                "network": "sandbox",
-            },
-            {
-                "id": "runtime-image",
-                "kind": "image",
-                "rootfs": "compile",
-                "config": {"entrypoint": [format!("/build/target/release/{crate_name}")], "workdir": "/var/lib/service"},
-            },
-            {
-                "id": "chart-package",
-                "kind": "run",
-                "base": "build-source",
-                "argv": ["tar", "--sort=name", "--mtime=@0", "--owner=0", "--group=0", "-czf", chart_archive, "-C", chart_path, "."],
-            },
-            {"id": "chart-archive", "kind": "artifact", "from": "chart-package", "path": chart_archive},
-        ],
+        "nodes": nodes,
         "outputs": [
             {"name": "app", "release_unit": format!("{service}-runtime"), "node": "runtime-image", "kind": "oci_image", "repository": release.image_repository},
             {"name": "chart", "release_unit": format!("{service}-chart"), "node": "chart-archive", "kind": "helm_chart"},
