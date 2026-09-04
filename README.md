@@ -96,6 +96,8 @@ The workspace is split by responsibility:
 - `service-eventlog` provides the Eventlog-backed persistence adapter.
 - `service-http` provides the Identity-authenticated HTTP server and generated-client transport.
 - `service-host` provides the generated binary's environment, SQLite, listener, and shutdown shell.
+- Identity HTTP packages expose that host through the default `standalone-host` feature. Client-only
+  consumers disable default features so they do not resolve the process host or persistence adapter.
 - `service-connectors` exposes inert factories for composed Connector runtimes.
 - `service-catalog` publishes the generated operation catalogue.
 - `service-builder` generates and drift-checks the complete artifact tree.

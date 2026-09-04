@@ -4,6 +4,8 @@
 
 - Separate scope-based projection visibility from aggregate ownership so tenant/realm-partitioned
   service libraries can be read by admitted principals without granting them mutation authority.
+- Make the generated standalone service host a default, optional feature so typed-client consumers
+  can disable it without linking the service's persistence adapter.
 
 ## 0.5.6 - 2026-09-04
 

@@ -61,13 +61,20 @@ service-connectors = {{ git = \"{}\", rev = \"{}\" }}\n",
         if standalone_host {
             let _ = writeln!(
                 cargo,
-                "service-host = {{ git = \"{}\", rev = \"{}\" }}",
+                "service-host = {{ git = \"{}\", rev = \"{}\", optional = true }}",
                 sdk.repository, sdk.revision
             );
-            cargo.push_str("anyhow = \"1\"\n");
+            cargo.push_str("anyhow = { version = \"1\", optional = true }\n");
         }
         cargo
             .push_str("serde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\n");
+        if standalone_host {
+            let _ = write!(
+                cargo,
+                "\n[features]\ndefault = [\"standalone-host\"]\nstandalone-host = [\"dep:anyhow\", \"dep:service-host\"]\n\n\
+[[bin]]\nname = \"{crate_name}\"\npath = \"src/main.rs\"\nrequired-features = [\"standalone-host\"]\n"
+            );
+        }
         if !scenario_paths.is_empty() {
             let _ = write!(
                 cargo,
