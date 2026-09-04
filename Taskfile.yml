@@ -25,7 +25,7 @@ tasks:
 
   aep-check:
     cmds:
-      - aep artifact validate
+      - aep plan artifact validate
 
   web-check:
     cmds:
