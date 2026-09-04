@@ -404,6 +404,56 @@ fn cli_generate_then_check_detects_byte_drift() {
 }
 
 #[test]
+fn composed_connector_package_does_not_emit_a_standalone_http_host() {
+    let temporary = TestDirectory::new();
+    let ess = temporary.path().join("ess");
+    fs::create_dir_all(&ess).expect("create ESS directory");
+    fs::write(ess.join("system.yaml"), ESS).expect("write ESS fixture");
+    fs::write(
+        temporary.path().join("runtime.yaml"),
+        DEFINITION
+            .replace("service: demo_todo", "service: demo")
+            .replace(
+                "delivery: { kind: identity_http, audience: urn:b10x:demo-todo }",
+                "delivery: { kind: composed_connector }",
+            ),
+    )
+    .expect("write runtime fixture");
+    fs::write(
+        temporary.path().join("service.yaml"),
+        r"format: service/1
+service: demo
+sdk:
+  repository: https://github.com/beyond10x/service-sdk.git
+  revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+semantic:
+  root: ess
+  sources: [system.yaml]
+runtime: runtime.yaml
+",
+    )
+    .expect("write package fixture");
+    let output = temporary.path().join("generated");
+    let generated = Command::new(env!("CARGO_BIN_EXE_service-builder"))
+        .arg("generate")
+        .arg("--package")
+        .arg(temporary.path().join("service.yaml"))
+        .arg("--output")
+        .arg(&output)
+        .output()
+        .expect("run package generation");
+    assert!(
+        generated.status.success(),
+        "package generation failed: {}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+
+    let cargo = fs::read_to_string(output.join("rust/Cargo.toml")).unwrap();
+    assert!(!cargo.contains("service-host"));
+    assert!(!output.join("rust/src/main.rs").exists());
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn unified_package_emits_compilable_service_and_connector_factory_sources() {
     let temporary = TestDirectory::new();

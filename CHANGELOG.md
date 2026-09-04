@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.6 - 2026-09-04
+
+- Emit the generated executable host only for services that declare Identity HTTP delivery, while
+  keeping composed Connector services library-only.
+
 ## 0.5.5 - 2026-09-04
 
 - Align generated Connector factories and conformance with Connectors 0.5.11 so OAuth refresh
