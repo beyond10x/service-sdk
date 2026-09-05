@@ -2,7 +2,7 @@
 format: aep.planning-md/1
 id: story:reject-ess-rust-target-refusals
 kind: story
-status: active
+status: implemented
 title: Reject ESS Rust target refusals before building services
 relations:
 - decomposes: epic:builder-runtime
@@ -12,7 +12,7 @@ scope:
   path: CHANGELOG.md
 - confidence: cited
   path: crates/service-builder
-revision: 7
+revision: 11
 ---
 ## Finding and source
 
@@ -48,3 +48,67 @@ The coordinator binds the reader policy before implementation: accept historical
 ## Checked result compatibility
 
 A fresh ESS regression proves compiler-admitted demo.lib has zero plan capabilities and panics on duplicate lib.rs. ESS therefore binds synthesize/synthesize_for to Result<Synthesis, TargetFailure>; the error implements Error + Send + Sync + 'static and has a new versioned global-cause envelope. This reader must compile against current direct Synthesis and future Result forms via a private typed conversion trait, retaining original errors before the report guard. No version sniffing, dependency/lock change, public test seam or inferred successful future-producer execution. Existing source/valid-output checks and actual later candidate CLI proof remain required.
+
+
+## Reviewed reader gate
+
+Exact current-pin source e9fcbb960b7a5283666c23c4e0478d4e7b7406d7 passed all seven Taskfile check dependencies individually: fmt-check, clippy, test, doc, aep-check, web-check, release-action-check. Final lane completed2026-09-05T19:50:19.449504Z. Rust runner totals111 passed,0 failed,0 ignored across29 summaries; web typecheck passed and Vitest ran4 passed. Package admission coverage is30 cases including the six-case independent review. Raw record target/review-boundaries-5/full-sdk-gate/record.json SHA25678800f21be681c2625057bb897ec4ebf81584f4d135bb813517a22a2d3335d9d. The ordinary pnpm install reused its lock; this is not a skipped web test. The only planning advisory is the CLI interpretation of the immutable empty findings block. The completed frozen-producer evidence below supplies the remaining compatibility proof; this gate itself does not claim a dependency adoption.
+
+
+## Completed frozen-producer compatibility
+
+SDK source e9fcbb960b7a5283666c23c4e0478d4e7b7406d7 was compiled against two exact clean ESS subjects in a separate managed source fixture: published baseline6616b26fe41548af9cb7ff9cf833ae977883f625 and checked producerf9a7cf7fcca79448a34b2754adb12f1a411573bd. No dependency pin upgrade is published.
+
+All seven ESS packages resolved to the recorded frozen path manifests and versions0.18.0, with no remaining old ESS git package and all seven reachable from the actual service-builder resolve graph. Temporary lock records agreed; no non-ESS package was added, removed or modified. Both CLI builds and fresh valid generation/check passed. Full63-file artifact maps from these two producers are byte-for-byte equal. The historical pinned d1a6677 output has14 changed and49 identical files, matching the previously recorded wave4 compatibility split; candidate check reported that old drift while preserving all original files. Equality with the published6616 baseline establishes that this wave adds no further valid-output byte change. The published6616 baseline passes candidate check unchanged.
+
+Eight real preferred --package CLI calls covered the zero-capability demo.lib collision and optional self-recursive demo.core.Link, each through generate/check and absent/existing owned-sentinel output. All returned1 with the original target cause; all output inventories (existence, paths, kinds, modes, contents and manifest) stayed equal. Valid controls demonstrate ordinary missing/drift errors and that successful generation can remove the same legitimately owned stale sentinel before a clean check. These are actual consumer executions, not synthetic TargetReport values.
+
+The zero-capability input copies the final ESS regression's system.yaml and lib.yaml exactly; the recursive input copies its system.yaml, core.yaml and empty-components wiring.yaml. Package source lists were updated in scratch to name those same files; existing runtime/scenario references intentionally remain unresolved because the target error precedes their semantic use. Actual Rust target diagnostics, together with the source order, establish that boundary. This is not a claim that the negative package could otherwise become a valid service.
+
+## Matrix
+
+| Invocation | Exit | Output unchanged |
+| --- | --- | --- |
+| zero-generate-absent | 1 | true |
+| zero-generate-existing | 1 | true |
+| zero-check-absent | 1 | true |
+| zero-check-existing | 1 | true |
+| recursive-generate-absent | 1 | true |
+| recursive-generate-existing | 1 | true |
+| recursive-check-absent | 1 | true |
+| recursive-check-existing | 1 | true |
+| valid-check-absent | 1 | true |
+| valid-check-existing | 1 | true |
+| valid-generate-existing | 0 | false |
+| valid-check-after-rewrite | 0 | true |
+| valid-check-published-baseline | 0 | true |
+| valid-check-old-pin | 1 | true |
+
+## Original target diagnostics
+
+```text
+Error: rust target cannot emit this workspace
+demo, demo.lib: multiple generated artifacts allocate `crates/demo-types/src/lib.rs`
+Error: rust target cannot emit this workspace
+demo.core.Link: by-value representation cycle demo.core.Link.next -> demo.core.Link; Optional preserves size, while List/Map break the cycle
+```
+
+## Restoration and limits
+
+Original SDK manifest, source and planning dirt were preserved. Original Cargo.lock bytes and mode were restored after each graph/build attempt; SHA256c1ea6417abe7af9175e61b650729bdbf88f5d62153fd6a9f20caf076bec9c746. Restored locked/offline metadata confirms all seven packages at the exact historical ESS d1a66772a91b5411d942d7a45bbf08dfc5de4651 git source and0.13.1. No source configuration or pin is changed by retained scratch configs.
+
+The first baseline metadata attempt preserved the old lock selection despite path patches. Its admission assertion stopped before compilation, and the finally block restored the lock. The corrected attempt explicitly cargo-updated only the seven ESS package selections under the scratch patch before verifying the actual graph. The first matrix expected a recursive type-only path; the actual diagnostic included the precise field .next. The unchanged tree and actual error were retained; the corrected exact field-path assertion completed all14 calls. Neither setup correction changed production or constitutes a target test failure.
+
+This validates the SDK build/generate/check boundary for this exact candidate and the existing valid package. It does not upgrade SDK/AgentIDE dependencies, prove unknown external callers, compile the generated deployable service, or release a version. The full current-pin SDK gate independently passed111 Rust and4 web tests; the earlier six-case adversary pass extended package coverage24 to30 with no findings.
+
+## Evidence identities
+
+- full-sdk-gate/record.json: SHA25678800f21be681c2625057bb897ec4ebf81584f4d135bb813517a22a2d3335d9d
+- adversary-pass-1.md: SHA256e6091f358865eb7c8d8e6eff6359e8d6176951fe5414b5766f5e2876e03b1333
+- exact-producer-baseline/record.json: SHA25609a5e4f958091ecb84a77d1faf9567ffe5a9d81609143c6ae13498c92e3af73c
+- exact-producer-baseline-2/record.json: SHA256c4f25271e6485af1d1a21a62ca4f6237a66d9d0acac451fd7a52f2c9932cb863
+- exact-producer/record.json: SHA256f5f8d1a8b8367e132730029cadfec7827fa666c0796efb704a7bee08bee75d29
+- exact-producer/matrix/record.json: SHA2567706ed533a3379a3dff3f5aeba5779ceb63f5dcd61e984bb263f43ccfd001297
+- exact-producer/matrix-2/record.json: SHA2563944240cf9e882e2d6b011d55b555a18bcbb795d66fecb90a9810817f9338720
+
+Final matrix completed 2026-09-05T20:07:39.556686+00:00. All exact argv, full outputs, config/metadata/lock copies, input manifests and before/after output inventories remain in the named scratch directories for archive before cleanup.
