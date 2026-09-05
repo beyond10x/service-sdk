@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Stop service generation when ESS returns a checked target failure, refusal, weakening, or
+  unexpected target, preserving the original diagnostic before any generated output is written.
+  Keep valid output and current ESS dependency pins unchanged.
+
 ## 0.5.11 - 2026-09-05
 
 - Align Connector factories and conformance with Connectors 0.6.5 so a composed host can keep
