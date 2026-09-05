@@ -9,16 +9,20 @@ relations:
 - serves: vision:composable-services
 scope:
 - confidence: cited
+  path: .engineering/planning
+- confidence: cited
   path: CHANGELOG.md
 - confidence: cited
   path: Cargo.lock
+- confidence: cited
+  path: Cargo.toml
 - confidence: cited
   path: crates/service-catalog/Cargo.toml
 - confidence: cited
   path: crates/service-conformance/Cargo.toml
 - confidence: cited
   path: crates/service-connectors/Cargo.toml
-revision: 7
+revision: 8
 ---
 ## Outcome
 
