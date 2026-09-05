@@ -1,0 +1,67 @@
+
+format: ess/1
+system: demo
+version: v1
+domains: [demo.todo]
+domain: demo.todo
+types:
+  - name: demo.todo.ItemId
+    kind: newtype
+    of: Uuid
+  - name: demo.todo.ContentRef
+    kind: newtype
+    of: String
+  - name: demo.todo.OwnerRef
+    kind: newtype
+    of: String
+  - name: demo.todo.ItemRow
+    kind: struct
+    fields:
+      - { name: item_id, type: demo.todo.ItemId }
+      - { name: content_ref, type: demo.todo.ContentRef }
+      - { name: owner, type: demo.todo.OwnerRef }
+entities:
+  - name: demo.todo.Item
+    identity: { name: item_id, type: demo.todo.ItemId }
+    fields:
+      - { name: content_ref, type: demo.todo.ContentRef }
+      - { name: owner, type: demo.todo.OwnerRef }
+    lifecycle:
+      initial: Active
+      states: [Active]
+      terminal: [Active]
+commands:
+  - name: demo.todo.AddItem
+    input:
+      - { name: item_id, type: demo.todo.ItemId }
+      - { name: content_ref, type: demo.todo.ContentRef }
+    outcomes:
+      - name: added
+        creates: demo.todo.Item
+        instance: item_id
+        emits: [demo.todo.ItemAdded]
+        payload:
+          demo.todo.ItemAdded:
+            item_id: input.item_id
+            content_ref: input.content_ref
+events:
+  - name: demo.todo.ItemAdded
+    fields:
+      - { name: item_id, type: demo.todo.ItemId }
+      - { name: content_ref, type: demo.todo.ContentRef }
+      - { name: owner, type: demo.todo.OwnerRef }
+views:
+  - name: demo.todo.ItemById
+    source: demo.todo.Item
+    shape: demo.todo.ItemRow
+    consistency: read_your_writes
+components:
+  - component: demo-service
+    summary: Owns demo todo items.
+    owns:
+      domains: [demo.todo]
+    accepts:
+      commands: [demo.todo.AddItem]
+    publishes:
+      events: [demo.todo.ItemAdded]
+    reached_by: network

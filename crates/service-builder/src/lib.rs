@@ -86,7 +86,8 @@ pub struct ServiceBuild {
 /// Runs the compiler and both established ESS artifact pipelines.
 pub fn build_ess(sources: &ess::EssSources) -> Result<EssBuild> {
     let ir = sources.compile()?;
-    let synthesized = ess_synth::synthesize(&ir);
+    let synthesized = ess_synth::synthesize(&ir).into_synthesis_result()?;
+    admit_rust_target(synthesized.target.as_ref())?;
     let projections = ess_gen::generate_all(&ir)?;
     Ok(EssBuild {
         ir,
@@ -94,6 +95,41 @@ pub fn build_ess(sources: &ess::EssSources) -> Result<EssBuild> {
         synthesis: synthesized.artifacts,
         projections,
     })
+}
+
+// Admit both the pinned direct return and the checked ESS facade without changing SDK's API.
+trait IntoSynthesisResult {
+    fn into_synthesis_result(self) -> Result<ess_synth::Synthesis>;
+}
+
+impl IntoSynthesisResult for ess_synth::Synthesis {
+    fn into_synthesis_result(self) -> Result<ess_synth::Synthesis> {
+        Ok(self)
+    }
+}
+
+impl<E: std::error::Error + Send + Sync + 'static> IntoSynthesisResult
+    for std::result::Result<ess_synth::Synthesis, E>
+{
+    fn into_synthesis_result(self) -> Result<ess_synth::Synthesis> {
+        self.map_err(anyhow::Error::new)
+    }
+}
+
+fn admit_rust_target(report: Option<&ess_synth::TargetReport>) -> Result<()> {
+    let Some(report) = report else {
+        return Ok(());
+    };
+    // The SDK has no accounting path for weakened guarantees or ungenerated capabilities.
+    if report.target != "rust" || !report.is_empty() {
+        anyhow::bail!(
+            "ESS synthesis target `{}` is not admitted: expected `rust` without refusals or \
+             weakenings.\n{}",
+            report.target,
+            report.to_markdown(),
+        );
+    }
+    Ok(())
 }
 
 /// Compiles ESS and runtime annotations into the complete deterministic generated tree.
@@ -238,3 +274,251 @@ fn build_service_catalog(
     })
     .context("service catalog is valid")
 }
+
+#[cfg(test)]
+mod synthesis_outcome_admission {
+    use std::collections::BTreeMap;
+
+    use ess_gen::Artifact;
+    use ess_synth::{Synthesis, SynthesisPlan, TargetReport};
+
+    use super::IntoSynthesisResult;
+    use crate::ess::EssSources;
+
+    fn synthesis() -> Synthesis {
+        let sources = EssSources::new(BTreeMap::from([(
+            "system.yaml".to_owned(),
+            "format: ess/1\nsystem: admission\nversion: v1\ndomains: [admission.model]\ndomain: admission.model\ntypes:\n  - name: admission.model.ItemId\n    kind: newtype\n    of: String\n"
+                .to_owned(),
+        )]))
+        .expect("valid typed control source");
+        let ir = sources.compile().expect("control compiles");
+        let plan = SynthesisPlan::of(&ir);
+        let target = Some(TargetReport {
+            provenance: plan.provenance.clone(),
+            target: "rust",
+            weakenings: Vec::new(),
+            refusals: Vec::new(),
+        });
+        Synthesis {
+            plan,
+            artifacts: BTreeMap::from([(
+                "control.txt".to_owned(),
+                Artifact::new("control.txt", "original bytes\n".to_owned()),
+            )]),
+            target,
+        }
+    }
+
+    fn assert_original_synthesis(actual: &Synthesis) {
+        let expected = synthesis();
+        assert_eq!(actual.plan, expected.plan);
+        assert_eq!(actual.artifacts, expected.artifacts);
+        assert_eq!(actual.target, expected.target);
+    }
+
+    #[derive(Debug, PartialEq, Eq, thiserror::Error)]
+    #[error("Rust target failure at demo.lib: {0}")]
+    struct FixtureTargetFailure(&'static str);
+
+    #[test]
+    fn historical_rust_success_preserves_every_ess_artifact() {
+        let sources = EssSources::new(BTreeMap::from([(
+            "system.yaml".to_owned(),
+            include_str!("../tests/fixtures/service.ess.yaml").to_owned(),
+        )]))
+        .expect("fixture sources are valid");
+        let ir = sources.compile().expect("fixture compiles through ESS");
+        let synthesized = ess_synth::synthesize(&ir)
+            .into_synthesis_result()
+            .expect("valid Rust synthesis succeeds");
+        assert!(
+            synthesized.target.is_none(),
+            "the current pinned Rust producer represents success with no report"
+        );
+        let projections = ess_gen::generate_all(&ir).expect("fixture projects through ESS");
+
+        let built = super::build_ess(&sources).expect("historical Rust success builds");
+        assert_eq!(built.ir.to_canonical_json(), ir.to_canonical_json());
+        assert_eq!(built.plan, synthesized.plan);
+        assert_eq!(built.synthesis, synthesized.artifacts);
+        assert_eq!(built.projections, projections);
+    }
+
+    #[test]
+    fn direct_synthesis_keeps_plan_artifacts_and_target() {
+        assert_original_synthesis(
+            &synthesis()
+                .into_synthesis_result()
+                .expect("the existing direct return is admitted"),
+        );
+    }
+
+    #[test]
+    fn fallible_success_keeps_plan_artifacts_and_target() {
+        assert_original_synthesis(
+            &Ok::<_, FixtureTargetFailure>(synthesis())
+                .into_synthesis_result()
+                .expect("a future successful result is admitted"),
+        );
+    }
+
+    #[test]
+    fn fallible_failure_preserves_original_typed_cause_without_a_capability() {
+        let error = Err::<Synthesis, _>(FixtureTargetFailure(
+            "output lib.rs collides although the domain has zero capabilities",
+        ))
+        .into_synthesis_result()
+        .err()
+        .expect("a failed synthesis cannot become a successful builder input");
+        assert_eq!(
+            error.to_string(),
+            "Rust target failure at demo.lib: output lib.rs collides although the domain has zero capabilities"
+        );
+        assert_eq!(
+            error.downcast_ref::<FixtureTargetFailure>(),
+            Some(&FixtureTargetFailure(
+                "output lib.rs collides although the domain has zero capabilities"
+            )),
+            "the original typed cause remains available to callers"
+        );
+    }
+}
+
+#[cfg(test)]
+mod rust_target_admission {
+    use ess_gen::Provenance;
+    use ess_synth::{Capability, CapabilityKind, TargetRefusal, TargetReport, TargetWeakening};
+
+    use super::admit_rust_target;
+
+    fn report(target: &'static str) -> TargetReport {
+        TargetReport {
+            provenance: Provenance {
+                system: "admission-fixture".to_owned(),
+                specification_version: "v1".to_owned(),
+                source_digest: "source-digest".to_owned(),
+                contract_digest: "contract-digest".to_owned(),
+            },
+            target,
+            weakenings: Vec::new(),
+            refusals: Vec::new(),
+        }
+    }
+
+    fn refusal(kind: CapabilityKind, source: &str, detail: &str) -> TargetRefusal {
+        TargetRefusal {
+            capability: Capability {
+                kind,
+                source: source.to_owned(),
+            },
+            detail: detail.to_owned(),
+        }
+    }
+
+    fn weakening() -> TargetWeakening {
+        TargetWeakening {
+            guarantee: "exhaustive lifecycle transitions".to_owned(),
+            instead: "runtime checks only; preserve this original explanation".to_owned(),
+            affects: vec![
+                CapabilityKind::EntityLifecycle,
+                CapabilityKind::CommandContract,
+            ],
+        }
+    }
+
+    #[test]
+    fn historical_absent_report_is_admitted() {
+        admit_rust_target(None).expect("historical Rust success is admitted");
+    }
+
+    #[test]
+    fn empty_rust_report_is_admitted() {
+        admit_rust_target(Some(&report("rust"))).expect("complete Rust output is admitted");
+    }
+
+    #[test]
+    fn mismatched_target_is_rejected_even_without_notes() {
+        for target in ["go", "web", "clap", "Rust", "rust ", ""] {
+            let error = admit_rust_target(Some(&report(target)))
+                .expect_err("an empty report for another target is not Rust success")
+                .to_string();
+            assert!(error.contains(&format!("`{target}`")), "{error}");
+            assert!(error.contains("expected `rust`"), "{error}");
+        }
+    }
+
+    #[test]
+    fn every_refusal_keeps_its_capability_source_and_original_reason() {
+        let mut report = report("rust");
+        report.refusals = vec![
+            refusal(
+                CapabilityKind::DomainType,
+                "demo.domain.Foo_Bar",
+                "normalizes to FooBar; collides with demo.domain.FooBar",
+            ),
+            refusal(
+                CapabilityKind::EntityLifecycle,
+                "demo.domain.Node",
+                "optional self-reference has infinite size\nsource: domain.yaml:17 — use indirection",
+            ),
+        ];
+        let error = admit_rust_target(Some(&report))
+            .expect_err("refused Rust capabilities cannot become a successful service")
+            .to_string();
+        assert!(error.contains("`rust`"), "{error}");
+        for refusal in &report.refusals {
+            assert!(
+                error.contains(refusal.capability.kind.describes()),
+                "{error}"
+            );
+            assert!(error.contains(&refusal.capability.source), "{error}");
+            assert!(error.contains(&refusal.detail), "{error}");
+        }
+        assert_eq!(
+            error,
+            admit_rust_target(Some(&report)).unwrap_err().to_string(),
+            "the same report produces identical diagnostics"
+        );
+    }
+
+    #[test]
+    fn weakening_without_refusals_keeps_guarantee_replacement_and_affected_capabilities() {
+        let mut report = report("rust");
+        report.weakenings.push(weakening());
+        let error = admit_rust_target(Some(&report))
+            .expect_err("SDK cannot silently drop weaker guarantees")
+            .to_string();
+        let weakening = &report.weakenings[0];
+        assert!(error.contains("`rust`"), "{error}");
+        assert!(error.contains(&weakening.guarantee), "{error}");
+        assert!(error.contains(&weakening.instead), "{error}");
+        for kind in &weakening.affects {
+            assert!(error.contains(kind.describes()), "{error}");
+        }
+    }
+
+    #[test]
+    fn mismatched_target_preserves_both_refusals_and_weakenings() {
+        let mut report = report("web");
+        report.refusals.push(refusal(
+            CapabilityKind::DomainType,
+            "demo.domain.Refused",
+            "original refusal must not disappear behind target mismatch",
+        ));
+        report.weakenings.push(weakening());
+        let error = admit_rust_target(Some(&report))
+            .expect_err("all accounting from the wrong target must remain visible")
+            .to_string();
+        assert!(error.contains("`web`"), "{error}");
+        assert!(error.contains("expected `rust`"), "{error}");
+        assert!(error.contains("demo.domain.Refused"), "{error}");
+        assert!(error.contains(&report.refusals[0].detail), "{error}");
+        assert!(error.contains(&report.weakenings[0].guarantee), "{error}");
+        assert!(error.contains(&report.weakenings[0].instead), "{error}");
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/support/rust_target_adversary.rs"]
+mod rust_target_adversary;

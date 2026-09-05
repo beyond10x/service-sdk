@@ -12,7 +12,7 @@ scope:
   path: CHANGELOG.md
 - confidence: cited
   path: crates/service-builder
-revision: 5
+revision: 7
 ---
 ## Finding and source
 
@@ -40,3 +40,11 @@ Add actual red-first refusal/control tests under service-builder and retain argv
 ## Coordination
 
 Atlas story:ess-rust-target-refusal-migration and proposed ADR0037 govern order; ESS story:review-rust-target-feasibility owns producer code. Source pin upgrade remains separate from publishing this compatible reader. AgentIDE's old exact SDK builder remains on its old ESS producer until its own coordinated upgrade. Existing runtime typed contracts are preserved.
+
+## Binding reader policy
+
+The coordinator binds the reader policy before implementation: accept historical target=None, or an explicitly Rust report with no refusals and no weakenings. Reject a mismatched target, any refusal, or any weakening with deterministic actionable original report details. SDK currently has no output/accounting contract for weaker guarantees, so it must not silently discard them. Existing Rust production outputs carry None; this adds no pin, public SDK return-type, report-format or generated-output change.
+
+## Checked result compatibility
+
+A fresh ESS regression proves compiler-admitted demo.lib has zero plan capabilities and panics on duplicate lib.rs. ESS therefore binds synthesize/synthesize_for to Result<Synthesis, TargetFailure>; the error implements Error + Send + Sync + 'static and has a new versioned global-cause envelope. This reader must compile against current direct Synthesis and future Result forms via a private typed conversion trait, retaining original errors before the report guard. No version sniffing, dependency/lock change, public test seam or inferred successful future-producer execution. Existing source/valid-output checks and actual later candidate CLI proof remain required.
