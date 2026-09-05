@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.11 - 2026-09-05
+
+- Align Connector factories and conformance with Connectors 0.6.5 so a composed host can keep
+  legacy GitLab connections inactive while remaining available for verified reconnection.
+
 ## 0.5.10 - 2026-09-05
 
 - Align generated Connector factories, catalogues, and conformance with the exact Connectors 0.6.4
