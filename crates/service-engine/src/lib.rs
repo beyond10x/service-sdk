@@ -2221,6 +2221,9 @@ fn projection_rows_for_partition(
                     if field == "state" {
                         value.insert(field.clone(), Value::String(entity.state.clone()));
                     } else if let Some(field_value) = entity.fields.get(field) {
+                        if view.optional_fields.contains(field) && field_value.is_null() {
+                            continue;
+                        }
                         value.insert(field.clone(), field_value.clone());
                     }
                 }
@@ -3021,6 +3024,160 @@ mod tests {
             Value::String("person-a".to_owned()),
             "v1 remains frozen as creation-time inheritance"
         );
+    }
+
+    fn optional_projection_correction_plan(legacy: bool) -> ServicePlan {
+        let (mut plan, _) = two_event_plan();
+        let fields = [
+            "id", "title", "empty", "present", "metadata", "items", "state",
+        ];
+        plan.reducers.get_mut("demo.Created").unwrap().fields = fields
+            .iter()
+            .filter(|field| **field != "state")
+            .map(|field| (*field).to_owned())
+            .collect();
+        plan.views.insert(
+            "demo.Items".to_owned(),
+            ViewPlan {
+                source: "demo.Item".to_owned(),
+                fields: fields.iter().map(|field| (*field).to_owned()).collect(),
+                field_types: BTreeMap::from([
+                    ("id".to_owned(), "String".to_owned()),
+                    ("title".to_owned(), "String".to_owned()),
+                    ("empty".to_owned(), "Optional<String>".to_owned()),
+                    ("present".to_owned(), "Optional<String>".to_owned()),
+                    ("metadata".to_owned(), "Optional<demo.Metadata>".to_owned()),
+                    ("items".to_owned(), "List<Optional<String>>".to_owned()),
+                    ("state".to_owned(), "String".to_owned()),
+                ]),
+                optional_fields: ["empty", "present", "metadata"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+                obligations: Vec::new(),
+            },
+        );
+        plan.queries.insert(
+            "list_items".to_owned(),
+            QueryPlan {
+                view: "demo.Items".to_owned(),
+                scope: "demo.read".to_owned(),
+                inputs: Vec::new(),
+                obligations: Vec::new(),
+            },
+        );
+        let mut encoded = serde_json::to_value(plan).unwrap();
+        if legacy {
+            encoded["format"] = Value::String(LEGACY_REALIZATION_PLAN_FORMAT.to_owned());
+            let view = encoded["views"]["demo.Items"].as_object_mut().unwrap();
+            view.remove("field_types");
+            view.remove("optional_fields");
+        }
+        ServicePlan::from_json(&serde_json::to_string(&encoded).unwrap()).unwrap()
+    }
+
+    fn optional_projection_correction_event() -> DomainEvent {
+        DomainEvent {
+            name: "demo.Created".to_owned(),
+            fields: serde_json::from_value(serde_json::json!({
+                "id": "item-a", "title": "required title", "empty": null,
+                "present": "retained", "metadata": {"nested": null, "value": "kept"},
+                "items": [null, "second"]
+            }))
+            .unwrap(),
+        }
+    }
+
+    fn optional_projection_correction_query(
+        engine: &ServiceEngine,
+        rows: Vec<ProjectionRow>,
+    ) -> Result<Vec<BTreeMap<String, Value>>, ExecutionError> {
+        let mut events = UnusedEvents;
+        let mut projections = QueryRows(rows);
+        let mut content = UnusedContent;
+        let mut authority = AllowAuthority;
+        let mut clock = FixedClock;
+        let mut ids = FixedIds;
+        let mut resources = ServiceResources {
+            events: &mut events,
+            projections: &mut projections,
+            content: &mut content,
+            authority: &mut authority,
+            clock: &mut clock,
+            ids: &mut ids,
+        };
+        block_on(engine.query(&mut resources, &context(None), "list_items", b"{}"))
+    }
+
+    #[test]
+    fn optional_projection_correction_materializes_canonical_rows_and_queries() {
+        let engine = ServiceEngine::new(optional_projection_correction_plan(false));
+        let event = optional_projection_correction_event();
+        let mut state = ProjectionState::default();
+        engine.apply_projection_event(&mut state, &event).unwrap();
+        let original_state = state.clone();
+        assert_eq!(state.entities["demo.Item"]["item-a"].fields, event.fields);
+        let rows = engine.projection_rows("tenant-a", None, &state);
+        assert_eq!(
+            state, original_state,
+            "projection must not normalize fold state"
+        );
+        let expected = serde_json::json!([{
+            "id": "item-a", "title": "required title", "present": "retained",
+            "metadata": {"nested": null, "value": "kept"},
+            "items": [null, "second"], "state": "Active"
+        }]);
+        let actual = optional_projection_correction_query(
+            &engine,
+            rows.into_iter().map(|row| row.row).collect(),
+        )
+        .expect("SDK-produced plan/3 rows must satisfy the public query contract");
+        assert_eq!(serde_json::to_value(actual).unwrap(), expected);
+    }
+
+    #[test]
+    fn optional_projection_correction_plan2_preserves_explicit_null_rows() {
+        let plan = optional_projection_correction_plan(true);
+        assert_eq!(plan.format, LEGACY_REALIZATION_PLAN_FORMAT);
+        assert!(plan.views["demo.Items"].field_types.is_empty());
+        assert!(plan.views["demo.Items"].optional_fields.is_empty());
+        let engine = ServiceEngine::new(plan);
+        let mut state = ProjectionState::default();
+        engine
+            .apply_projection_event(&mut state, &optional_projection_correction_event())
+            .unwrap();
+        let rows = engine.projection_rows("tenant-a", None, &state);
+        let actual = optional_projection_correction_query(
+            &engine,
+            rows.into_iter().map(|row| row.row).collect(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_value(actual).unwrap(),
+            serde_json::json!([{
+                "id": "item-a", "title": "required title", "empty": null,
+                "present": "retained", "metadata": {"nested": null, "value": "kept"},
+                "items": [null, "second"], "state": "Active"
+            }])
+        );
+    }
+
+    #[test]
+    fn optional_projection_correction_query_refuses_injected_plan3_null() {
+        let engine = ServiceEngine::new(optional_projection_correction_plan(false));
+        let mut value = optional_projection_correction_event().fields;
+        value.insert("state".to_owned(), Value::String("Active".to_owned()));
+        let row = ProjectionRow {
+            view: "demo.Items".to_owned(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            source_stream: None,
+            value,
+        };
+        assert!(matches!(
+            optional_projection_correction_query(&engine, vec![row]),
+            Err(ExecutionError::InvalidProjection)
+        ));
     }
 
     #[test]

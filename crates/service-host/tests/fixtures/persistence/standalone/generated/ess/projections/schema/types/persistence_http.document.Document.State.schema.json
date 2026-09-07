@@ -5,7 +5,7 @@
     "system": "persistence_http",
     "specification_version": "v1",
     "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
-    "contract_digest": "f52c39e10c9ade0635931f79b56d742318a0b60f85024cce17d805e304708c06",
+    "contract_digest": "slice-sha256/2:f52c39e10c9ade0635931f79b56d742318a0b60f85024cce17d805e304708c06",
     "regenerate": "ess generate"
   },
   "$defs": {

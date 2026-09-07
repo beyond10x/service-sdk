@@ -43,7 +43,7 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal
 time = { version = "=0.3.36", features = ["formatting", "parsing"] }
 uuid = { version = "1", features = ["v7"] }
 
-identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23" }
+identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "7f22a5359fc5786fd26ab0f0bd728b8544b11950" }
 
 # The organization persistence kit is the only generated-service event/projection/blob backend.
 eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "081815cdfcbf1c751e7ee91abd81af2ff7d460cb" }
@@ -53,12 +53,12 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-pemfile = "2"
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/3.
-ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
-ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
-ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
-ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
-ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
-ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
+ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

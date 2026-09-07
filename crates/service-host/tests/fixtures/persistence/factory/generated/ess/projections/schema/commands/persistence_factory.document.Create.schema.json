@@ -21,7 +21,7 @@
     "system": "persistence_factory",
     "specification_version": "v1",
     "source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
-    "contract_digest": "f78c6e181e7429d7cb724e220fe9ef6829caf29ad3d893c7cae21e2459a49af3",
+    "contract_digest": "slice-sha256/2:f78c6e181e7429d7cb724e220fe9ef6829caf29ad3d893c7cae21e2459a49af3",
     "regenerate": "ess generate"
   },
   "$defs": {

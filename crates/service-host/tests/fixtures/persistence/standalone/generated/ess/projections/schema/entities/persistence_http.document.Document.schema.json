@@ -37,7 +37,7 @@
     "system": "persistence_http",
     "specification_version": "v1",
     "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
-    "contract_digest": "0528745a9a01b2a8dc583fa1de2f708aae6fb678354318014f7c493b5b8f0bd9",
+    "contract_digest": "slice-sha256/2:0528745a9a01b2a8dc583fa1de2f708aae6fb678354318014f7c493b5b8f0bd9",
     "regenerate": "ess generate"
   },
   "$defs": {

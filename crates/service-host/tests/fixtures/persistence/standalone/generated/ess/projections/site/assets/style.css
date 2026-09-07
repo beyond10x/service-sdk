@@ -167,6 +167,7 @@ main {
 
 .content {
   max-width: var(--measure);
+  overflow-wrap: anywhere;
 }
 
 /* ---- prose -------------------------------------------------------------------------------- */
