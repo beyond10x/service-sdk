@@ -54,6 +54,22 @@ fn main() -> Result<()> {
         .block_on(async {
             if arguments == ["--workload-child"] {
                 workload::child().await
+            } else if arguments == ["--pressure-scheduler-probe"] {
+                let fixture = Fixture::required()?;
+                fixture.prepare().await?;
+                println!("running 1 isolated pressure scheduler case");
+                match pressure_case(&fixture, true).await {
+                    Ok(()) => {
+                        println!("test pressure_cancellation_tracks_admission_under_reordered_dispatch ... ok");
+                        println!("test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out");
+                        Ok(())
+                    }
+                    Err(error) => {
+                        println!("test pressure_cancellation_tracks_admission_under_reordered_dispatch ... FAILED: {error:#}");
+                        println!("test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out");
+                        Err(error)
+                    }
+                }
             } else if arguments == ["--readiness-probe"] {
                 let mut fixture = Fixture::required()?;
                 fixture.prepare().await?;
@@ -133,7 +149,8 @@ async fn run() -> Result<()> {
     );
     case!(
         "postgres_saturation_cancellation_reconnect_and_bounded_drain",
-        pressure_case(&fixture)
+        // Keep the controlled ordering in the required roster, so CI exercises the regression.
+        pressure_case(&fixture, true)
     );
     case!(
         "postgres_two_process_sdk_workload_six_configurations",
@@ -1095,6 +1112,7 @@ async fn standalone_pressure(
 ) -> Result<()> {
     let mut locker = lock_events(fixture, "standalone-pressure-lock").await?;
     let mut requests = Vec::new();
+    let started = Instant::now();
     for index in 0..32 {
         if index == 2 {
             let observed = Instant::now();
@@ -1124,7 +1142,14 @@ async fn standalone_pressure(
             (started.elapsed(), response)
         }));
     }
-    tokio::time::sleep(Duration::from_millis(30)).await;
+    let occupied = fixture.sql("SELECT count(*) FROM pg_stat_activity WHERE usename = 'eventlog_test_application' AND wait_event_type = 'Lock'")?;
+    ensure!(
+        occupied.trim() == "2"
+            && started.elapsed() < Duration::from_millis(400)
+            && !requests[0].is_finished()
+            && !requests[1].is_finished(),
+        "standalone cancellation targets are no longer the two observed active clients"
+    );
     requests[0].abort();
     requests[1].abort();
     let mut cancelled = 0;
@@ -1160,7 +1185,7 @@ async fn standalone_pressure(
     Ok(())
 }
 
-async fn pressure_case(fixture: &Fixture) -> Result<()> {
+async fn pressure_case(fixture: &Fixture, reorder: bool) -> Result<()> {
     let persistence = Arc::new(fixture.open(true, ROSTER).await?);
     let authority = Authority(Arc::new(AtomicBool::new(true)));
     let factory = bind(&persistence, authority.clone(), false).await?;
@@ -1168,13 +1193,69 @@ async fn pressure_case(fixture: &Fixture) -> Result<()> {
     persistence.seal().await?;
     let mut locker = lock_events(fixture, "pressure-lock").await?;
     let mut requests = Vec::new();
-    for _ in 0..32 {
-        let persistence = persistence.clone();
+    let delayed = Arc::new(tokio::sync::Semaphore::new(0));
+    let first_runnable = usize::from(reorder) * 2;
+    let admission_started = Instant::now();
+    for index in 0..32 {
+        let running = persistence.clone();
+        let delayed = delayed.clone();
         requests.push(tokio::spawn(async move {
+            if reorder && index < 2 {
+                let _permit = delayed.acquire().await.unwrap();
+            }
             let start = Instant::now();
-            let result = persistence.readiness().await;
+            let result = running.readiness().await;
             (start.elapsed(), result)
         }));
+        if (first_runnable..first_runnable + 3).contains(&index) {
+            let expected = match index - first_runnable {
+                0 => (1, 0),
+                1 => (2, 0),
+                _ => (2, 1),
+            };
+            let observed = Instant::now();
+            loop {
+                let status = persistence.pool_status().context("PG pool counters")?;
+                if (status.checked_out, status.waiting) == expected {
+                    break;
+                }
+                ensure!(
+                    observed.elapsed() < Duration::from_millis(40),
+                    "request {index} did not reach its required admission stage {expected:?}"
+                );
+                tokio::time::sleep(Duration::from_millis(2)).await;
+            }
+            println!(
+                "identified readiness request {index}: active={}, waiting={}",
+                expected.0, expected.1
+            );
+        }
+    }
+    if reorder {
+        let observed = Instant::now();
+        loop {
+            let status = persistence.pool_status().context("PG pool counters")?;
+            if status.checked_out == 2 && status.waiting == 4 {
+                break;
+            }
+            ensure!(
+                observed.elapsed() < Duration::from_millis(40),
+                "controlled scheduler did not fill admissions"
+            );
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        delayed.add_permits(2);
+        let observed = Instant::now();
+        while !requests[0].is_finished() || !requests[1].is_finished() {
+            ensure!(
+                observed.elapsed() < Duration::from_millis(40),
+                "controlled late handles did not finish"
+            );
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+        println!(
+            "controlled scheduler: original cancellation handles 0 and 1 completed after all six admission positions were occupied"
+        );
     }
     let mut peak_active = 0;
     let mut peak_waiting = 0;
@@ -1188,9 +1269,43 @@ async fn pressure_case(fixture: &Fixture) -> Result<()> {
         );
         tokio::time::sleep(Duration::from_millis(2)).await;
     }
-    requests[0].abort();
-    requests[1].abort();
-    let mut cancelled = 0;
+    // No later request can replace either occupied call before its locked read expires.
+    // Identify the queued future while those two calls remain live, then cancel it first.
+    let queued = first_runnable + 2;
+    let status = persistence.pool_status().context("PG pool counters")?;
+    ensure!(
+        admission_started.elapsed() < pool().acquisition_timeout
+            && status.checked_out == 2
+            && status.waiting > 0
+            && !requests[first_runnable].is_finished()
+            && !requests[first_runnable + 1].is_finished()
+            && !requests[queued].is_finished(),
+        "identified readiness cancellation targets left their occupied/queued stages"
+    );
+    println!(
+        "cancelling identified queued request {queued} and occupied request {first_runnable}; active={}, waiting={}",
+        status.checked_out, status.waiting
+    );
+    requests[queued].abort();
+    match requests.remove(queued).await {
+        Err(error) if error.is_cancelled() => {}
+        outcome => bail!("identified queued cancellation did not complete: {outcome:?}"),
+    }
+    let after_queued = persistence.pool_status().context("PG pool counters")?;
+    ensure!(
+        admission_started.elapsed() < pool().acquisition_timeout
+            && after_queued.checked_out == 2
+            && after_queued.waiting + 1 == status.waiting
+            && !requests[first_runnable].is_finished()
+            && !requests[first_runnable + 1].is_finished(),
+        "queued cancellation did not retire its waiter before either occupied request"
+    );
+    println!(
+        "queued cancellation completed before occupied cancellation: active={}, waiting={}",
+        after_queued.checked_out, after_queued.waiting
+    );
+    requests[first_runnable].abort();
+    let mut cancelled = 1;
     let mut refused = 0;
     for task in requests {
         match task.await {
@@ -1207,7 +1322,7 @@ async fn pressure_case(fixture: &Fixture) -> Result<()> {
         }
     }
     ensure!(
-        peak_active == 2 && peak_waiting > 0 && refused > 0,
+        peak_active == 2 && peak_waiting > 0 && refused == 30,
         "pressure did not exercise actual pool saturation"
     );
     ensure!(
