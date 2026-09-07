@@ -1,6 +1,6 @@
 # generated from persistence_http v1
 # model digest 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
-# contract digest 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+# contract digest slice-sha256/2:3d0faab36c842042317c0500936ab21cc2bf15e3f727183b029fa1f6dfbd2185
 # do not edit: regenerate with `ess generate`
 openapi: 3.1.0
 info:
@@ -17,7 +17,7 @@ info:
     system: persistence_http
     specification_version: v1
     source_digest: 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
-    contract_digest: 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+    contract_digest: slice-sha256/2:3d0faab36c842042317c0500936ab21cc2bf15e3f727183b029fa1f6dfbd2185
   x-ess-reached-by: network
 tags:
 - name: document

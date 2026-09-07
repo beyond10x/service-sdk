@@ -5,7 +5,7 @@
     "system": "persistence_factory",
     "specification_version": "v1",
     "source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
-    "contract_digest": "8306c576ff497c20b29fdea28e7145cb5e6ba7b4995fad76e87ce771200690d5",
+    "contract_digest": "slice-sha256/2:8306c576ff497c20b29fdea28e7145cb5e6ba7b4995fad76e87ce771200690d5",
     "regenerate": "ess generate"
   },
   "$defs": {

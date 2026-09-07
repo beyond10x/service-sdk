@@ -204,6 +204,17 @@ impl EventlogService {
         (layout.projector_name, layout.specs())
     }
 
+    /// Constructs the SDK projector for explicit owner-operated maintenance.
+    ///
+    /// Construction does not register the projector or mutate a store. The owner must fence
+    /// every writer before rebuilding through a fresh operational provider with the exact
+    /// approved plan. A provider's `is_inline` check covers only that local store instance;
+    /// it does not establish a deployment-wide writer fence.
+    #[must_use]
+    pub fn projector(engine: ServiceEngine) -> Arc<dyn Projector> {
+        Arc::new(ServiceProjector::new(Arc::new(engine)))
+    }
+
     /// Performs a real bounded backend read without minting a tenant or a feed identity.
     pub async fn readiness(&self) -> Result<(), EventLogError> {
         let probe = StreamId::new(
@@ -234,11 +245,8 @@ impl EventlogService {
         engine: ServiceEngine,
     ) -> Result<Self, EventLogError> {
         let engine = Arc::new(engine);
-        let projection = ProjectionLayout::for_service(&engine.plan().service);
-        let projector = Arc::new(ServiceProjector {
-            engine: Arc::clone(&engine),
-            layout: projection,
-        });
+        let projector = Arc::new(ServiceProjector::new(Arc::clone(&engine)));
+        let projection = projector.layout;
         store.register_inline(projector).await?;
         Ok(Self {
             store,
@@ -603,6 +611,13 @@ fn leak(value: String) -> &'static str {
 struct ServiceProjector {
     engine: Arc<ServiceEngine>,
     layout: ProjectionLayout,
+}
+
+impl ServiceProjector {
+    fn new(engine: Arc<ServiceEngine>) -> Self {
+        let layout = ProjectionLayout::for_service(&engine.plan().service);
+        Self { engine, layout }
+    }
 }
 
 impl Projector for ServiceProjector {
@@ -2408,6 +2423,660 @@ mod tests {
                 .events
                 .len(),
             1
+        );
+    }
+
+    fn optional_projection_correction_plan(legacy: bool) -> ServicePlan {
+        let mut plan = retry_plan("fixture", false);
+        plan.content.clear();
+        let create = plan.intents.get_mut("create").unwrap();
+        create.inputs.retain(|input| input.name != "content");
+        create.outcome.events[0]
+            .fields
+            .retain(|field| field.name != "content_ref");
+        let reducer = plan.reducers.get_mut("fixture.Created").unwrap();
+        reducer.fields.retain(|field| field != "content_ref");
+        for (name, type_ref, optional) in [
+            ("title", "String", false),
+            ("empty", "Optional<String>", true),
+            ("present", "Optional<String>", true),
+            ("metadata", "Optional<fixture.Metadata>", true),
+            ("items", "List<Optional<String>>", false),
+        ] {
+            create.inputs.push(InputPlan {
+                name: name.to_owned(),
+                type_ref: type_ref.to_owned(),
+                optional,
+                source: InputSource::Command,
+            });
+            create.outcome.events[0].fields.push(retry_field(
+                name,
+                ValueSource::Input {
+                    field: name.to_owned(),
+                },
+            ));
+            reducer.fields.push(name.to_owned());
+        }
+        let fields = BTreeMap::from([
+            ("id", "String"),
+            ("revision_id", "String"),
+            ("owner", "String"),
+            ("scopes", "fixture.Scopes"),
+            ("state", "String"),
+            ("title", "String"),
+            ("empty", "Optional<String>"),
+            ("present", "Optional<String>"),
+            ("metadata", "Optional<fixture.Metadata>"),
+            ("items", "List<Optional<String>>"),
+        ]);
+        plan.views.insert(
+            "fixture.Documents".to_owned(),
+            service_engine::ViewPlan {
+                source: "fixture.Document".to_owned(),
+                fields: fields.keys().map(|field| (*field).to_owned()).collect(),
+                field_types: fields
+                    .into_iter()
+                    .map(|(field, kind)| (field.to_owned(), kind.to_owned()))
+                    .collect(),
+                optional_fields: ["empty", "present", "metadata"]
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect(),
+                obligations: Vec::new(),
+            },
+        );
+        plan.queries.insert(
+            "list_documents".to_owned(),
+            service_engine::QueryPlan {
+                view: "fixture.Documents".to_owned(),
+                scope: "documents.read".to_owned(),
+                inputs: Vec::new(),
+                obligations: vec![ObligationUse {
+                    provider: "sdk.projection.auth-partitioned-visibility/v1".to_owned(),
+                    bindings: BTreeMap::from([
+                        ("owner".to_owned(), "owner".to_owned()),
+                        ("scopes".to_owned(), "scopes".to_owned()),
+                    ]),
+                }],
+            },
+        );
+        let mut encoded = serde_json::to_value(plan).unwrap();
+        if legacy {
+            encoded["format"] = Value::String("service-realization-plan/2".to_owned());
+            let view = encoded["views"]["fixture.Documents"]
+                .as_object_mut()
+                .unwrap();
+            view.remove("field_types");
+            view.remove("optional_fields");
+        }
+        ServicePlan::from_json(&serde_json::to_string(&encoded).unwrap()).unwrap()
+    }
+
+    fn optional_projection_correction_body() -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "id": "document-a", "key": "optional-create", "scopes": {"team": "engineering"},
+            "title": "required title", "empty": null, "present": "retained",
+            "metadata": {"nested": null, "value": "kept"}, "items": [null, "second"]
+        }))
+        .unwrap()
+    }
+
+    fn optional_projection_correction_view(first: &IntentResult, legacy: bool) -> Value {
+        // Only the actual opaque revision is supplied by the outcome; the complete public
+        // shape and approved format-specific difference are fixed expectations.
+        let revision = &first.events[0].fields["revision_id"];
+        if legacy {
+            serde_json::json!([{
+                "id": "document-a", "revision_id": revision, "owner": "person-a",
+                "scopes": {"team": "engineering"}, "state": "Open", "title": "required title",
+                "empty": null, "present": "retained", "metadata": {"nested": null, "value": "kept"},
+                "items": [null, "second"]
+            }])
+        } else {
+            serde_json::json!([{
+                "id": "document-a", "revision_id": revision, "owner": "person-a",
+                "scopes": {"team": "engineering"}, "state": "Open", "title": "required title",
+                "present": "retained", "metadata": {"nested": null, "value": "kept"},
+                "items": [null, "second"]
+            }])
+        }
+    }
+
+    struct OptionalProjectionClaimRecorder {
+        inner: EventlogEvents,
+        claims: Vec<IntentClaimRequest>,
+        appends: usize,
+    }
+
+    impl EventStore for OptionalProjectionClaimRecorder {
+        fn recorded_intent<'a>(
+            &'a mut self,
+            claim: &'a IntentClaimRequest,
+        ) -> BoxFuture<'a, Result<Option<RecordedIntent>, ResourceError>> {
+            self.claims.push(claim.clone());
+            self.inner.recorded_intent(claim)
+        }
+        fn authorization_state<'a>(
+            &'a mut self,
+            stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<ProjectionState, ResourceError>> {
+            self.inner.authorization_state(stream)
+        }
+        fn load<'a>(
+            &'a mut self,
+            stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<LoadedStream, ResourceError>> {
+            self.inner.load(stream)
+        }
+        fn append(
+            &mut self,
+            request: AppendRequest,
+        ) -> BoxFuture<'_, Result<AppendReceipt, ResourceError>> {
+            self.appends += 1;
+            self.inner.append(request)
+        }
+    }
+
+    async fn optional_projection_correction_recorded_claim(
+        service: &EventlogService,
+        auth: &VerifiedAuthContext,
+        first: &IntentResult,
+    ) -> eventlog_core::Claim {
+        // Observe the real engine's claim on a genuine retry; do not reproduce its digest.
+        let mut events = OptionalProjectionClaimRecorder {
+            inner: EventlogEvents::new(Arc::clone(&service.store), service.projection),
+            claims: Vec::new(),
+            appends: 0,
+        };
+        let mut projections = EventlogProjections::new(
+            Arc::clone(&service.store),
+            service.projection.rows,
+            &service.plan().service,
+        );
+        let mut content = EventlogContent::new(Arc::clone(&service.store));
+        let mut authority = VerifiedAuthority::new(retry_facts());
+        let mut clock = SystemClock;
+        let mut ids = UuidV7;
+        let mut resources = ServiceResources {
+            events: &mut events,
+            projections: &mut projections,
+            content: &mut content,
+            authority: &mut authority,
+            clock: &mut clock,
+            ids: &mut ids,
+        };
+        let replay = service
+            .engine
+            .intent(
+                &mut resources,
+                auth,
+                RequestMetadata::default(),
+                "create",
+                &optional_projection_correction_body(),
+            )
+            .await
+            .unwrap();
+        let mut expected = first.clone();
+        expected.replayed = true;
+        assert_eq!(replay, expected);
+        assert_eq!(events.appends, 0, "claim observation must not append");
+        assert_eq!(events.claims.len(), 1);
+        intent_claim(&events.claims[0]).unwrap()
+    }
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct OptionalProjectionCustody {
+        identity: String,
+        feed: eventlog_core::FeedPage,
+        stream: eventlog_core::StreamSlice,
+        version: u64,
+        command: eventlog_core::AppendResult,
+        claim: eventlog_core::ClaimedCommand,
+        fold: Vec<(String, Value)>,
+    }
+
+    async fn optional_projection_correction_custody(
+        store: &dyn DurableEventStore,
+        tenant: &TenantId,
+        first: &IntentResult,
+        claim: &eventlog_core::Claim,
+    ) -> OptionalProjectionCustody {
+        let feed = store.read_feed(tenant, 0, 100).await.unwrap();
+        assert!(!feed.has_more);
+        assert_eq!(feed.events.len(), 1);
+        let stream_id = feed.events[0].stream().unwrap();
+        let stream = store.read_stream(&stream_id, 0, 100).await.unwrap();
+        assert!(stream.end_of_stream);
+        assert_eq!(stream.events, feed.events);
+        let hash =
+            eventlog_core::request_hash(&serde_json::to_value(&first.events).unwrap()).unwrap();
+        let command = store
+            .recorded_command(&stream_id, "optional-create", &hash)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.events, feed.events);
+        let recorded_claim = store.recorded_claim(tenant, claim).await.unwrap().unwrap();
+        assert_eq!(recorded_claim.stream, stream_id);
+        assert_eq!(recorded_claim.first_version, command.first_version);
+        assert_eq!(recorded_claim.last_version, command.last_version);
+        let (_, specs) = EventlogService::projection_declaration("fixture");
+        let state = specs
+            .iter()
+            .find(|spec| spec.name.ends_with("_state"))
+            .unwrap();
+        OptionalProjectionCustody {
+            identity: store.stream_identity(tenant).await.unwrap(),
+            feed,
+            stream,
+            version: store
+                .stream_version(&stream_id)
+                .await
+                .unwrap()
+                .expect("the populated stream must retain its head"),
+            command,
+            claim: recorded_claim,
+            fold: store
+                .projection_list(state, tenant, None, 100)
+                .await
+                .unwrap(),
+        }
+    }
+
+    fn optional_projection_correction_closed_bytes(database: &std::path::Path) -> Vec<u8> {
+        for suffix in ["-wal", "-shm"] {
+            assert!(
+                !std::path::PathBuf::from(format!("{}{suffix}", database.display())).exists(),
+                "all SQLite handles must be closed and WAL custody complete before copying"
+            );
+        }
+        assert!(std::fs::metadata(database).unwrap().len() < 1024 * 1024);
+        std::fs::read(database).unwrap()
+    }
+
+    #[tokio::test]
+    async fn optional_projection_correction_sqlite_intent_keeps_raw_nulls() {
+        let store: Arc<dyn DurableEventStore> =
+            Arc::new(SqliteEventStore::in_memory("sdk_optional").await.unwrap());
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(optional_projection_correction_plan(false)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        let body = optional_projection_correction_body();
+        let before_body = body.clone();
+        let first = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert_eq!(body, before_body);
+        assert!(!first.replayed);
+        assert_eq!(first.events.len(), 1);
+        let fields = &first.events[0].fields;
+        let expected_fields = serde_json::json!({
+            "id": "document-a", "revision_id": fields["revision_id"], "owner": "person-a",
+            "scopes": {"team": "engineering"}, "title": "required title", "empty": null,
+            "present": "retained", "metadata": {"nested": null, "value": "kept"},
+            "items": [null, "second"]
+        });
+        assert_eq!(serde_json::to_value(fields).unwrap(), expected_fields);
+        let tenant = TenantId::new("tenant-a").unwrap();
+        let claim = optional_projection_correction_recorded_claim(&service, &context, &first).await;
+        let custody =
+            optional_projection_correction_custody(store.as_ref(), &tenant, &first, &claim).await;
+        assert_eq!(custody.feed.events[0].data, expected_fields);
+        let fold = store
+            .projection_get(
+                service.projection.state,
+                &tenant,
+                &custody.feed.events[0].stream_id,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            fold,
+            serde_json::json!({"entities": {"fixture.Document": {
+                "document-a": {"state": "Open", "fields": expected_fields}
+            }}})
+        );
+        let query = service
+            .query(&context, retry_facts(), "list_documents", b"{}")
+            .await
+            .expect("explicit-null command must produce a queryable canonical plan/3 row");
+        assert_eq!(
+            serde_json::to_value(query).unwrap(),
+            optional_projection_correction_view(&first, false)
+        );
+        assert_eq!(
+            optional_projection_correction_custody(store.as_ref(), &tenant, &first, &claim).await,
+            custody
+        );
+    }
+
+    #[tokio::test]
+    async fn optional_projection_correction_projector_is_explicit_and_inline_rebuild_refuses() {
+        let store = SqliteEventStore::in_memory("sdk_optional_api")
+            .await
+            .unwrap();
+        let tenant = TenantId::new("tenant-a").unwrap();
+        let projector = EventlogService::projector(ServiceEngine::new(
+            optional_projection_correction_plan(false),
+        ));
+        let declaration = EventlogService::projection_declaration("fixture");
+        assert_eq!(projector.name(), declaration.0);
+        assert_eq!(projector.projections(), declaration.1);
+        assert!(!store.is_inline(projector.name()).await);
+        assert!(
+            store
+                .projection_list(&projector.projections()[0], &tenant, None, 100)
+                .await
+                .is_err()
+        );
+        store
+            .create_projections(Arc::clone(&projector))
+            .await
+            .unwrap();
+        assert!(!store.is_inline(projector.name()).await);
+        for spec in projector.projections() {
+            assert_eq!(
+                store
+                    .projection_list(spec, &tenant, None, 100)
+                    .await
+                    .unwrap(),
+                Vec::new()
+            );
+        }
+        let store: Arc<dyn DurableEventStore> = Arc::new(store);
+        let _service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(optional_projection_correction_plan(false)),
+        )
+        .await
+        .unwrap();
+        assert!(store.is_inline(projector.name()).await);
+        assert!(matches!(store.rebuild_projection(projector, &tenant).await,
+            Err(EventLogError::Invalid(message)) if message == "rebuild requires a catch-up projection"
+        ));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)]
+    async fn optional_projection_correction_plan2_copy_rebuild_preserves_custody_and_foreign_tenant()
+     {
+        // Current SDK + parsed old-format plan; this is not historical SDK0118 population.
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/sdk-persistence-tests")
+            .join(Uuid::now_v7().to_string());
+        std::fs::create_dir_all(&directory).unwrap();
+        let original = directory.join("original.sqlite3");
+        let candidate = directory.join("candidate.sqlite3");
+        let tenant = TenantId::new("tenant-a").unwrap();
+        let foreign = TenantId::new("tenant-b").unwrap();
+        let context = retry_context(None);
+        let foreign_context = retry_context_in("tenant-b", Some("default"));
+        let projector = EventlogService::projector(ServiceEngine::new(
+            optional_projection_correction_plan(false),
+        ));
+        let (
+            first,
+            foreign_first,
+            claim,
+            foreign_claim,
+            before,
+            foreign_before,
+            foreign_projections,
+        ) = {
+            let store: Arc<dyn DurableEventStore> = Arc::new(
+                SqliteEventStore::open(original.to_str().unwrap(), "sdk_optional_restore")
+                    .await
+                    .unwrap(),
+            );
+            let plan = optional_projection_correction_plan(true);
+            assert_eq!(plan.format, "service-realization-plan/2");
+            assert!(plan.views["fixture.Documents"].optional_fields.is_empty());
+            let service = EventlogService::initialize(Arc::clone(&store), ServiceEngine::new(plan))
+                .await
+                .unwrap();
+            let first = service
+                .intent(
+                    &context,
+                    retry_facts(),
+                    RequestMetadata::default(),
+                    "create",
+                    &optional_projection_correction_body(),
+                )
+                .await
+                .unwrap();
+            let foreign_first = service
+                .intent(
+                    &foreign_context,
+                    retry_facts(),
+                    RequestMetadata::default(),
+                    "create",
+                    &optional_projection_correction_body(),
+                )
+                .await
+                .unwrap();
+            let old_views = service
+                .query(&context, retry_facts(), "list_documents", b"{}")
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::to_value(&old_views).unwrap(),
+                optional_projection_correction_view(&first, true)
+            );
+            assert_eq!(
+                serde_json::to_value(
+                    service
+                        .query(&foreign_context, retry_facts(), "list_documents", b"{}")
+                        .await
+                        .unwrap()
+                )
+                .unwrap(),
+                optional_projection_correction_view(&foreign_first, true)
+            );
+            std::fs::write(
+                directory.join("original-views.json"),
+                serde_json::to_vec_pretty(&old_views).unwrap(),
+            )
+            .unwrap();
+            let claim =
+                optional_projection_correction_recorded_claim(&service, &context, &first).await;
+            let foreign_claim = optional_projection_correction_recorded_claim(
+                &service,
+                &foreign_context,
+                &foreign_first,
+            )
+            .await;
+            let before =
+                optional_projection_correction_custody(store.as_ref(), &tenant, &first, &claim)
+                    .await;
+            let foreign_before = optional_projection_correction_custody(
+                store.as_ref(),
+                &foreign,
+                &foreign_first,
+                &foreign_claim,
+            )
+            .await;
+            let mut foreign_projections = Vec::new();
+            for spec in projector.projections() {
+                foreign_projections.push(
+                    store
+                        .projection_list(spec, &foreign, None, 100)
+                        .await
+                        .unwrap(),
+                );
+            }
+            (
+                first,
+                foreign_first,
+                claim,
+                foreign_claim,
+                before,
+                foreign_before,
+                foreign_projections,
+            )
+        };
+        let original_bytes = optional_projection_correction_closed_bytes(&original);
+        let original_hash = hex_digest(&original_bytes);
+        std::fs::write(
+            directory.join("original.sha256"),
+            format!("{original_hash}  original.sqlite3\n"),
+        )
+        .unwrap();
+        std::fs::copy(&original, &candidate).unwrap();
+        assert_eq!(
+            optional_projection_correction_closed_bytes(&candidate),
+            original_bytes
+        );
+        {
+            let store: Arc<dyn DurableEventStore> = Arc::new(
+                SqliteEventStore::open(candidate.to_str().unwrap(), "sdk_optional_restore")
+                    .await
+                    .unwrap(),
+            );
+            let service = EventlogService::initialize(
+                Arc::clone(&store),
+                ServiceEngine::new(optional_projection_correction_plan(false)),
+            )
+            .await
+            .unwrap();
+            assert!(matches!(
+                service
+                    .query(&context, retry_facts(), "list_documents", b"{}")
+                    .await,
+                Err(service_engine::ExecutionError::InvalidProjection)
+            ));
+            assert!(
+                matches!(store.rebuild_projection(Arc::clone(&projector), &tenant).await,
+                Err(EventLogError::Invalid(message)) if message == "rebuild requires a catch-up projection")
+            );
+            assert_eq!(
+                optional_projection_correction_custody(store.as_ref(), &tenant, &first, &claim)
+                    .await,
+                before
+            );
+        }
+        // Every writer above has been dropped. The fresh handle's local flag is only a
+        // registration check; the test's ownership/scopes establish the actual writer fence.
+        {
+            let store = SqliteEventStore::open(candidate.to_str().unwrap(), "sdk_optional_restore")
+                .await
+                .unwrap();
+            assert!(!store.is_inline(projector.name()).await);
+            store
+                .create_projections(Arc::clone(&projector))
+                .await
+                .unwrap();
+            assert!(!store.is_inline(projector.name()).await);
+            assert_eq!(
+                store
+                    .rebuild_projection(Arc::clone(&projector), &tenant)
+                    .await
+                    .unwrap(),
+                before.feed.events.len() as u64
+            );
+            assert_eq!(
+                optional_projection_correction_custody(&store, &tenant, &first, &claim).await,
+                before
+            );
+            assert_eq!(
+                optional_projection_correction_custody(
+                    &store,
+                    &foreign,
+                    &foreign_first,
+                    &foreign_claim
+                )
+                .await,
+                foreign_before
+            );
+            for (spec, expected) in projector.projections().iter().zip(&foreign_projections) {
+                assert_eq!(
+                    &store
+                        .projection_list(spec, &foreign, None, 100)
+                        .await
+                        .unwrap(),
+                    expected
+                );
+            }
+        }
+        assert_eq!(
+            optional_projection_correction_closed_bytes(&original),
+            original_bytes
+        );
+        assert_eq!(
+            hex_digest(&std::fs::read(&original).unwrap()),
+            original_hash
+        );
+        {
+            let store: Arc<dyn DurableEventStore> = Arc::new(
+                SqliteEventStore::open(candidate.to_str().unwrap(), "sdk_optional_restore")
+                    .await
+                    .unwrap(),
+            );
+            let service = EventlogService::initialize(
+                Arc::clone(&store),
+                ServiceEngine::new(optional_projection_correction_plan(false)),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                optional_projection_correction_custody(store.as_ref(), &tenant, &first, &claim)
+                    .await,
+                before
+            );
+            assert_eq!(
+                optional_projection_correction_custody(
+                    store.as_ref(),
+                    &foreign,
+                    &foreign_first,
+                    &foreign_claim
+                )
+                .await,
+                foreign_before
+            );
+            assert!(
+                matches!(
+                    service
+                        .query(&foreign_context, retry_facts(), "list_documents", b"{}")
+                        .await,
+                    Err(service_engine::ExecutionError::InvalidProjection)
+                ),
+                "the foreign old row is still unmigrated"
+            );
+            assert_eq!(
+                service
+                    .query(
+                        &retry_context(Some("default")),
+                        retry_facts(),
+                        "list_documents",
+                        b"{}"
+                    )
+                    .await
+                    .unwrap(),
+                Vec::new()
+            );
+            let query = service
+                .query(&context, retry_facts(), "list_documents", b"{}")
+                .await
+                .expect("offline original-projector rebuild must produce canonical plan/3 rows");
+            assert_eq!(
+                serde_json::to_value(query).unwrap(),
+                optional_projection_correction_view(&first, false)
+            );
+        }
+        assert_eq!(
+            optional_projection_correction_closed_bytes(&original),
+            original_bytes
         );
     }
 

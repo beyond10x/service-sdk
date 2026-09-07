@@ -246,7 +246,7 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 [[package]]
 name = "catalog"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "catalog-reader",
  "serde",
@@ -256,7 +256,7 @@ dependencies = [
 [[package]]
 name = "catalog-reader"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 
 [[package]]
 name = "cc"
@@ -346,7 +346,7 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 [[package]]
 name = "connector-address"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "thiserror",
 ]
@@ -354,7 +354,7 @@ dependencies = [
 [[package]]
 name = "connector-resolve"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "catalog",
  "catalog-reader",
@@ -370,7 +370,7 @@ dependencies = [
 [[package]]
 name = "connector-secrets"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "async-trait",
  "connector-address",
@@ -384,7 +384,7 @@ dependencies = [
 [[package]]
 name = "connector-state"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "thiserror",
 ]
@@ -549,7 +549,7 @@ dependencies = [
 [[package]]
 name = "domain"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "async-trait",
  "connector-state",
@@ -617,8 +617,8 @@ dependencies = [
 
 [[package]]
 name = "ess-compiler"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -629,8 +629,8 @@ dependencies = [
 
 [[package]]
 name = "ess-deployment"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-compiler",
  "ess-realization",
@@ -644,8 +644,8 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -657,8 +657,8 @@ dependencies = [
 
 [[package]]
 name = "ess-gen"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -672,8 +672,8 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -683,8 +683,8 @@ dependencies = [
 
 [[package]]
 name = "ess-realization"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -696,8 +696,8 @@ dependencies = [
 
 [[package]]
 name = "ess-synth"
-version = "0.13.1"
-source = "git+https://github.com/beyond10x/ess.git?rev=d1a66772a91b5411d942d7a45bbf08dfc5de4651#d1a66772a91b5411d942d7a45bbf08dfc5de4651"
+version = "0.20.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -1236,7 +1236,7 @@ dependencies = [
 [[package]]
 name = "identity-client"
 version = "0.5.6"
-source = "git+https://github.com/beyond10x/identity.git?rev=e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23#e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23"
+source = "git+https://github.com/beyond10x/identity.git?rev=7f22a5359fc5786fd26ab0f0bd728b8544b11950#7f22a5359fc5786fd26ab0f0bd728b8544b11950"
 dependencies = [
  "reqwest",
  "serde",
@@ -1743,7 +1743,7 @@ dependencies = [
 [[package]]
 name = "protocol"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "domain",
  "fluent-uri",
@@ -2278,7 +2278,7 @@ dependencies = [
 [[package]]
 name = "service"
 version = "0.7.0"
-source = "git+https://github.com/beyond10x/connectors.git?rev=e80b7ae1b2151d13aa9786cf67ea05e66717ee35#e80b7ae1b2151d13aa9786cf67ea05e66717ee35"
+source = "git+https://github.com/beyond10x/connectors.git?rev=9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1#9f2a361b5751ac1d1fcbdce06a0a09e9ce741db1"
 dependencies = [
  "async-trait",
  "base64",

@@ -126,7 +126,7 @@ Receipt recovery reads a bounded original event range; unresolved outcomes never
 or admit a new external effect. Effect preparation, claims and terminal outcomes retain their
 existing journal identities across restart.
 
-Existing event hashes and stream, feed, cursor, projection, effect and `service-content/1`
+Existing event hashes and stream, feed, cursor, projection storage, effect and `service-content/1`
 encodings remain unchanged. The historical content digest includes tenant, exact optional realm,
 policy, idempotency key, media type and bytes; it does not add a service namespace. There is no
 public SDK content-download route. Tests cover the older `service-stream/1` identity vectors;
@@ -138,6 +138,29 @@ retained client or owner evidence. Old SDK commands had no original-intent claim
 response containing an unknown generated stream UUID cannot be recovered by the new bounded
 lookup; it blocks that deployment's write admission until reconciled. This release does not
 scan tenant feeds, synthesize legacy receipts or prove that a deployment completed this process.
+
+### Optional fields and projection upgrades
+
+Typed `service-realization-plan/3` views represent an empty optional object field by its absence.
+For example, a grant without an expiry omits `expires_at` from its query row. The accepted command,
+stored event and folded state retain the original explicit null; present optional values and
+nested nulls remain unchanged. The validator rejects an externally supplied optional null row.
+Legacy `service-realization-plan/2` keeps its historical null-valued query representation.
+
+This is an explicit query-output change when upgrading an existing plan/2 deployment. Before
+candidate traffic, fence all writers, retain a complete closed backup, and rebuild the service's
+projections for each tenant with the approved new plan. `EventlogService::projector(engine)`
+constructs the same SDK-owned projector used by serving initialization without registering it
+or touching storage. Pass that projector to the provider's `create_projections` and
+`rebuild_projection` operations in a fresh maintenance process. Its local `is_inline` check
+cannot establish that other processes have stopped. Serving initialization alone does not
+rewrite existing rows, and locally inline rebuilds refuse.
+
+Verify complete old and rebuilt views with only the declared top-level optional-null-to-absence
+mapping, and verify original events, identities, command outcomes and claims independently.
+Retain the original views; do not normalize their evidence. Reopen the rebuilt store and verify
+the candidate's queries before admitting traffic. Genuine historical SDK migration and the
+complete PostgreSQL consumer proof are separate from the SDK's file SQLite plan-format tests.
 
 ## Why it is built on ESS
 

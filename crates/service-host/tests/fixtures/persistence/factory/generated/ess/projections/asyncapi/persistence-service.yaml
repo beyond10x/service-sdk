@@ -1,6 +1,6 @@
 # generated from persistence_factory v1
 # model digest 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
-# contract digest f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+# contract digest slice-sha256/2:f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d
 # do not edit: regenerate with `ess generate`
 asyncapi: 3.0.0
 info:
@@ -17,7 +17,7 @@ info:
     system: persistence_factory
     specification_version: v1
     source_digest: 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
-    contract_digest: f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+    contract_digest: slice-sha256/2:f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d
 defaultContentType: application/json
 channels:
   persistence_factory.document.Closed:
