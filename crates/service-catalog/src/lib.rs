@@ -431,6 +431,7 @@ impl CatalogBackend {
             approval: ApprovalPosture::NotRequired,
             connections: vec![self.connection()],
             description_ref: self.description_ref(context, &operation.operation_ref),
+            rate_advice: None,
         }))
     }
 
