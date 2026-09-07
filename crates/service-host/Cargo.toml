@@ -30,8 +30,8 @@ serde.workspace = true
 service-runtime = { path = "../service-runtime" }
 persistence-http-generated-service = { path = "tests/fixtures/persistence/standalone/generated/rust", default-features = false }
 persistence-factory-generated-service = { path = "tests/fixtures/persistence/factory/generated/rust" }
-connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329" }
-connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "e80b7ae1b2151d13aa9786cf67ea05e66717ee35" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "e80b7ae1b2151d13aa9786cf67ea05e66717ee35" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 uuid.workspace = true
 time.workspace = true
