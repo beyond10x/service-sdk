@@ -24,7 +24,7 @@ pub const SERVICE_PACKAGE_FORMAT_V2: &str = "service/2";
 pub enum ReleasePersistence {
     /// Existing local file storage and durable volume.
     Sqlite,
-    /// Verified, separately migrated PostgreSQL selected by deployment.
+    /// Verified, separately migrated `PostgreSQL` selected by deployment.
     Postgres,
 }
 

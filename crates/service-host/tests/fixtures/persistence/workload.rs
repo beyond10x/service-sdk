@@ -890,14 +890,26 @@ fn docker_stats(fixture: &Fixture) -> Result<String> {
 fn freeze_inputs(fixture: &Fixture) -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .canonicalize()?;
-    let listed = Command::new("rg")
-        .args(["--files", "crates", "ess"])
+        .canonicalize()
+        .context("canonicalizing SDK source root for input freeze")?;
+    let listed = Command::new("git")
+        .args([
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            "crates",
+            "ess",
+        ])
         .current_dir(&root)
-        .output()?;
+        .output()
+        .context("executing git ls-files for source input freeze")?;
     ensure!(listed.status.success(), "source inventory failed");
     let mut paths = String::from_utf8(listed.stdout)?
-        .lines()
+        .split('\0')
+        .filter(|path| !path.is_empty())
         .map(str::to_owned)
         .collect::<Vec<_>>();
     paths.extend(["Cargo.toml", "Cargo.lock"].into_iter().map(str::to_owned));
@@ -909,7 +921,13 @@ fn freeze_inputs(fixture: &Fixture) -> Result<()> {
     );
     paths.push(
         binary()
-            .canonicalize()?
+            .canonicalize()
+            .with_context(|| {
+                format!(
+                    "canonicalizing standalone fixture binary {}",
+                    binary().display()
+                )
+            })?
             .strip_prefix(&root)?
             .display()
             .to_string(),
@@ -918,7 +936,8 @@ fn freeze_inputs(fixture: &Fixture) -> Result<()> {
     let output = Command::new("sha256sum")
         .args(&paths)
         .current_dir(&root)
-        .output()?;
+        .output()
+        .context("executing sha256sum for source/binary input freeze")?;
     ensure!(
         output.status.success(),
         "source/binary input hashing failed"

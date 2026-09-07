@@ -355,7 +355,7 @@ impl Persistence {
             .context("generated service schema migration was refused")
     }
 
-    /// Opens the same file SQLite adapter used by the default generated host.
+    /// Opens the same file `SQLite` adapter used by the default generated host.
     pub async fn open_sqlite(path: &str, prefix: &str, services: &[&str]) -> Result<Self> {
         let roster = Roster::new(services)?;
         let inner: Arc<dyn DurableEventStore> =
@@ -455,7 +455,7 @@ impl Persistence {
         Ok(())
     }
 
-    /// Non-sensitive PostgreSQL pool measurements, when this host selected PostgreSQL.
+    /// Non-sensitive `PostgreSQL` pool measurements, when this host selected `PostgreSQL`.
     pub fn pool_status(&self) -> Option<PoolStatus> {
         self.postgres
             .as_ref()
