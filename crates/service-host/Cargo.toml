@@ -41,5 +41,10 @@ name = "persistence"
 path = "tests/persistence.rs"
 harness = false
 
+[[test]]
+name = "persistence-adversary"
+path = "tests/fixtures/persistence/adversary.rs"
+harness = true
+
 [lints]
 workspace = true
