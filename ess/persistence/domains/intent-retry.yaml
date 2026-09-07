@@ -1,0 +1,97 @@
+# SDK intent claims use Eventlog's existing atomic Claim representation.
+# No event payload, stream encoding, CommandMeta request_hash or SQL shape changes.
+# Proposed protocol: service-intent-claim/1. Recorded is a committed receipt fact,
+# not a second command lifecycle. Legacy commands without claims are not imported.
+domain: service_sdk.persistence
+summary: Original-input claims referring to one committed generated command batch.
+
+types:
+  - name: service_sdk.persistence.TenantId
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.ServiceId
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.RealmId
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.StreamCategory
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.StreamKey
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.ClaimKey
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.ClaimIdentity
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.ClaimScope
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.OriginalIntentDigest
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.ProducedEventsDigest
+    kind: newtype
+    of: String
+  - name: service_sdk.persistence.StreamVersion
+    kind: newtype
+    of: Integer
+  - name: service_sdk.persistence.Protocol
+    kind: enum
+    variants: [ServiceIntentClaimV1]
+  - name: service_sdk.persistence.StreamSelectorKind
+    kind: enum
+    variants: [CommandField, GeneratedUuidV7]
+  - name: service_sdk.persistence.StreamSelector
+    kind: struct
+    fields:
+      - { name: kind, type: service_sdk.persistence.StreamSelectorKind }
+      # Present exactly for CommandField; generated identity is not available yet.
+      - { name: key, type: Optional<service_sdk.persistence.StreamKey> }
+  - name: service_sdk.persistence.IntentPartition
+    kind: struct
+    fields:
+      - { name: tenant, type: service_sdk.persistence.TenantId }
+      - { name: service, type: service_sdk.persistence.ServiceId }
+      - { name: realm, type: Optional<service_sdk.persistence.RealmId> }
+      - { name: category, type: service_sdk.persistence.StreamCategory }
+      - { name: selector, type: service_sdk.persistence.StreamSelector }
+  - name: service_sdk.persistence.RecordedStream
+    kind: struct
+    fields:
+      - { name: tenant, type: service_sdk.persistence.TenantId }
+      - { name: service, type: service_sdk.persistence.ServiceId }
+      - { name: realm, type: Optional<service_sdk.persistence.RealmId> }
+      - { name: category, type: service_sdk.persistence.StreamCategory }
+      - { name: key, type: service_sdk.persistence.StreamKey }
+  - name: service_sdk.persistence.CommandBatch
+    kind: struct
+    fields:
+      - { name: stream, type: service_sdk.persistence.RecordedStream }
+      # Inclusive, positive and contiguous; at most 1024 recorded events.
+      - { name: first_version, type: service_sdk.persistence.StreamVersion }
+      - { name: last_version, type: service_sdk.persistence.StreamVersion }
+      # Existing CommandMeta request_hash over the produced DomainEvent batch.
+      - { name: produced_events_digest, type: service_sdk.persistence.ProducedEventsDigest }
+
+entities:
+  - name: service_sdk.persistence.IntentClaim
+    identity:
+      name: identity
+      type: service_sdk.persistence.ClaimIdentity
+    fields:
+      - { name: protocol, type: service_sdk.persistence.Protocol }
+      - { name: partition, type: service_sdk.persistence.IntentPartition }
+      - { name: scope, type: service_sdk.persistence.ClaimScope }
+      - { name: key, type: service_sdk.persistence.ClaimKey }
+      # Hashes admitted caller input and original authenticated identities, never
+      # stores plaintext content, credentials, authority grants or generated UUIDs.
+      - { name: original_intent_digest, type: service_sdk.persistence.OriginalIntentDigest }
+      - { name: batch, type: service_sdk.persistence.CommandBatch }
+    lifecycle:
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]

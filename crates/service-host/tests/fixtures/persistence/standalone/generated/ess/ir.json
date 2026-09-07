@@ -1,0 +1,627 @@
+{
+  "system": "persistence_http",
+  "version": 1,
+  "naming": {},
+  "domains": {
+    "persistence_http.document": {
+      "name": "persistence_http.document",
+      "naming": {},
+      "types": [
+        "persistence_http.document.ContentRef",
+        "persistence_http.document.Document.State",
+        "persistence_http.document.Id",
+        "persistence_http.document.Owner",
+        "persistence_http.document.Row",
+        "persistence_http.document.Scopes"
+      ],
+      "entities": [
+        "persistence_http.document.Document"
+      ],
+      "commands": [
+        "persistence_http.document.Close",
+        "persistence_http.document.Create",
+        "persistence_http.document.Revise"
+      ],
+      "events": [
+        "persistence_http.document.Closed",
+        "persistence_http.document.Created",
+        "persistence_http.document.Revised"
+      ],
+      "errors": [],
+      "views": [
+        "persistence_http.document.ById"
+      ],
+      "actors": []
+    }
+  },
+  "types": {
+    "persistence_http.document.ContentRef": {
+      "name": "persistence_http.document.ContentRef",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "persistence_http.document.Document.State": {
+      "name": "persistence_http.document.Document.State",
+      "body": {
+        "kind": "enum",
+        "variants": [
+          "Closed",
+          "Open"
+        ]
+      },
+      "naming": {}
+    },
+    "persistence_http.document.Id": {
+      "name": "persistence_http.document.Id",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "persistence_http.document.Owner": {
+      "name": "persistence_http.document.Owner",
+      "body": {
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "persistence_http.document.Row": {
+      "name": "persistence_http.document.Row",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type_ref": {
+              "kind": "declared",
+              "name": "persistence_http.document.Id"
+            },
+            "naming": {}
+          },
+          {
+            "name": "revision",
+            "type_ref": {
+              "kind": "declared",
+              "name": "persistence_http.document.Id"
+            },
+            "naming": {}
+          },
+          {
+            "name": "owner",
+            "type_ref": {
+              "kind": "declared",
+              "name": "persistence_http.document.Owner"
+            },
+            "naming": {}
+          },
+          {
+            "name": "scopes",
+            "type_ref": {
+              "kind": "declared",
+              "name": "persistence_http.document.Scopes"
+            },
+            "naming": {}
+          },
+          {
+            "name": "content_ref",
+            "type_ref": {
+              "kind": "declared",
+              "name": "persistence_http.document.ContentRef"
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    },
+    "persistence_http.document.Scopes": {
+      "name": "persistence_http.document.Scopes",
+      "body": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "team",
+            "type_ref": {
+              "kind": "optional",
+              "of": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            "naming": {}
+          }
+        ],
+        "invariants": []
+      },
+      "naming": {}
+    }
+  },
+  "conversions": [],
+  "entities": {
+    "persistence_http.document.Document": {
+      "name": "persistence_http.document.Document",
+      "domain": "persistence_http.document",
+      "identity": {
+        "name": "id",
+        "type_ref": {
+          "kind": "declared",
+          "name": "persistence_http.document.Id"
+        },
+        "naming": {}
+      },
+      "fields": [
+        {
+          "name": "revision",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "owner",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Owner"
+          },
+          "naming": {}
+        },
+        {
+          "name": "scopes",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Scopes"
+          },
+          "naming": {}
+        },
+        {
+          "name": "content_ref",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.ContentRef"
+          },
+          "naming": {}
+        }
+      ],
+      "state_type": "persistence_http.document.Document.State",
+      "lifecycle": {
+        "states": [
+          "Closed",
+          "Open"
+        ],
+        "initial": "Open",
+        "terminal": [
+          "Closed"
+        ],
+        "transitions": [
+          {
+            "name": "close",
+            "from": [
+              "Open"
+            ],
+            "to": "Closed"
+          }
+        ]
+      },
+      "invariants": [],
+      "naming": {}
+    }
+  },
+  "commands": {
+    "persistence_http.document.Close": {
+      "name": "persistence_http.document.Close",
+      "domain": "persistence_http.document",
+      "input": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "closed",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "persistence_http.document.Document",
+            "effect": "moves",
+            "transition": {
+              "name": "close",
+              "from": [
+                "Open"
+              ],
+              "to": "Closed"
+            },
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "persistence_http.document.Id"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": [
+            "persistence_http.document.Closed"
+          ],
+          "payload": [
+            {
+              "event": "persistence_http.document.Closed",
+              "fields": [
+                {
+                  "target": "id",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "persistence_http.document.Id"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "id",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "persistence_http.document.Id"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "naming": {}
+    },
+    "persistence_http.document.Create": {
+      "name": "persistence_http.document.Create",
+      "domain": "persistence_http.document",
+      "input": [
+        {
+          "name": "content_ref",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.ContentRef"
+          },
+          "naming": {}
+        },
+        {
+          "name": "scopes",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Scopes"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "created",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "persistence_http.document.Document",
+            "effect": "creates",
+            "instance": {
+              "from": "observed",
+              "event": "persistence_http.document.Created",
+              "field": {
+                "name": "id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "persistence_http.document.Id"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": [
+            "persistence_http.document.Created"
+          ],
+          "payload": [
+            {
+              "event": "persistence_http.document.Created",
+              "fields": [
+                {
+                  "target": "scopes",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "persistence_http.document.Scopes"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "scopes",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "persistence_http.document.Scopes"
+                    }
+                  }
+                },
+                {
+                  "target": "content_ref",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "persistence_http.document.ContentRef"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "content_ref",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "persistence_http.document.ContentRef"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "naming": {}
+    },
+    "persistence_http.document.Revise": {
+      "name": "persistence_http.document.Revise",
+      "domain": "persistence_http.document",
+      "input": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        }
+      ],
+      "outcomes": [
+        {
+          "name": "revised",
+          "condition": {
+            "kind": "otherwise"
+          },
+          "subject": {
+            "entity": "persistence_http.document.Document",
+            "effect": "updates",
+            "instance": {
+              "from": "supplied",
+              "field": {
+                "name": "id",
+                "type_ref": {
+                  "kind": "declared",
+                  "name": "persistence_http.document.Id"
+                },
+                "naming": {}
+              }
+            }
+          },
+          "test_strategy": "default_branch",
+          "emits": [
+            "persistence_http.document.Revised"
+          ],
+          "payload": [
+            {
+              "event": "persistence_http.document.Revised",
+              "fields": [
+                {
+                  "target": "id",
+                  "target_type": {
+                    "kind": "declared",
+                    "name": "persistence_http.document.Id"
+                  },
+                  "value": {
+                    "kind": "input_field",
+                    "field": "id",
+                    "type_ref": {
+                      "kind": "declared",
+                      "name": "persistence_http.document.Id"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "events": {
+    "persistence_http.document.Closed": {
+      "name": "persistence_http.document.Closed",
+      "domain": "persistence_http.document",
+      "fields": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "revision",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "persistence_http.document.Created": {
+      "name": "persistence_http.document.Created",
+      "domain": "persistence_http.document",
+      "fields": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "revision",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "owner",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Owner"
+          },
+          "naming": {}
+        },
+        {
+          "name": "scopes",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Scopes"
+          },
+          "naming": {}
+        },
+        {
+          "name": "content_ref",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.ContentRef"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    },
+    "persistence_http.document.Revised": {
+      "name": "persistence_http.document.Revised",
+      "domain": "persistence_http.document",
+      "fields": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "revision",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        }
+      ],
+      "naming": {}
+    }
+  },
+  "errors": {},
+  "views": {
+    "persistence_http.document.ById": {
+      "name": "persistence_http.document.ById",
+      "domain": "persistence_http.document",
+      "source": "persistence_http.document.Document",
+      "shape": "persistence_http.document.Row",
+      "fields": [
+        {
+          "name": "id",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "revision",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Id"
+          },
+          "naming": {}
+        },
+        {
+          "name": "owner",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Owner"
+          },
+          "naming": {}
+        },
+        {
+          "name": "scopes",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.Scopes"
+          },
+          "naming": {}
+        },
+        {
+          "name": "content_ref",
+          "type_ref": {
+            "kind": "declared",
+            "name": "persistence_http.document.ContentRef"
+          },
+          "naming": {}
+        }
+      ],
+      "consistency": "read_your_writes",
+      "assertion_style": "expect",
+      "naming": {}
+    }
+  },
+  "actors": {},
+  "bindings": {},
+  "components": {
+    "persistence-service": {
+      "name": "persistence-service",
+      "owns": [
+        "persistence_http.document"
+      ],
+      "accepts": [
+        "persistence_http.document.Close",
+        "persistence_http.document.Create",
+        "persistence_http.document.Revise"
+      ],
+      "publishes": [
+        "persistence_http.document.Closed",
+        "persistence_http.document.Created",
+        "persistence_http.document.Revised"
+      ],
+      "reached_by": "network",
+      "naming": {
+        "summary": "SDK-owned persistence proof documents."
+      }
+    }
+  },
+  "workloads": {}
+}

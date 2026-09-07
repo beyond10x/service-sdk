@@ -1,4 +1,4 @@
-//! Transactional loading of one modular `service/1` package.
+//! Transactional loading of strict `service/1` and `service/2` packages.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -12,8 +12,29 @@ use service_definition::ServiceDefinition;
 use crate::client::{ClientOperationKind, ClientPlan};
 use crate::ess::EssSources;
 
-/// The only service-package format understood by the builder.
+/// Original service-package format, retained with its unchanged release fields.
 pub const SERVICE_PACKAGE_FORMAT: &str = "service/1";
+
+/// Versioned package format admitting explicit release persistence selection.
+pub const SERVICE_PACKAGE_FORMAT_V2: &str = "service/2";
+
+/// Closed deployment persistence selection admitted by `service/2`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReleasePersistence {
+    /// Existing local file storage and durable volume.
+    Sqlite,
+    /// Verified, separately migrated PostgreSQL selected by deployment.
+    Postgres,
+}
+
+fn release_persistence<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ReleasePersistence>, D::Error> {
+    // Explicit null is not omission. In particular it cannot smuggle a new field
+    // through the strict service/1 compatibility reader.
+    ReleasePersistence::deserialize(deserializer).map(Some)
+}
 
 /// Exact SDK source lock emitted into generated Rust dependencies.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,6 +70,13 @@ pub struct BuildBase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReleasePackage {
+    /// Explicit backend; this field is admitted only in `service/2`.
+    #[serde(
+        default,
+        deserialize_with = "release_persistence",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub persistence: Option<ReleasePersistence>,
     /// Canonical generated tree relative to the repository root.
     #[serde(default = "default_generated_root")]
     pub generated_root: String,
@@ -464,13 +492,15 @@ fn validate_operation(
     Ok(())
 }
 
-fn validate_manifest(manifest: &ServicePackageManifest) -> Result<()> {
-    if manifest.format != SERVICE_PACKAGE_FORMAT {
-        bail!(
-            "unsupported service package format {:?}; expected {SERVICE_PACKAGE_FORMAT:?}",
-            manifest.format
-        );
+fn validate_package_format(format: &str) -> Result<()> {
+    if format != SERVICE_PACKAGE_FORMAT && format != SERVICE_PACKAGE_FORMAT_V2 {
+        bail!("unsupported service package format {format:?}; expected service/1 or service/2");
     }
+    Ok(())
+}
+
+fn validate_manifest(manifest: &ServicePackageManifest) -> Result<()> {
+    validate_package_format(&manifest.format)?;
     if manifest.service.is_empty()
         || !manifest
             .service
@@ -521,6 +551,11 @@ fn validate_manifest(manifest: &ServicePackageManifest) -> Result<()> {
         }
     }
     if let Some(release) = &manifest.release {
+        if manifest.format == SERVICE_PACKAGE_FORMAT && release.persistence.is_some() {
+            bail!(
+                "release.persistence requires service/2; service/1 retains its strict original fields"
+            );
+        }
         validate_relative(&release.generated_root)?;
         if release.image_repository.trim().is_empty()
             || release.image_repository.contains('@')

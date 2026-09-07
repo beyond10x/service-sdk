@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<!--
+  generated from persistence_factory v1
+  model digest 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+  contract digest f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d
+  do not edit: regenerate with `ess generate`
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>document · persistence_factory</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="shell">
+<nav class="sidebar">
+<a class="masthead" href="../index.html">
+<span class="system">persistence_factory</span><span class="version">v1</span>
+</a>
+<div class="nav">
+<a href="../index.html">persistence_factory v1</a>
+<a href="../crossings.html">Type crossings</a>
+<div class="group">domains</div>
+<a class="nested" href="persistence_factory-document.html" aria-current="page">document</a>
+<a href="../interactions.html">Interactions</a>
+<a href="../topology.html">Topology</a>
+</div>
+</nav>
+<main>
+<article class="content">
+<h1>document</h1>
+<p><code>persistence_factory.document</code> is one of persistence_factory&#39;s bounded contexts. <a href="../index.html">Back to the index</a>.</p>
+<h2 id="types">Types</h2>
+<h3 id="contentref"><code>ContentRef</code></h3>
+<p><code>persistence_factory.document.ContentRef</code> wraps <code>String</code> and is not interchangeable with one: the whole value of naming it separately is the crossings the model then refuses.</p>
+<h3 id="id"><code>Id</code></h3>
+<p><code>persistence_factory.document.Id</code> wraps <code>Uuid</code> and is not interchangeable with one: the whole value of naming it separately is the crossings the model then refuses.</p>
+<h3 id="owner"><code>Owner</code></h3>
+<p><code>persistence_factory.document.Owner</code> wraps <code>String</code> and is not interchangeable with one: the whole value of naming it separately is the crossings the model then refuses.</p>
+<h3 id="row"><code>Row</code></h3>
+<p><code>persistence_factory.document.Row</code> is a record of five fields:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>owner</code> — <code>persistence_factory.document.Owner</code></li>
+<li><code>scopes</code> — <code>persistence_factory.document.Scopes</code></li>
+<li><code>content_ref</code> — <code>persistence_factory.document.ContentRef</code></li>
+</ul>
+<h3 id="scopes"><code>Scopes</code></h3>
+<p><code>persistence_factory.document.Scopes</code> is a record of one field:</p>
+<ul>
+<li><code>team</code> — <code>Optional&lt;String&gt;</code>, which may be absent</li>
+</ul>
+<p>One of the types above is reached by nothing else in this system: <code>persistence_factory.document.Row</code>. No entity, view, command, event, error or crossing names it, so it is either vocabulary something outside this specification uses or a leftover — and only a person can tell which.</p>
+<h2 id="entities">Entities</h2>
+<p>An entity is what this context is about: something with an identity that outlives any one request, a shape, and a lifecycle. The lifecycle is exhaustive — a move that is not drawn below is a move this specification does not permit, and that is the only way it says so. Every move is labelled with the command that takes it, because a move nothing can trigger is refused rather than drawn.</p>
+<h3 id="document"><code>Document</code></h3>
+<p><code>persistence_factory.document.Document</code>.</p>
+<p>An instance is identified by <code>id</code>, a <code>persistence_factory.document.Id</code>. The name is part of the model and not a convention: a view projects the identity under that name, so a projection inventing its own would disagree with the view.</p>
+<p>It holds:</p>
+<ul>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>owner</code> — <code>persistence_factory.document.Owner</code></li>
+<li><code>scopes</code> — <code>persistence_factory.document.Scopes</code></li>
+<li><code>content_ref</code> — <code>persistence_factory.document.ContentRef</code></li>
+</ul>
+<p>It declares no relation to another entity, and no other entity names it.</p>
+<p>No invariant is declared, so nothing here constrains an instance at rest.</p>
+<p>Its state is a <code>persistence_factory.document.Document.State</code>, one of <code>Closed</code> and <code>Open</code>. That enum is synthesised from the lifecycle rather than declared beside it, so the states a view&#39;s filter compares and the states drawn below cannot disagree.</p>
+<p>An instance is created in <code>Open</code>. <code>Closed</code> is terminal, so an instance may rest there forever. That is declared rather than inferred from having no way out: an entity that cannot leave a state is either finished or stuck, and only its author knows which.</p>
+<pre class="mermaid">stateDiagram-v2
+    [*] --&gt; Open
+    Open --&gt; Closed: close (Close)
+    Closed --&gt; [*]</pre>
+<p>Each move is taken by a declared command outcome, and a move nothing takes is refused as <code>missing_causation</code> rather than left as a state change nobody can trigger:</p>
+<ul>
+<li><code>close</code> — taken by <code>persistence_factory.document.Close</code> on its <code>closed</code> outcome</li>
+</ul>
+<p>An instance is brought into existence by <code>persistence_factory.document.Create</code> on its <code>created</code> outcome.</p>
+<p>Illegal transitions are illegal by absence: no rule forbids them, there is simply no arrow, because a rule would be a second place for the same truth to live. A diagram cannot show an absence, so the pairs it does not connect are listed here, derived from the same transitions — anything named below is a move this specification does not permit.</p>
+<ul>
+<li><code>Closed</code> may not become <code>Open</code></li>
+</ul>
+<p>One view projects it: <a href="#byid"><code>ById</code></a>.</p>
+<h2 id="views">Views</h2>
+<p>A view is what the outside world is promised it can observe. Each one says which instances it contains and how soon it reflects a command that has already returned, because &quot;you can read this&quot; without &quot;how soon&quot; is the promise every flaky suite is built on.</p>
+<h3 id="byid"><code>ById</code></h3>
+<p><code>persistence_factory.document.ById</code>.</p>
+<p>It reads <a href="#document"><code>Document</code></a>.</p>
+<p>It contains every instance of that entity: no filter narrows it, which is a decision somebody made and not a line somebody omitted.</p>
+<p>It exposes:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>owner</code> — <code>persistence_factory.document.Owner</code></li>
+<li><code>scopes</code> — <code>persistence_factory.document.Scopes</code></li>
+<li><code>content_ref</code> — <code>persistence_factory.document.ContentRef</code></li>
+</ul>
+<p>It declares no order, so the rows come back in whatever order the implementation has, and two reads may disagree.</p>
+<p><strong>Read-your-writes</strong>: it is current the moment the command that changed it returns. A caller that has just created an invoice and cannot see it in here has been told a lie about what it did.</p>
+<p>A generated scenario asserts it once, immediately after the command: a view promising this and not keeping the promise has to fail the suite rather than be retried until it passes.</p>
+<h2 id="commands">Commands</h2>
+<h3 id="close"><code>Close</code></h3>
+<p><code>persistence_factory.document.Close</code>.</p>
+<p>It takes:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+</ul>
+<p>It has one outcome.</p>
+<p><strong><code>closed</code></strong> — The default branch, taken when no other outcome&#39;s condition matched. It moves a <code>persistence_factory.document.Document</code> from <code>Open</code> to <code>Closed</code>, along the declared move <code>close</code>. The instance is the one named by the input field <code>id</code>. It emits <code>persistence_factory.document.Closed</code>. A test reaches it by constructing an input that satisfies no other outcome&#39;s condition.</p>
+<h3 id="create"><code>Create</code></h3>
+<p><code>persistence_factory.document.Create</code>.</p>
+<p>It takes:</p>
+<ul>
+<li><code>content_ref</code> — <code>persistence_factory.document.ContentRef</code></li>
+<li><code>scopes</code> — <code>persistence_factory.document.Scopes</code></li>
+</ul>
+<p>It has one outcome.</p>
+<p><strong><code>created</code></strong> — The default branch, taken when no other outcome&#39;s condition matched. It creates a <code>persistence_factory.document.Document</code>, which starts in <code>Open</code>. The new instance&#39;s identity is published as <code>id</code> on <code>persistence_factory.document.Created</code>. It emits <code>persistence_factory.document.Created</code>. A test reaches it by constructing an input that satisfies no other outcome&#39;s condition.</p>
+<h3 id="revise"><code>Revise</code></h3>
+<p><code>persistence_factory.document.Revise</code>.</p>
+<p>It takes:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+</ul>
+<p>It has one outcome.</p>
+<p><strong><code>revised</code></strong> — The default branch, taken when no other outcome&#39;s condition matched. It changes a <code>persistence_factory.document.Document</code> without moving it along its lifecycle. The instance is the one named by the input field <code>id</code>. It emits <code>persistence_factory.document.Revised</code>. A test reaches it by constructing an input that satisfies no other outcome&#39;s condition.</p>
+<h2 id="events">Events</h2>
+<h3 id="closed"><code>Closed</code></h3>
+<p><code>persistence_factory.document.Closed</code>.</p>
+<p>It carries:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+</ul>
+<p>Emitted by <code>persistence_factory.document.Close</code> on its <code>closed</code> outcome.</p>
+<p>Nothing in this system reacts to it.</p>
+<h3 id="created"><code>Created</code></h3>
+<p><code>persistence_factory.document.Created</code>.</p>
+<p>It carries:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>owner</code> — <code>persistence_factory.document.Owner</code></li>
+<li><code>scopes</code> — <code>persistence_factory.document.Scopes</code></li>
+<li><code>content_ref</code> — <code>persistence_factory.document.ContentRef</code></li>
+</ul>
+<p>Emitted by <code>persistence_factory.document.Create</code> on its <code>created</code> outcome.</p>
+<p>Nothing in this system reacts to it.</p>
+<h3 id="revised"><code>Revised</code></h3>
+<p><code>persistence_factory.document.Revised</code>.</p>
+<p>It carries:</p>
+<ul>
+<li><code>id</code> — <code>persistence_factory.document.Id</code></li>
+<li><code>revision</code> — <code>persistence_factory.document.Id</code></li>
+</ul>
+<p>Emitted by <code>persistence_factory.document.Revise</code> on its <code>revised</code> outcome.</p>
+<p>Nothing in this system reacts to it.</p>
+<ul>
+</ul>
+</article>
+<footer class="provenance">
+Generated from persistence_factory v1 · model digest <code>1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82</code> · contract digest <code>f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d</code>. Do not edit this file; change the specification and regenerate it with <code>ess generate</code>.
+</footer>
+</main>
+</div>
+<script type="module">
+const diagrams = document.querySelectorAll("pre.mermaid");
+if (diagrams.length > 0) {
+  // A script element, not `import`: the bundle publishes itself with a top-level `var`, and a
+  // top-level `var` in a module is scoped to the module, so importing it throws.
+  await new Promise((resolve, reject) => {
+    const tag = document.createElement("script");
+    tag.src = "../assets/mermaid.min.js";
+    tag.addEventListener("load", resolve);
+    tag.addEventListener("error", reject);
+    document.head.append(tag);
+  });
+  globalThis.mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default",
+  });
+  await globalThis.mermaid.run({ querySelector: "pre.mermaid" });
+}
+</script>
+</body>
+</html>

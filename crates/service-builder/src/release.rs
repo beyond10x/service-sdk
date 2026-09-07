@@ -12,7 +12,7 @@ use service_engine::{PlanDelivery, ServicePlan};
 use sha2::{Digest as _, Sha256};
 
 use crate::EssBuild;
-use crate::package::{ReleasePackage, ServicePackage};
+use crate::package::{ReleasePackage, ReleasePersistence, ServicePackage};
 
 /// Generated release files, all beneath the service-builder output root.
 pub struct ReleaseArtifacts {
@@ -42,7 +42,8 @@ impl ReleaseArtifacts {
             bail!("an independently released service must realize at least one ESS component");
         }
 
-        let realization_yaml = realization_yaml(service, ess, generated, &component_names)?;
+        let realization_yaml =
+            realization_yaml(service, release, ess, generated, &component_names)?;
         let realization_spec = ess_realization::RealizationSpec::from_yaml(&realization_yaml)
             .context("generated ESS realization does not parse")?;
         let realization = ess_realization::compile(&realization_spec, &ess.ir)
@@ -118,6 +119,7 @@ impl ReleaseArtifacts {
 
 fn realization_yaml(
     service: &str,
+    release: &ReleasePackage,
     ess: &EssBuild,
     generated: &BTreeMap<String, String>,
     components: &[String],
@@ -136,6 +138,14 @@ fn realization_yaml(
         )
         .collect::<Vec<_>>();
     surfaces.sort_by_key(Value::to_string);
+    let mut requires = vec![
+        json!({"kind": "environment_variable", "name": environment_name(service, "IDENTITY_ORIGIN"), "summary": "Identity service origin."}),
+    ];
+    if release.persistence == Some(ReleasePersistence::Postgres) {
+        requires.push(json!({"kind": "environment_variable", "name": environment_name(service, "POSTGRES_URL"), "summary": "Application-role PostgreSQL connection under verified TLS."}));
+    } else {
+        requires.push(json!({"kind": "filesystem", "name": format!("/var/lib/{service}"), "summary": "Durable Eventlog storage."}));
+    }
     render_yaml(&json!({
         "type": "ess-realization/1",
         "id": format!("{service}-generated"),
@@ -172,10 +182,7 @@ fn realization_yaml(
             "actors": [],
             "surfaces": surfaces,
             "invocation": {"kind": "url", "url": "http://127.0.0.1:8080"},
-            "requires": [
-                {"kind": "environment_variable", "name": environment_name(service, "IDENTITY_ORIGIN"), "summary": "Identity service origin."},
-                {"kind": "filesystem", "name": format!("/var/lib/{service}"), "summary": "Durable Eventlog storage."},
-            ],
+            "requires": requires,
         }],
     }))
 }
@@ -260,6 +267,80 @@ fn runtime_yaml(
     let PlanDelivery::IdentityHttp { audience } = &plan.delivery else {
         bail!("independent release generation currently requires Identity HTTP delivery");
     };
+    let postgres = release.persistence == Some(ReleasePersistence::Postgres);
+    let mut config = if postgres {
+        vec![json!({
+            "name": "persistence",
+            "environment": environment_name(service, "PERSISTENCE"),
+            "kind": "literal",
+            "value": "postgres",
+        })]
+    } else {
+        vec![json!({
+            "name": "database-path",
+            "environment": environment_name(service, "DATABASE_PATH"),
+            "kind": "literal",
+            "value": format!("/var/lib/{service}/{service}.sqlite3"),
+        })]
+    };
+    if postgres {
+        for (name, suffix) in [
+            ("postgres-schema", "POSTGRES_SCHEMA"),
+            ("postgres-ca-pem", "POSTGRES_CA_PEM"),
+            ("pool-max", "POOL_MAX"),
+            ("pool-waiters", "POOL_WAITERS"),
+            ("acquisition-ms", "ACQUISITION_MS"),
+            ("connect-ms", "CONNECT_MS"),
+            ("statement-ms", "STATEMENT_MS"),
+            ("lock-ms", "LOCK_MS"),
+            ("transaction-ms", "TRANSACTION_MS"),
+            ("shutdown-ms", "SHUTDOWN_MS"),
+            ("drain-ms", "DRAIN_MS"),
+            ("database-connections", "DATABASE_CONNECTIONS"),
+            ("replicas", "REPLICAS"),
+            ("reserved-connections", "RESERVED_CONNECTIONS"),
+        ] {
+            config.push(json!({"name": name, "environment": environment_name(service, suffix), "kind": "required"}));
+        }
+    }
+    let volume_mounts = if postgres {
+        Vec::new()
+    } else {
+        vec![json!({"volume": "data", "mount_path": format!("/var/lib/{service}")})]
+    };
+    let volumes = if postgres {
+        Vec::new()
+    } else {
+        vec![json!({"name": "data", "size": release.storage_size})]
+    };
+    let secrets = if postgres {
+        vec![
+            json!({"name": "postgres-url", "environment": environment_name(service, "POSTGRES_URL"), "key": "url"}),
+        ]
+    } else {
+        Vec::new()
+    };
+    let mut server = json!({
+        "name": "server",
+        "process": "server",
+        "http_port": 8080,
+        "readiness_path": "/readyz",
+        "liveness_path": "/healthz",
+        "config": config,
+        "endpoints": [{
+            "name": "identity",
+            "environment": environment_name(service, "IDENTITY_ORIGIN"),
+            "system": "identity",
+            "endpoint": "api",
+        }],
+        "audiences": [audience],
+    });
+    if !volume_mounts.is_empty() {
+        server["volume_mounts"] = json!(volume_mounts);
+    }
+    if !secrets.is_empty() {
+        server["secrets"] = json!(secrets);
+    }
     render_yaml(&json!({
         "format": "ess-runtime/1",
         "runtime": format!("{service}-runtime"),
@@ -267,33 +348,13 @@ fn runtime_yaml(
         "realization_digest": realization.realization_digest().to_string(),
         "build_digest": build.digest().to_string(),
         "processes": [{"name": "server", "image": "app"}],
-        "containers": [{
-            "name": "server",
-            "process": "server",
-            "http_port": 8080,
-            "readiness_path": "/readyz",
-            "liveness_path": "/healthz",
-            "config": [{
-                "name": "database-path",
-                "environment": environment_name(service, "DATABASE_PATH"),
-                "kind": "literal",
-                "value": format!("/var/lib/{service}/{service}.sqlite3"),
-            }],
-            "endpoints": [{
-                "name": "identity",
-                "environment": environment_name(service, "IDENTITY_ORIGIN"),
-                "system": "identity",
-                "endpoint": "api",
-            }],
-            "volume_mounts": [{"volume": "data", "mount_path": format!("/var/lib/{service}")}],
-            "audiences": [audience],
-        }],
+        "containers": [server],
         "workloads": [{
             "name": service,
             "components": components,
             "containers": ["server"],
             "replicas": 1,
-            "volumes": [{"name": "data", "size": release.storage_size}],
+            "volumes": volumes,
         }],
         "provided_endpoints": [{"name": "api", "workload": service, "container": "server", "scheme": "http"}],
     }))

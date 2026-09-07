@@ -1,0 +1,288 @@
+# generated from persistence_factory v1
+# model digest 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+# contract digest f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+# do not edit: regenerate with `ess generate`
+openapi: 3.1.0
+info:
+  title: persistence-service
+  summary: SDK-owned persistence proof documents.
+  description: |-
+    The HTTP surface of `persistence-service`, one of the components of `persistence_factory` v1.
+
+    Every path here is one semantic command, so the method is always POST and the path is the command's wire name under its domain's: a command is not a resource, and this document does not invent one. A status code is the outcome the specification declares — 202 for a branch that was taken, 422 for a refusal the input decides, 502 for a refusal decided outside the request — and the `outcome` property of every response body names the branch. Events emitted by a branch are published to consumers through the event transport; they are not returned here.
+
+    This component declares `reached_by: network`, so its callers are not deployed with it and this contract is the surface they reach it through. That declaration is also why the views its domains declare have paths here: a GET under `views` per projection, answering every row it holds. There is no page size, no cursor, no ordering and no filter parameter, because the specification states none — a view's filter is part of the projection, not of the request.
+  version: v1
+  x-ess-provenance:
+    system: persistence_factory
+    specification_version: v1
+    source_digest: 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+    contract_digest: f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+  x-ess-reached-by: network
+tags:
+- name: document
+paths:
+  /document/commands/Close:
+    post:
+      operationId: persistence_factory.document.Close
+      summary: Close
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_factory.document.Close` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_factory.document.Close.Input'
+      responses:
+        '202':
+          description: 'Outcome `closed`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_factory.document.Close.closed.Response'
+  /document/commands/Create:
+    post:
+      operationId: persistence_factory.document.Create
+      summary: Create
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_factory.document.Create` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_factory.document.Create.Input'
+      responses:
+        '202':
+          description: 'Outcome `created`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_factory.document.Create.created.Response'
+  /document/commands/Revise:
+    post:
+      operationId: persistence_factory.document.Revise
+      summary: Revise
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_factory.document.Revise` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_factory.document.Revise.Input'
+      responses:
+        '202':
+          description: 'Outcome `revised`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_factory.document.Revise.revised.Response'
+  /document/views/ById:
+    get:
+      operationId: persistence_factory.document.ById
+      summary: ById
+      tags:
+      - document
+      x-ess-consistency: read_your_writes
+      responses:
+        '200':
+          description: 'Every row of `persistence_factory.document.ById`, a projection of `persistence_factory.document.Document`. Contains every instance. Read-your-writes: a caller that has just issued a command sees its effect here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_factory.document.ById.Response'
+components:
+  schemas:
+    persistence_factory.document.ById.Response:
+      additionalProperties: false
+      description: The rows of `persistence_factory.document.ById`.
+      properties:
+        rows:
+          description: Every row the projection holds, in the order it holds them.
+          items:
+            $ref: '#/components/schemas/persistence_factory.document.Row'
+          type: array
+      required:
+      - rows
+      type: object
+    persistence_factory.document.Close.Input:
+      title: Close input
+      x-ess-name: persistence_factory.document.Close
+      x-ess-kind: command-input
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_factory.document.Id'
+      required:
+      - id
+      additionalProperties: false
+    persistence_factory.document.Close.closed.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_factory.document.Document` has moved to `Closed`, along `close`. The instance is the one `id` names. Emits `Closed`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: closed
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_factory.document.ContentRef:
+      title: ContentRef
+      x-ess-name: persistence_factory.document.ContentRef
+      x-ess-kind: newtype
+      type: string
+    persistence_factory.document.Create.Input:
+      title: Create input
+      x-ess-name: persistence_factory.document.Create
+      x-ess-kind: command-input
+      type: object
+      properties:
+        content_ref:
+          $ref: '#/components/schemas/persistence_factory.document.ContentRef'
+        scopes:
+          $ref: '#/components/schemas/persistence_factory.document.Scopes'
+      required:
+      - content_ref
+      - scopes
+      additionalProperties: false
+    persistence_factory.document.Create.created.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_factory.document.Document` now exists, in `Open`. Its identity is published as `id` on `persistence_factory.document.Created`. Emits `Created`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: created
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_factory.document.Id:
+      title: Id
+      x-ess-name: persistence_factory.document.Id
+      x-ess-kind: newtype
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    persistence_factory.document.Owner:
+      title: Owner
+      x-ess-name: persistence_factory.document.Owner
+      x-ess-kind: newtype
+      type: string
+    persistence_factory.document.Revise.Input:
+      title: Revise input
+      x-ess-name: persistence_factory.document.Revise
+      x-ess-kind: command-input
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_factory.document.Id'
+      required:
+      - id
+      additionalProperties: false
+    persistence_factory.document.Revise.revised.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_factory.document.Document` has changed, and its state is unchanged. The instance is the one `id` names. Emits `Revised`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: revised
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_factory.document.Row:
+      title: Row
+      x-ess-name: persistence_factory.document.Row
+      x-ess-kind: struct
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_factory.document.Id'
+        revision:
+          $ref: '#/components/schemas/persistence_factory.document.Id'
+        owner:
+          $ref: '#/components/schemas/persistence_factory.document.Owner'
+        scopes:
+          $ref: '#/components/schemas/persistence_factory.document.Scopes'
+        content_ref:
+          $ref: '#/components/schemas/persistence_factory.document.ContentRef'
+      required:
+      - id
+      - revision
+      - owner
+      - scopes
+      - content_ref
+      additionalProperties: false
+    persistence_factory.document.Scopes:
+      title: Scopes
+      x-ess-name: persistence_factory.document.Scopes
+      x-ess-kind: struct
+      type: object
+      properties:
+        team:
+          type: string
+      additionalProperties: false
+x-ess-entities:
+  persistence_factory.document.ContentRef:
+    title: ContentRef
+    x-ess-name: persistence_factory.document.ContentRef
+    x-ess-kind: newtype
+    type: string
+  persistence_factory.document.Document:
+    title: Document
+    x-ess-name: persistence_factory.document.Document
+    x-ess-kind: entity
+    type: object
+    properties:
+      id:
+        $ref: '#/x-ess-entities/persistence_factory.document.Id'
+      revision:
+        $ref: '#/x-ess-entities/persistence_factory.document.Id'
+      owner:
+        $ref: '#/x-ess-entities/persistence_factory.document.Owner'
+      scopes:
+        $ref: '#/x-ess-entities/persistence_factory.document.Scopes'
+      content_ref:
+        $ref: '#/x-ess-entities/persistence_factory.document.ContentRef'
+      state:
+        $ref: '#/x-ess-entities/persistence_factory.document.Document.State'
+    required:
+    - id
+    - revision
+    - owner
+    - scopes
+    - content_ref
+    - state
+    additionalProperties: false
+  persistence_factory.document.Document.State:
+    title: State
+    x-ess-name: persistence_factory.document.Document.State
+    x-ess-kind: enum
+    type: string
+    enum:
+    - Closed
+    - Open
+  persistence_factory.document.Id:
+    title: Id
+    x-ess-name: persistence_factory.document.Id
+    x-ess-kind: newtype
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  persistence_factory.document.Owner:
+    title: Owner
+    x-ess-name: persistence_factory.document.Owner
+    x-ess-kind: newtype
+    type: string
+  persistence_factory.document.Scopes:
+    title: Scopes
+    x-ess-name: persistence_factory.document.Scopes
+    x-ess-kind: struct
+    type: object
+    properties:
+      team:
+        type: string
+    additionalProperties: false

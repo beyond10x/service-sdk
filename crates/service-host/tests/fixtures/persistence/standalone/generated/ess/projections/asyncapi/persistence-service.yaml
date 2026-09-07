@@ -1,0 +1,178 @@
+# generated from persistence_http v1
+# model digest 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
+# contract digest 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+# do not edit: regenerate with `ess generate`
+asyncapi: 3.0.0
+info:
+  title: persistence-service
+  version: v1
+  description: |-
+    `persistence-service` in the `persistence_http` specification.
+
+    SDK-owned persistence proof documents.
+
+    The specification declares no transport, so each address below is a name and not a topic on a named broker. Servers, protocol bindings, security schemes, message keys, partitioning, retention and ordering are absent because the model does not state them.
+  x-ess-component: persistence-service
+  x-ess-provenance:
+    system: persistence_http
+    specification_version: v1
+    source_digest: 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
+    contract_digest: 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+defaultContentType: application/json
+channels:
+  persistence_http.document.Closed:
+    address: persistence_http.document.Closed
+    title: Closed
+    messages:
+      persistence_http.document.Closed:
+        $ref: '#/components/messages/persistence_http.document.Closed'
+    x-ess-event: persistence_http.document.Closed
+    x-ess-address-source: qualified-name
+  persistence_http.document.Created:
+    address: persistence_http.document.Created
+    title: Created
+    messages:
+      persistence_http.document.Created:
+        $ref: '#/components/messages/persistence_http.document.Created'
+    x-ess-event: persistence_http.document.Created
+    x-ess-address-source: qualified-name
+  persistence_http.document.Revised:
+    address: persistence_http.document.Revised
+    title: Revised
+    messages:
+      persistence_http.document.Revised:
+        $ref: '#/components/messages/persistence_http.document.Revised'
+    x-ess-event: persistence_http.document.Revised
+    x-ess-address-source: qualified-name
+operations:
+  send.persistence_http.document.Closed:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_http.document.Closed'
+    title: Publish Closed
+    summary: Publishes `persistence_http.document.Closed`.
+    description: |-
+      Nothing in this specification reacts to `persistence_http.document.Closed`.
+      `persistence_http.document.Close` emits it on `closed`, which moves a `persistence_http.document.Document` to `Closed` along `close`.
+    messages:
+    - $ref: '#/channels/persistence_http.document.Closed/messages/persistence_http.document.Closed'
+  send.persistence_http.document.Created:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_http.document.Created'
+    title: Publish Created
+    summary: Publishes `persistence_http.document.Created`.
+    description: |-
+      Nothing in this specification reacts to `persistence_http.document.Created`.
+      `persistence_http.document.Create` emits it on `created`, which creates a `persistence_http.document.Document` in `Open`. It carries the new instance's identity in `id`.
+    messages:
+    - $ref: '#/channels/persistence_http.document.Created/messages/persistence_http.document.Created'
+  send.persistence_http.document.Revised:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_http.document.Revised'
+    title: Publish Revised
+    summary: Publishes `persistence_http.document.Revised`.
+    description: |-
+      Nothing in this specification reacts to `persistence_http.document.Revised`.
+      `persistence_http.document.Revise` emits it on `revised`, which changes a `persistence_http.document.Document` without moving it.
+    messages:
+    - $ref: '#/channels/persistence_http.document.Revised/messages/persistence_http.document.Revised'
+components:
+  messages:
+    persistence_http.document.Closed:
+      name: persistence_http.document.Closed
+      title: Closed
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_http.document.Closed'
+    persistence_http.document.Created:
+      name: persistence_http.document.Created
+      title: Created
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_http.document.Created'
+    persistence_http.document.Revised:
+      name: persistence_http.document.Revised
+      title: Revised
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_http.document.Revised'
+  schemas:
+    event.persistence_http.document.Closed:
+      title: Closed payload
+      x-ess-name: persistence_http.document.Closed
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+      required:
+      - id
+      - revision
+      additionalProperties: false
+    event.persistence_http.document.Created:
+      title: Created payload
+      x-ess-name: persistence_http.document.Created
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+        owner:
+          $ref: '#/components/schemas/type.persistence_http.document.Owner'
+        scopes:
+          $ref: '#/components/schemas/type.persistence_http.document.Scopes'
+        content_ref:
+          $ref: '#/components/schemas/type.persistence_http.document.ContentRef'
+      required:
+      - id
+      - revision
+      - owner
+      - scopes
+      - content_ref
+      additionalProperties: false
+    event.persistence_http.document.Revised:
+      title: Revised payload
+      x-ess-name: persistence_http.document.Revised
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_http.document.Id'
+      required:
+      - id
+      - revision
+      additionalProperties: false
+    type.persistence_http.document.ContentRef:
+      title: ContentRef
+      x-ess-name: persistence_http.document.ContentRef
+      x-ess-kind: newtype
+      type: string
+    type.persistence_http.document.Id:
+      title: Id
+      x-ess-name: persistence_http.document.Id
+      x-ess-kind: newtype
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    type.persistence_http.document.Owner:
+      title: Owner
+      x-ess-name: persistence_http.document.Owner
+      x-ess-kind: newtype
+      type: string
+    type.persistence_http.document.Scopes:
+      title: Scopes
+      x-ess-name: persistence_http.document.Scopes
+      x-ess-kind: struct
+      type: object
+      properties:
+        team:
+          type: string
+      additionalProperties: false

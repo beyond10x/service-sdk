@@ -1,0 +1,983 @@
+{
+  "format": "service-catalog/1",
+  "service_ref": "service:persistence_factory",
+  "display_name": "persistence factory",
+  "description": "Generated persistence factory service",
+  "semantic_catalog": {
+    "bindings": [],
+    "commands": [
+      {
+        "behavior": {
+          "contract": "given `persistence_factory.document.Close` input, decide and enact exactly one outcome — `closed` otherwise, takes `close` of `persistence_factory.document.Document`, emits `persistence_factory.document.Closed`",
+          "disposition": "obligation",
+          "why": "the contract is declared; the algorithm is not"
+        },
+        "component": "persistence-service",
+        "dispatchable": true,
+        "display": "Close",
+        "domain": "persistence_factory.document",
+        "input": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          }
+        ],
+        "name": "persistence_factory.document.Close",
+        "outcomes": [
+          {
+            "condition": "otherwise",
+            "error": null,
+            "moves": {
+              "effect": {
+                "from": [
+                  "Open"
+                ],
+                "kind": "moves",
+                "to": "Closed",
+                "transition": "close"
+              },
+              "entity": "persistence_factory.document.Document"
+            },
+            "name": "closed",
+            "publishes": [
+              "persistence_factory.document.Closed"
+            ],
+            "summary": null
+          }
+        ]
+      },
+      {
+        "behavior": {
+          "contract": "given `persistence_factory.document.Create` input, decide and enact exactly one outcome — `created` otherwise, creates `persistence_factory.document.Document`, emits `persistence_factory.document.Created`",
+          "disposition": "obligation",
+          "why": "the contract is declared; the algorithm is not"
+        },
+        "component": "persistence-service",
+        "dispatchable": true,
+        "display": "Create",
+        "domain": "persistence_factory.document",
+        "input": [
+          {
+            "name": "content_ref",
+            "optional": false,
+            "spelling": "persistence_factory.document.ContentRef",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.ContentRef"
+            },
+            "wire": "content_ref"
+          },
+          {
+            "name": "scopes",
+            "optional": false,
+            "spelling": "persistence_factory.document.Scopes",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Scopes"
+            },
+            "wire": "scopes"
+          }
+        ],
+        "name": "persistence_factory.document.Create",
+        "outcomes": [
+          {
+            "condition": "otherwise",
+            "error": null,
+            "moves": {
+              "effect": {
+                "kind": "creates"
+              },
+              "entity": "persistence_factory.document.Document"
+            },
+            "name": "created",
+            "publishes": [
+              "persistence_factory.document.Created"
+            ],
+            "summary": null
+          }
+        ]
+      },
+      {
+        "behavior": {
+          "contract": "given `persistence_factory.document.Revise` input, decide and enact exactly one outcome — `revised` otherwise, updates `persistence_factory.document.Document`, emits `persistence_factory.document.Revised`",
+          "disposition": "obligation",
+          "why": "the contract is declared; the algorithm is not"
+        },
+        "component": "persistence-service",
+        "dispatchable": true,
+        "display": "Revise",
+        "domain": "persistence_factory.document",
+        "input": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          }
+        ],
+        "name": "persistence_factory.document.Revise",
+        "outcomes": [
+          {
+            "condition": "otherwise",
+            "error": null,
+            "moves": {
+              "effect": {
+                "kind": "updates"
+              },
+              "entity": "persistence_factory.document.Document"
+            },
+            "name": "revised",
+            "publishes": [
+              "persistence_factory.document.Revised"
+            ],
+            "summary": null
+          }
+        ]
+      }
+    ],
+    "components": [
+      {
+        "accepts": [
+          "persistence_factory.document.Close",
+          "persistence_factory.document.Create",
+          "persistence_factory.document.Revise"
+        ],
+        "display": "persistence-service",
+        "name": "persistence-service",
+        "publishes": [
+          "persistence_factory.document.Closed",
+          "persistence_factory.document.Created",
+          "persistence_factory.document.Revised"
+        ],
+        "summary": "SDK-owned persistence proof documents."
+      }
+    ],
+    "conversions": [],
+    "display": "persistence_factory",
+    "entities": [
+      {
+        "display": "Document",
+        "fields": [
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          },
+          {
+            "name": "owner",
+            "optional": false,
+            "spelling": "persistence_factory.document.Owner",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Owner"
+            },
+            "wire": "owner"
+          },
+          {
+            "name": "scopes",
+            "optional": false,
+            "spelling": "persistence_factory.document.Scopes",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Scopes"
+            },
+            "wire": "scopes"
+          },
+          {
+            "name": "content_ref",
+            "optional": false,
+            "spelling": "persistence_factory.document.ContentRef",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.ContentRef"
+            },
+            "wire": "content_ref"
+          }
+        ],
+        "identity": {
+          "name": "id",
+          "optional": false,
+          "spelling": "persistence_factory.document.Id",
+          "type": {
+            "kind": "declared",
+            "name": "persistence_factory.document.Id"
+          },
+          "wire": "id"
+        },
+        "initial": "Open",
+        "invariants": [],
+        "name": "persistence_factory.document.Document",
+        "states": [
+          "Closed",
+          "Open"
+        ],
+        "summary": null,
+        "terminal": [
+          "Closed"
+        ],
+        "transitions": [
+          {
+            "from": [
+              "Open"
+            ],
+            "name": "close",
+            "to": "Closed"
+          }
+        ],
+        "views": [
+          "persistence_factory.document.ById"
+        ]
+      }
+    ],
+    "errors": [],
+    "events": [
+      {
+        "display": "Closed",
+        "fields": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          },
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          }
+        ],
+        "name": "persistence_factory.document.Closed",
+        "summary": null
+      },
+      {
+        "display": "Created",
+        "fields": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          },
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          },
+          {
+            "name": "owner",
+            "optional": false,
+            "spelling": "persistence_factory.document.Owner",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Owner"
+            },
+            "wire": "owner"
+          },
+          {
+            "name": "scopes",
+            "optional": false,
+            "spelling": "persistence_factory.document.Scopes",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Scopes"
+            },
+            "wire": "scopes"
+          },
+          {
+            "name": "content_ref",
+            "optional": false,
+            "spelling": "persistence_factory.document.ContentRef",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.ContentRef"
+            },
+            "wire": "content_ref"
+          }
+        ],
+        "name": "persistence_factory.document.Created",
+        "summary": null
+      },
+      {
+        "display": "Revised",
+        "fields": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          },
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          }
+        ],
+        "name": "persistence_factory.document.Revised",
+        "summary": null
+      }
+    ],
+    "format": "ess-browser-catalog/1",
+    "plan": {
+      "generated": 16,
+      "obligations": 4,
+      "refused": 0
+    },
+    "provenance": {
+      "contract_digest": "f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d",
+      "source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+      "specification_version": "v1",
+      "system": "persistence_factory"
+    },
+    "system": "persistence_factory",
+    "types": {
+      "persistence_factory.document.ContentRef": {
+        "display": "ContentRef",
+        "invariants": [],
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "spelling": "String"
+      },
+      "persistence_factory.document.Document.State": {
+        "display": "State",
+        "kind": "enum",
+        "variants": [
+          "Closed",
+          "Open"
+        ]
+      },
+      "persistence_factory.document.Id": {
+        "display": "Id",
+        "invariants": [],
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "uuid"
+        },
+        "spelling": "Uuid"
+      },
+      "persistence_factory.document.Owner": {
+        "display": "Owner",
+        "invariants": [],
+        "kind": "newtype",
+        "of": {
+          "kind": "primitive",
+          "name": "string"
+        },
+        "spelling": "String"
+      },
+      "persistence_factory.document.Row": {
+        "display": "Row",
+        "fields": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          },
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          },
+          {
+            "name": "owner",
+            "optional": false,
+            "spelling": "persistence_factory.document.Owner",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Owner"
+            },
+            "wire": "owner"
+          },
+          {
+            "name": "scopes",
+            "optional": false,
+            "spelling": "persistence_factory.document.Scopes",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Scopes"
+            },
+            "wire": "scopes"
+          },
+          {
+            "name": "content_ref",
+            "optional": false,
+            "spelling": "persistence_factory.document.ContentRef",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.ContentRef"
+            },
+            "wire": "content_ref"
+          }
+        ],
+        "invariants": [],
+        "kind": "struct"
+      },
+      "persistence_factory.document.Scopes": {
+        "display": "Scopes",
+        "fields": [
+          {
+            "name": "team",
+            "optional": true,
+            "spelling": "Optional<String>",
+            "type": {
+              "kind": "optional",
+              "of": {
+                "kind": "primitive",
+                "name": "string"
+              }
+            },
+            "wire": "team"
+          }
+        ],
+        "invariants": [],
+        "kind": "struct"
+      }
+    },
+    "version": "v1",
+    "views": [
+      {
+        "component": "persistence-service",
+        "consistency": "read_your_writes",
+        "display": "ById",
+        "entity": "persistence_factory.document.Document",
+        "fields": [
+          {
+            "name": "id",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "id"
+          },
+          {
+            "name": "revision",
+            "optional": false,
+            "spelling": "persistence_factory.document.Id",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Id"
+            },
+            "wire": "revision"
+          },
+          {
+            "name": "owner",
+            "optional": false,
+            "spelling": "persistence_factory.document.Owner",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Owner"
+            },
+            "wire": "owner"
+          },
+          {
+            "name": "scopes",
+            "optional": false,
+            "spelling": "persistence_factory.document.Scopes",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.Scopes"
+            },
+            "wire": "scopes"
+          },
+          {
+            "name": "content_ref",
+            "optional": false,
+            "spelling": "persistence_factory.document.ContentRef",
+            "type": {
+              "kind": "declared",
+              "name": "persistence_factory.document.ContentRef"
+            },
+            "wire": "content_ref"
+          }
+        ],
+        "filter": null,
+        "name": "persistence_factory.document.ById",
+        "served": {
+          "contract": "a query answering `persistence_factory.document.ById` with rows projected from `persistence_factory.document.Document` at `read_your_writes` consistency",
+          "disposition": "obligation",
+          "why": "how the projection is kept current is a storage decision"
+        },
+        "summary": null
+      }
+    ]
+  },
+  "authentication": {
+    "source": "session",
+    "realm_policy": "optional"
+  },
+  "operations": [
+    {
+      "name": "close",
+      "operation_ref": "persistence_factory.close",
+      "semantic_ref": "persistence_factory.document.Close",
+      "kind": "intent",
+      "effect": "write",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "persistence_factory.document.Id"
+          },
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "version"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "type": "array"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "through_version": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "events",
+          "through_version",
+          "replayed"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "create",
+      "operation_ref": "persistence_factory.create",
+      "semantic_ref": "persistence_factory.document.Create",
+      "kind": "intent",
+      "effect": "write",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "additionalProperties": false,
+            "properties": {
+              "media_type": {
+                "enum": [
+                  "text/plain"
+                ],
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "media_type",
+              "text"
+            ],
+            "type": "object"
+          },
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "scopes": {
+            "additionalProperties": false,
+            "description": "Optional conjunctive visibility scopes; an empty object is private to the owner.",
+            "properties": {
+              "extension": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "kind": {
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "value": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "type": "object"
+                  }
+                ]
+              },
+              "principal": {
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "project": {
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "team": {
+                "minLength": 1,
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "content",
+          "key",
+          "scopes"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "type": "array"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "through_version": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "events",
+          "through_version",
+          "replayed"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "name": "get",
+      "operation_ref": "persistence_factory.get",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "effect": "read",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "$page": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "type": "object"
+          },
+          "id": {
+            "title": "persistence_factory.document.Id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "content_ref": {},
+                "id": {},
+                "owner": {},
+                "revision": {},
+                "scopes": {}
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "content_ref": {},
+                    "id": {},
+                    "owner": {},
+                    "revision": {},
+                    "scopes": {}
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "partial": {
+                "type": "boolean"
+              },
+              "through_version": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "through_version",
+              "next_cursor",
+              "partial"
+            ],
+            "type": "object"
+          }
+        ]
+      }
+    },
+    {
+      "name": "list",
+      "operation_ref": "persistence_factory.list",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "effect": "read",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "$page": {
+            "additionalProperties": false,
+            "properties": {
+              "cursor": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "limit": {
+                "maximum": 1000,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "limit"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "content_ref": {},
+                "id": {},
+                "owner": {},
+                "revision": {},
+                "scopes": {}
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "content_ref": {},
+                    "id": {},
+                    "owner": {},
+                    "revision": {},
+                    "scopes": {}
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "partial": {
+                "type": "boolean"
+              },
+              "through_version": {
+                "minimum": 1,
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "through_version",
+              "next_cursor",
+              "partial"
+            ],
+            "type": "object"
+          }
+        ]
+      }
+    },
+    {
+      "name": "revise",
+      "operation_ref": "persistence_factory.revise",
+      "semantic_ref": "persistence_factory.document.Revise",
+      "kind": "intent",
+      "effect": "write",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "persistence_factory.document.Id"
+          },
+          "key": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "version": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "version"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "type": "array"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "through_version": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "events",
+          "through_version",
+          "replayed"
+        ],
+        "type": "object"
+      }
+    }
+  ]
+}

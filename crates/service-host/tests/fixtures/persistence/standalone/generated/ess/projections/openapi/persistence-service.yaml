@@ -1,0 +1,288 @@
+# generated from persistence_http v1
+# model digest 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
+# contract digest 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+# do not edit: regenerate with `ess generate`
+openapi: 3.1.0
+info:
+  title: persistence-service
+  summary: SDK-owned persistence proof documents.
+  description: |-
+    The HTTP surface of `persistence-service`, one of the components of `persistence_http` v1.
+
+    Every path here is one semantic command, so the method is always POST and the path is the command's wire name under its domain's: a command is not a resource, and this document does not invent one. A status code is the outcome the specification declares — 202 for a branch that was taken, 422 for a refusal the input decides, 502 for a refusal decided outside the request — and the `outcome` property of every response body names the branch. Events emitted by a branch are published to consumers through the event transport; they are not returned here.
+
+    This component declares `reached_by: network`, so its callers are not deployed with it and this contract is the surface they reach it through. That declaration is also why the views its domains declare have paths here: a GET under `views` per projection, answering every row it holds. There is no page size, no cursor, no ordering and no filter parameter, because the specification states none — a view's filter is part of the projection, not of the request.
+  version: v1
+  x-ess-provenance:
+    system: persistence_http
+    specification_version: v1
+    source_digest: 6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46
+    contract_digest: 55a96c314dd0e0033441e1060a6a7b3ac593dc81b0166f622a524f4642859f76
+  x-ess-reached-by: network
+tags:
+- name: document
+paths:
+  /document/commands/Close:
+    post:
+      operationId: persistence_http.document.Close
+      summary: Close
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_http.document.Close` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_http.document.Close.Input'
+      responses:
+        '202':
+          description: 'Outcome `closed`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_http.document.Close.closed.Response'
+  /document/commands/Create:
+    post:
+      operationId: persistence_http.document.Create
+      summary: Create
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_http.document.Create` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_http.document.Create.Input'
+      responses:
+        '202':
+          description: 'Outcome `created`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_http.document.Create.created.Response'
+  /document/commands/Revise:
+    post:
+      operationId: persistence_http.document.Revise
+      summary: Revise
+      tags:
+      - document
+      requestBody:
+        description: The input `persistence_http.document.Revise` declares.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/persistence_http.document.Revise.Input'
+      responses:
+        '202':
+          description: 'Outcome `revised`: the branch the specification declares for this input. Events this branch emits are published to consumers, not returned here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_http.document.Revise.revised.Response'
+  /document/views/ById:
+    get:
+      operationId: persistence_http.document.ById
+      summary: ById
+      tags:
+      - document
+      x-ess-consistency: read_your_writes
+      responses:
+        '200':
+          description: 'Every row of `persistence_http.document.ById`, a projection of `persistence_http.document.Document`. Contains every instance. Read-your-writes: a caller that has just issued a command sees its effect here.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/persistence_http.document.ById.Response'
+components:
+  schemas:
+    persistence_http.document.ById.Response:
+      additionalProperties: false
+      description: The rows of `persistence_http.document.ById`.
+      properties:
+        rows:
+          description: Every row the projection holds, in the order it holds them.
+          items:
+            $ref: '#/components/schemas/persistence_http.document.Row'
+          type: array
+      required:
+      - rows
+      type: object
+    persistence_http.document.Close.Input:
+      title: Close input
+      x-ess-name: persistence_http.document.Close
+      x-ess-kind: command-input
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_http.document.Id'
+      required:
+      - id
+      additionalProperties: false
+    persistence_http.document.Close.closed.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_http.document.Document` has moved to `Closed`, along `close`. The instance is the one `id` names. Emits `Closed`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: closed
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_http.document.ContentRef:
+      title: ContentRef
+      x-ess-name: persistence_http.document.ContentRef
+      x-ess-kind: newtype
+      type: string
+    persistence_http.document.Create.Input:
+      title: Create input
+      x-ess-name: persistence_http.document.Create
+      x-ess-kind: command-input
+      type: object
+      properties:
+        content_ref:
+          $ref: '#/components/schemas/persistence_http.document.ContentRef'
+        scopes:
+          $ref: '#/components/schemas/persistence_http.document.Scopes'
+      required:
+      - content_ref
+      - scopes
+      additionalProperties: false
+    persistence_http.document.Create.created.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_http.document.Document` now exists, in `Open`. Its identity is published as `id` on `persistence_http.document.Created`. Emits `Created`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: created
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_http.document.Id:
+      title: Id
+      x-ess-name: persistence_http.document.Id
+      x-ess-kind: newtype
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    persistence_http.document.Owner:
+      title: Owner
+      x-ess-name: persistence_http.document.Owner
+      x-ess-kind: newtype
+      type: string
+    persistence_http.document.Revise.Input:
+      title: Revise input
+      x-ess-name: persistence_http.document.Revise
+      x-ess-kind: command-input
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_http.document.Id'
+      required:
+      - id
+      additionalProperties: false
+    persistence_http.document.Revise.revised.Response:
+      additionalProperties: false
+      description: Taken when no other outcome's condition matched. A `persistence_http.document.Document` has changed, and its state is unchanged. The instance is the one `id` names. Emits `Revised`, published to consumers rather than returned here.
+      properties:
+        outcome:
+          const: revised
+          description: Which declared outcome the command took.
+      required:
+      - outcome
+      type: object
+    persistence_http.document.Row:
+      title: Row
+      x-ess-name: persistence_http.document.Row
+      x-ess-kind: struct
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/persistence_http.document.Id'
+        revision:
+          $ref: '#/components/schemas/persistence_http.document.Id'
+        owner:
+          $ref: '#/components/schemas/persistence_http.document.Owner'
+        scopes:
+          $ref: '#/components/schemas/persistence_http.document.Scopes'
+        content_ref:
+          $ref: '#/components/schemas/persistence_http.document.ContentRef'
+      required:
+      - id
+      - revision
+      - owner
+      - scopes
+      - content_ref
+      additionalProperties: false
+    persistence_http.document.Scopes:
+      title: Scopes
+      x-ess-name: persistence_http.document.Scopes
+      x-ess-kind: struct
+      type: object
+      properties:
+        team:
+          type: string
+      additionalProperties: false
+x-ess-entities:
+  persistence_http.document.ContentRef:
+    title: ContentRef
+    x-ess-name: persistence_http.document.ContentRef
+    x-ess-kind: newtype
+    type: string
+  persistence_http.document.Document:
+    title: Document
+    x-ess-name: persistence_http.document.Document
+    x-ess-kind: entity
+    type: object
+    properties:
+      id:
+        $ref: '#/x-ess-entities/persistence_http.document.Id'
+      revision:
+        $ref: '#/x-ess-entities/persistence_http.document.Id'
+      owner:
+        $ref: '#/x-ess-entities/persistence_http.document.Owner'
+      scopes:
+        $ref: '#/x-ess-entities/persistence_http.document.Scopes'
+      content_ref:
+        $ref: '#/x-ess-entities/persistence_http.document.ContentRef'
+      state:
+        $ref: '#/x-ess-entities/persistence_http.document.Document.State'
+    required:
+    - id
+    - revision
+    - owner
+    - scopes
+    - content_ref
+    - state
+    additionalProperties: false
+  persistence_http.document.Document.State:
+    title: State
+    x-ess-name: persistence_http.document.Document.State
+    x-ess-kind: enum
+    type: string
+    enum:
+    - Closed
+    - Open
+  persistence_http.document.Id:
+    title: Id
+    x-ess-name: persistence_http.document.Id
+    x-ess-kind: newtype
+    type: string
+    format: uuid
+    pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+  persistence_http.document.Owner:
+    title: Owner
+    x-ess-name: persistence_http.document.Owner
+    x-ess-kind: newtype
+    type: string
+  persistence_http.document.Scopes:
+    title: Scopes
+    x-ess-name: persistence_http.document.Scopes
+    x-ess-kind: struct
+    type: object
+    properties:
+      team:
+        type: string
+    additionalProperties: false

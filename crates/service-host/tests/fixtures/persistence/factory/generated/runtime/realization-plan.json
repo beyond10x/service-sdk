@@ -1,0 +1,425 @@
+{
+  "format": "service-realization-plan/3",
+  "service": "persistence_factory",
+  "delivery": {
+    "kind": "composed_connector"
+  },
+  "realm": "optional",
+  "ess_source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+  "obligation_catalog_digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+  "content": {
+    "body": {
+      "media_types": [
+        "text/plain"
+      ],
+      "max_bytes": 4096
+    }
+  },
+  "intents": {
+    "close": {
+      "command": "persistence_factory.document.Close",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "command_field",
+        "field": "id"
+      },
+      "expected_version": {
+        "kind": "operation_field",
+        "field": "version"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_factory.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+          "bindings": {
+            "owner": "persistence_factory.document.Document.owner",
+            "scopes": "persistence_factory.document.Document.scopes"
+          }
+        },
+        {
+          "provider": "sdk.lifecycle.require-state/v1",
+          "bindings": {
+            "allowed": "Open",
+            "entity": "persistence_factory.document.Document"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "closed",
+        "events": [
+          {
+            "event": "persistence_factory.document.Closed",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "input",
+                  "field": "id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    },
+    "create": {
+      "command": "persistence_factory.document.Create",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "content",
+          "type_ref": "Bytes",
+          "optional": false,
+          "source": {
+            "kind": "content",
+            "policy": "body",
+            "command_field": "content_ref"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "scopes",
+          "type_ref": "persistence_factory.document.Scopes",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "generated_uuid_v7"
+      },
+      "expected_version": {
+        "kind": "no_stream"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_factory.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.requested-scopes/v1",
+          "bindings": {
+            "scopes": "scopes"
+          }
+        },
+        {
+          "provider": "sdk.content.external-erasable/v1",
+          "bindings": {
+            "content": "body"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "created",
+        "events": [
+          {
+            "event": "persistence_factory.document.Created",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "stream_id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              },
+              {
+                "name": "owner",
+                "source": {
+                  "kind": "context",
+                  "value": "current_authority"
+                }
+              },
+              {
+                "name": "scopes",
+                "source": {
+                  "kind": "input",
+                  "field": "scopes"
+                }
+              },
+              {
+                "name": "content_ref",
+                "source": {
+                  "kind": "input",
+                  "field": "content_ref"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    },
+    "revise": {
+      "command": "persistence_factory.document.Revise",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "command_field",
+        "field": "id"
+      },
+      "expected_version": {
+        "kind": "operation_field",
+        "field": "version"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_factory.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+          "bindings": {
+            "owner": "persistence_factory.document.Document.owner",
+            "scopes": "persistence_factory.document.Document.scopes"
+          }
+        },
+        {
+          "provider": "sdk.lifecycle.require-state/v1",
+          "bindings": {
+            "allowed": "Open",
+            "entity": "persistence_factory.document.Document"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "revised",
+        "events": [
+          {
+            "event": "persistence_factory.document.Revised",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "input",
+                  "field": "id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    }
+  },
+  "queries": {
+    "get": {
+      "view": "persistence_factory.document.ById",
+      "scope": "documents.read",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "selector",
+            "view_field": "id"
+          }
+        }
+      ],
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    },
+    "list": {
+      "view": "persistence_factory.document.ById",
+      "scope": "documents.read",
+      "inputs": [],
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    }
+  },
+  "reducers": {
+    "persistence_factory.document.Closed": {
+      "entity": "persistence_factory.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "move",
+        "from": [
+          "Open"
+        ],
+        "to": "Closed"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    },
+    "persistence_factory.document.Created": {
+      "entity": "persistence_factory.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "create",
+        "initial_state": "Open"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    },
+    "persistence_factory.document.Revised": {
+      "entity": "persistence_factory.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "update"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    }
+  },
+  "views": {
+    "persistence_factory.document.ById": {
+      "source": "persistence_factory.document.Document",
+      "fields": [
+        "id",
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ],
+      "field_types": {
+        "content_ref": "persistence_factory.document.ContentRef",
+        "id": "persistence_factory.document.Id",
+        "owner": "persistence_factory.document.Owner",
+        "revision": "persistence_factory.document.Id",
+        "scopes": "persistence_factory.document.Scopes"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    }
+  }
+}

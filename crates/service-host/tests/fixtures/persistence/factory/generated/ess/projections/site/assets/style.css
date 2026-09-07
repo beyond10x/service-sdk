@@ -1,0 +1,372 @@
+/*
+ * generated from persistence_factory v1
+ * model digest 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+ * contract digest f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d
+ * do not edit: regenerate with `ess generate`
+ */
+/* The default style for a generated specification site.
+ *
+ * One stylesheet, no build step, no framework. It is written to be read: an adopter who wants to
+ * know why their site looks the way it does opens one file, and an adopter who wants a different
+ * style adds one beside it rather than fighting a theme.
+ *
+ * Colour is carried entirely by custom properties declared twice — once for light, once inside the
+ * dark media query — so a second style overriding the palette does not have to restate the layout.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --ink: #16191d;
+  --ink-soft: #55606d;
+  --ink-faint: #8b95a1;
+  --page: #ffffff;
+  --panel: #f7f8fa;
+  --panel-edge: #e3e7ec;
+  --accent: #1f6f4f;
+  --accent-soft: #e8f2ed;
+  --code-bg: #f3f5f7;
+
+  --measure: 74ch;
+  --sidebar: 19rem;
+  --gutter: 2.5rem;
+
+  --font-text: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --font-code: ui-monospace, "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas,
+    monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6e9ee;
+    --ink-soft: #a6b0bd;
+    --ink-faint: #6f7a88;
+    --page: #14171b;
+    --panel: #1a1e24;
+    --panel-edge: #2a3038;
+    --accent: #7fc9a4;
+    --accent-soft: #1c2b25;
+    --code-bg: #1d2228;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* No `scroll-behavior: smooth`: a heading link that animates is a heading link somebody with
+   * vestibular sensitivity cannot use, and the anchor still works without it. */
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: 16.5px;
+  line-height: 1.65;
+  font-feature-settings: "kern", "liga";
+  text-rendering: optimizeLegibility;
+}
+
+/* ---- layout ------------------------------------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid var(--panel-edge);
+  background: var(--panel);
+  padding: 1.75rem 1.25rem 3rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.masthead {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  margin-bottom: 1.75rem;
+}
+
+.masthead .system {
+  display: block;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.masthead .version {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.3rem;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--font-code);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.nav a {
+  display: block;
+  padding: 0.34rem 0.6rem;
+  border-radius: 0.4rem;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+
+.nav a:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.nav a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A page one level down — a bounded context — is indented under the section it belongs to. */
+.nav a.nested {
+  margin-left: 0.7rem;
+  font-size: 0.88rem;
+}
+
+.nav .group {
+  margin: 1.1rem 0 0.3rem 0.6rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+main {
+  min-width: 0;
+  padding: 3rem var(--gutter) 6rem;
+}
+
+.content {
+  max-width: var(--measure);
+}
+
+/* ---- prose -------------------------------------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4 {
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  font-weight: 650;
+  scroll-margin-top: 1.5rem;
+}
+
+h1 {
+  font-size: 2.1rem;
+  margin: 0 0 1.25rem;
+}
+
+h2 {
+  font-size: 1.4rem;
+  margin: 2.75rem 0 0.9rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--panel-edge);
+}
+
+h3 {
+  font-size: 1.1rem;
+  margin: 2rem 0 0.6rem;
+}
+
+h4 {
+  font-size: 0.97rem;
+  margin: 1.5rem 0 0.5rem;
+  color: var(--ink-soft);
+}
+
+p,
+ul,
+ol {
+  margin: 0 0 1.05rem;
+}
+
+li {
+  margin-bottom: 0.3rem;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 0.06em;
+}
+
+strong {
+  font-weight: 650;
+}
+
+hr {
+  margin: 3rem 0 1.5rem;
+  border: 0;
+  border-top: 1px solid var(--panel-edge);
+}
+
+blockquote {
+  margin: 1.2rem 0;
+  padding: 0.1rem 0 0.1rem 1.1rem;
+  border-left: 3px solid var(--panel-edge);
+  color: var(--ink-soft);
+}
+
+/* ---- code --------------------------------------------------------------------------------- */
+
+code {
+  font-family: var(--font-code);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.12em 0.36em;
+  border-radius: 0.3rem;
+  /* A qualified name is long and has no spaces; without this it overflows the measure. */
+  overflow-wrap: anywhere;
+}
+
+pre {
+  margin: 1.2rem 0;
+  padding: 1rem 1.1rem;
+  background: var(--code-bg);
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.55rem;
+  overflow-x: auto;
+  line-height: 1.55;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.84rem;
+  overflow-wrap: normal;
+}
+
+/* ---- tables ------------------------------------------------------------------------------- */
+
+/* Wider than the measure on purpose: a table of fields and types is scanned in columns, not read
+ * in lines, and wrapping every cell to 74 characters makes it unreadable. */
+table {
+  width: 100%;
+  max-width: calc(var(--measure) + 8rem);
+  margin: 1.3rem 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  display: block;
+  overflow-x: auto;
+}
+
+th,
+td {
+  padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid var(--panel-edge);
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ---- diagrams ----------------------------------------------------------------------------- */
+
+.mermaid {
+  margin: 1.5rem 0;
+  padding: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 0.55rem;
+  overflow-x: auto;
+  text-align: center;
+}
+
+/* Until the diagram is drawn it is its own source, which is readable and is better than a blank
+ * box. `mermaid.run` replaces the contents and drops this class. */
+.mermaid:not([data-processed]) {
+  font-family: var(--font-code);
+  font-size: 0.8rem;
+  white-space: pre;
+  text-align: left;
+  color: var(--ink-faint);
+}
+
+/* ---- provenance --------------------------------------------------------------------------- */
+
+.provenance {
+  max-width: var(--measure);
+  margin-top: 4rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--panel-edge);
+  color: var(--ink-faint);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.provenance code {
+  background: none;
+  font-size: 0.95em;
+  word-break: break-all;
+}
+
+/* ---- narrow ------------------------------------------------------------------------------- */
+
+@media (max-width: 62rem) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--panel-edge);
+    padding-bottom: 1.5rem;
+  }
+
+  main {
+    padding: 2rem 1.25rem 4rem;
+  }
+}
+
+@media print {
+  .sidebar {
+    display: none;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+  }
+}

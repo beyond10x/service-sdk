@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/persistence_http.document.ContentRef",
+  "x-ess-provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "ffe7d44556cff2e92120e4ca866ea1e3638eb659dba4a5af9a3f3c2432af4a72",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_http.document.ContentRef": {
+      "title": "ContentRef",
+      "x-ess-name": "persistence_http.document.ContentRef",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

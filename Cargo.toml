@@ -13,6 +13,8 @@ members = [
     "crates/service-obligations",
     "crates/service-runtime",
     "crates/service-runtime-ir",
+    "crates/service-host/tests/fixtures/persistence/standalone/generated/rust",
+    "crates/service-host/tests/fixtures/persistence/factory/generated/rust",
 ]
 
 [workspace.package]
@@ -44,8 +46,11 @@ uuid = { version = "1", features = ["v7"] }
 identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "e3231bc34eb65695ba0486e1bbe3a0f1ec5b2a23" }
 
 # The organization persistence kit is the only generated-service event/projection/blob backend.
-eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
-eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog.git", rev = "b7e8f0d87b01c403415546d311952cb155caf16f" }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog.git", rev = "081815cdfcbf1c751e7ee91abd81af2ff7d460cb" }
+eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog.git", rev = "081815cdfcbf1c751e7ee91abd81af2ff7d460cb" }
+eventlog-postgres = { git = "https://github.com/beyond10x/eventlog.git", rev = "081815cdfcbf1c751e7ee91abd81af2ff7d460cb" }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pemfile = "2"
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/3.
 ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "d1a66772a91b5411d942d7a45bbf08dfc5de4651" }
@@ -66,3 +71,12 @@ module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
+
+# Generated SDK proof packages retain their published source lock. Only this
+# workspace fixture build substitutes the candidate under test, never a sibling.
+[patch."https://github.com/beyond10x/service-sdk.git"]
+service-engine = { path = "crates/service-engine" }
+service-connectors = { path = "crates/service-connectors" }
+service-catalog = { path = "crates/service-catalog" }
+service-http = { path = "crates/service-http" }
+service-host = { path = "crates/service-host" }

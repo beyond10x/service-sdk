@@ -1,0 +1,9 @@
+format: service/2
+service: persistence_factory
+sdk:
+  repository: https://github.com/beyond10x/service-sdk.git
+  revision: 6e5141f3ead0e4d0c8f75787aec7051e2a1f41d0
+semantic:
+  root: ess
+  sources: [system.yaml]
+runtime: runtime.yaml

@@ -528,6 +528,8 @@ pub struct AppendRequest {
     pub expected: AppendExpectation,
     /// Mutation idempotency identity.
     pub idempotency_key: String,
+    /// Versioned original-input claim, atomically recorded with this event batch.
+    pub claim: IntentClaimRequest,
     /// Non-empty event batch.
     pub events: Vec<DomainEvent>,
     /// Receiver-derived audit metadata.
@@ -565,10 +567,54 @@ pub struct AppendReceipt {
     pub disposition: AppendDisposition,
     /// Stream version through the accepted event batch.
     pub through_version: u64,
+    /// Actual winning stream, including when a concurrent Create minted another UUID.
+    pub stream: ServiceStream,
+    /// Original winning events; a retry must never return the losing decision.
+    pub events: Vec<DomainEvent>,
+}
+
+/// Original-input identity for `service-intent-claim/1`; no plaintext is persisted here.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct IntentClaimRequest {
+    /// Authenticated tenant partition.
+    pub tenant: String,
+    /// Stable generated service identity.
+    pub service: String,
+    /// Exact optional authenticated realm.
+    pub realm: Option<String>,
+    /// Aggregate category selected by the generated plan.
+    pub category: String,
+    /// Caller-selected stream key, or absence when the first attempt mints a UUID.
+    pub stream_key: Option<String>,
+    /// Original caller idempotency identity.
+    pub key: String,
+    /// Versioned digest of admitted input, plan interpretation and verified identities.
+    pub digest: String,
+}
+
+/// Bounded original command result resolved from an atomic Eventlog claim.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RecordedIntent {
+    /// Exact original aggregate stream.
+    pub stream: ServiceStream,
+    /// Original accepted event batch, in version order.
+    pub events: Vec<DomainEvent>,
+    /// Original inclusive last stream version.
+    pub through_version: u64,
 }
 
 /// Event-log resource selected by deployment.
 pub trait EventStore: Send {
+    /// Resolves at most one bounded committed batch before any new decision.
+    fn recorded_intent<'a>(
+        &'a mut self,
+        claim: &'a IntentClaimRequest,
+    ) -> BoxFuture<'a, Result<Option<RecordedIntent>, ResourceError>>;
+    /// Reads current inline aggregate state by exact key for retry authorization.
+    fn authorization_state<'a>(
+        &'a mut self,
+        stream: &'a ServiceStream,
+    ) -> BoxFuture<'a, Result<ProjectionState, ResourceError>>;
     /// Loads one complete stream.
     fn load<'a>(
         &'a mut self,
@@ -836,6 +882,102 @@ impl ServiceEngine {
             .get(operation)
             .ok_or_else(|| ExecutionError::UnknownOperation(operation.to_owned()))?;
         let decoded = decode_inputs(&plan.inputs, body)?;
+        let command = command_inputs(&plan.inputs, &decoded);
+        let key = idempotency(&plan.idempotency, &decoded, metadata)?;
+        expected_version(&plan.expected_version, &decoded)?;
+        let stream_key = match &plan.stream {
+            StreamPlan::CommandField { field } => Some(scalar_string(
+                command
+                    .get(field)
+                    .ok_or_else(|| ExecutionError::MissingInput(field.clone()))?,
+                field,
+            )?),
+            StreamPlan::GeneratedUuidV7 => None,
+        };
+        let category = plan
+            .obligations
+            .iter()
+            .find(|item| item.provider == "sdk.aggregate.event-sourced/v1")
+            .and_then(|item| item.bindings.get("category"))
+            .map_or_else(|| "aggregate".to_owned(), Clone::clone);
+        let plan_bytes = serde_json::to_vec(&self.plan)
+            .map_err(|_| ExecutionError::InvalidPlan("intent claim plan".to_owned()))?;
+        let intent_bytes = serde_json::to_vec(&serde_json::json!({
+            "protocol": "service-intent-claim/1",
+            "plan_digest": hex::encode(Sha256::digest(plan_bytes)),
+            "operation": operation,
+            "input": decoded,
+            "idempotency_key": key,
+            "tenant": context.tenant().as_str(),
+            "realm": context.realm().map(service_runtime::RealmId::as_str),
+            "authority": context.authority().as_str(),
+            "user": context.user().as_str(),
+            "executor": context.executor().map(service_runtime::ExecutorId::as_str),
+        }))
+        .map_err(|_| ExecutionError::InvalidPlan("intent claim input".to_owned()))?;
+        let claim = IntentClaimRequest {
+            tenant: context.tenant().as_str().to_owned(),
+            service: self.plan.service.clone(),
+            realm: context.realm().map(|realm| realm.as_str().to_owned()),
+            category,
+            stream_key,
+            key,
+            digest: hex::encode(Sha256::digest(intent_bytes)),
+        };
+        if let Some(recorded) = resources.events.recorded_intent(&claim).await? {
+            return self
+                .replay_intent(resources, context, plan, &command, recorded)
+                .await;
+        }
+        match self
+            .decide_intent(resources, context, metadata, plan, decoded, claim.clone())
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(original) => {
+                // A contender may have committed between lookup and fold/decision, or the
+                // append response may have been lost. Resolve once; never decide in a loop.
+                if let Some(recorded) = resources.events.recorded_intent(&claim).await? {
+                    self.replay_intent(resources, context, plan, &command, recorded)
+                        .await
+                } else {
+                    Err(original)
+                }
+            }
+        }
+    }
+
+    async fn replay_intent(
+        &self,
+        resources: &mut ServiceResources<'_>,
+        context: &VerifiedAuthContext,
+        plan: &IntentPlan,
+        command: &BTreeMap<String, Value>,
+        recorded: RecordedIntent,
+    ) -> Result<IntentResult, ExecutionError> {
+        let state = resources
+            .events
+            .authorization_state(&recorded.stream)
+            .await?;
+        run_intent_authorization(resources, context, plan, &state, command).await?;
+        Ok(IntentResult {
+            outcome: plan.outcome.name.clone(),
+            events: recorded.events,
+            through_version: recorded.through_version,
+            replayed: true,
+        })
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    async fn decide_intent(
+        &self,
+        resources: &mut ServiceResources<'_>,
+        context: &VerifiedAuthContext,
+        metadata: RequestMetadata<'_>,
+        plan: &IntentPlan,
+        decoded: BTreeMap<String, Value>,
+        claim: IntentClaimRequest,
+    ) -> Result<IntentResult, ExecutionError> {
         let mut command = command_inputs(&plan.inputs, &decoded);
         let idempotency_key = idempotency(&plan.idempotency, &decoded, metadata)?;
         let expected = expected_version(&plan.expected_version, &decoded)?;
@@ -918,6 +1060,7 @@ impl ServiceEngine {
                 stream: stream.clone(),
                 expected,
                 idempotency_key,
+                claim,
                 events: events.clone(),
                 metadata: AppendMetadata {
                     subject: context.authority().as_str().to_owned(),
@@ -938,6 +1081,22 @@ impl ServiceEngine {
                 return Err(error.into());
             }
         };
+
+        if receipt.disposition == AppendDisposition::Replayed {
+            return self
+                .replay_intent(
+                    resources,
+                    context,
+                    plan,
+                    &command,
+                    RecordedIntent {
+                        stream: receipt.stream,
+                        events: receipt.events,
+                        through_version: receipt.through_version,
+                    },
+                )
+                .await;
+        }
 
         let committed = resources.events.load(&stream).await?;
         let state = fold(&self.plan, &committed)?;
@@ -1181,15 +1340,83 @@ async fn run_intent_obligations(
     state: &ProjectionState,
     command: &BTreeMap<String, Value>,
 ) -> Result<(), ExecutionError> {
+    run_intent_authorization(resources, context, plan, state, command).await?;
     for obligation in &plan.obligations {
         match obligation.provider.as_str() {
-            "sdk.aggregate.event-sourced/v1"
+            "sdk.lifecycle.require-state/v1" => {
+                let instances = state
+                    .entities
+                    .get(binding(obligation, "entity")?)
+                    .ok_or_else(|| ExecutionError::ObligationRefused("not_found".into()))?;
+                let entity = if let Some(identity_field) = obligation.bindings.get("identity") {
+                    let identity = command
+                        .get(identity_field)
+                        .ok_or_else(|| ExecutionError::MissingInput(identity_field.clone()))?;
+                    instances.get(&scalar_string(identity, identity_field)?)
+                } else {
+                    instances.values().next()
+                }
+                .ok_or_else(|| ExecutionError::ObligationRefused("not_found".into()))?;
+                if !binding(obligation, "allowed")?
+                    .split(',')
+                    .map(str::trim)
+                    .any(|candidate| candidate == entity.state)
+                {
+                    return Err(ExecutionError::ObligationRefused("wrong_state".into()));
+                }
+            }
+            "sdk.aggregate.nested-entity/v1" => {
+                require_nested_entity(state, obligation, command)?;
+            }
+            "sdk.graph.connect-dag/v1" => {
+                let source = command_binding_string(command, obligation, "source")?;
+                let target = command_binding_string(command, obligation, "target")?;
+                graph_materialization(state, obligation, command, Some((&source, &target)))?;
+            }
+            "sdk.graph.node-unreferenced/v1" => {
+                require_unreferenced_node(state, obligation, command)?;
+            }
+            "sdk.graph.publish-snapshot/v1" => {
+                graph_materialization(state, obligation, command, None)?;
+            }
+            "sdk.aggregate.owned-revision/v1" => {
+                require_owned_revision(state, obligation, command)?;
+            }
+            "sdk.lifecycle.expiring-parent-child/v1" => {
+                validate_lifetime(resources.clock, obligation, state, command)?;
+            }
+            "sdk.lifecycle.bounded-future/v1" => {
+                validate_future(resources.clock, obligation, command)?;
+            }
+            "sdk.lifecycle.expiry-due/v1" => {
+                validate_expiry_due(resources.clock, obligation, state, command)?;
+            }
+            "sdk.auth.owner-and-conjunctive-scopes/v1"
+            | "sdk.auth.requested-scopes/v1"
+            | "sdk.auth.same-partition-owner-transfer/v1"
+            | "sdk.auth.trusted-scheduler/v1"
+            | "sdk.aggregate.event-sourced/v1"
             | "sdk.content.external-erasable/v1"
             | "sdk.derive.inherit-parent-authority/v1"
             | "sdk.derive.inherit-parent-authority/v2"
             | "sdk.projection.auth-partitioned-visibility/v1"
             | "sdk.projection.conjunctive-scopes-visibility/v1"
             | "sdk.projection.hide-terminal-parent/v1" => {}
+            other => return Err(ExecutionError::UnknownProvider(other.to_owned())),
+        }
+    }
+    Ok(())
+}
+
+async fn run_intent_authorization(
+    resources: &mut ServiceResources<'_>,
+    context: &VerifiedAuthContext,
+    plan: &IntentPlan,
+    state: &ProjectionState,
+    command: &BTreeMap<String, Value>,
+) -> Result<(), ExecutionError> {
+    for obligation in &plan.obligations {
+        match obligation.provider.as_str() {
             "sdk.auth.owner-and-conjunctive-scopes/v1" => {
                 let entity = bound_entity(state, obligation, "owner")?;
                 let owner = bound_value(entity, obligation, "owner")?;
@@ -1240,54 +1467,22 @@ async fn run_intent_obligations(
                 )
                 .await?;
             }
-            "sdk.lifecycle.require-state/v1" => {
-                let instances = state
-                    .entities
-                    .get(binding(obligation, "entity")?)
-                    .ok_or_else(|| ExecutionError::ObligationRefused("not_found".into()))?;
-                let entity = if let Some(identity_field) = obligation.bindings.get("identity") {
-                    let identity = command
-                        .get(identity_field)
-                        .ok_or_else(|| ExecutionError::MissingInput(identity_field.clone()))?;
-                    instances.get(&scalar_string(identity, identity_field)?)
-                } else {
-                    instances.values().next()
-                }
-                .ok_or_else(|| ExecutionError::ObligationRefused("not_found".into()))?;
-                let allowed = binding(obligation, "allowed")?
-                    .split(',')
-                    .map(str::trim)
-                    .any(|candidate| candidate == entity.state);
-                if !allowed {
-                    return Err(ExecutionError::ObligationRefused("wrong_state".into()));
-                }
-            }
-            "sdk.aggregate.nested-entity/v1" => {
-                require_nested_entity(state, obligation, command)?;
-            }
-            "sdk.graph.connect-dag/v1" => {
-                let source = command_binding_string(command, obligation, "source")?;
-                let target = command_binding_string(command, obligation, "target")?;
-                graph_materialization(state, obligation, command, Some((&source, &target)))?;
-            }
-            "sdk.graph.node-unreferenced/v1" => {
-                require_unreferenced_node(state, obligation, command)?;
-            }
-            "sdk.graph.publish-snapshot/v1" => {
-                graph_materialization(state, obligation, command, None)?;
-            }
-            "sdk.aggregate.owned-revision/v1" => {
-                require_owned_revision(state, obligation, command)?;
-            }
-            "sdk.lifecycle.expiring-parent-child/v1" => {
-                validate_lifetime(resources.clock, obligation, state, command)?;
-            }
-            "sdk.lifecycle.bounded-future/v1" => {
-                validate_future(resources.clock, obligation, command)?;
-            }
-            "sdk.lifecycle.expiry-due/v1" => {
-                validate_expiry_due(resources.clock, obligation, state, command)?;
-            }
+            "sdk.aggregate.event-sourced/v1"
+            | "sdk.content.external-erasable/v1"
+            | "sdk.derive.inherit-parent-authority/v1"
+            | "sdk.derive.inherit-parent-authority/v2"
+            | "sdk.projection.auth-partitioned-visibility/v1"
+            | "sdk.projection.conjunctive-scopes-visibility/v1"
+            | "sdk.projection.hide-terminal-parent/v1"
+            | "sdk.lifecycle.require-state/v1"
+            | "sdk.aggregate.nested-entity/v1"
+            | "sdk.graph.connect-dag/v1"
+            | "sdk.graph.node-unreferenced/v1"
+            | "sdk.graph.publish-snapshot/v1"
+            | "sdk.aggregate.owned-revision/v1"
+            | "sdk.lifecycle.expiring-parent-child/v1"
+            | "sdk.lifecycle.bounded-future/v1"
+            | "sdk.lifecycle.expiry-due/v1" => {}
             other => return Err(ExecutionError::UnknownProvider(other.to_owned())),
         }
     }
@@ -2347,6 +2542,19 @@ mod tests {
     struct UnusedEvents;
 
     impl EventStore for UnusedEvents {
+        fn recorded_intent<'a>(
+            &'a mut self,
+            _claim: &'a IntentClaimRequest,
+        ) -> BoxFuture<'a, Result<Option<RecordedIntent>, ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
+
+        fn authorization_state<'a>(
+            &'a mut self,
+            _stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<ProjectionState, ResourceError>> {
+            Box::pin(std::future::ready(Err(ResourceError)))
+        }
         fn load<'a>(
             &'a mut self,
             _stream: &'a ServiceStream,

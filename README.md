@@ -13,17 +13,29 @@ consumed from exact Git revisions; they are not published to crates.io or npm.
 
 ## Build and test
 
-Prerequisites are Rust 1.91 or newer, Node.js 22, pnpm 10.15, the `task` runner, and the AEP CLI.
+Prerequisites are Rust 1.91 or newer, Node.js 22, pnpm 10.15, the `task` runner, the AEP CLI,
+Docker and PostgreSQL client tools. The complete gate requires an explicitly supplied disposable
+PostgreSQL fixture with verified TLS, a separate migration role, and a DML application role with
+connection limit 4. The [required proof workflow](https://github.com/beyond10x/service-sdk/blob/main/.github/workflows/persistence-proof.yml)
+contains the complete reproducible fixture setup.
 
 ```bash
 git clone https://github.com/beyond10x/service-sdk.git
 cd service-sdk
 corepack enable
-task check
+# Set the four fixture inputs from your disposable PostgreSQL setup:
+# EVENTLOG_TEST_HOSTED_POSTGRES_URL       application-role URL
+# EVENTLOG_TEST_POSTGRES_MIGRATION_URL   migration-role URL
+# EVENTLOG_TEST_POSTGRES_CA              path to its CA PEM
+# EVENTLOG_TEST_POSTGRES_CONTAINER       exact disposable Docker container name
+task --concurrency 1 check
 ```
 
 `task check` formats, lints, builds documentation, tests every Rust crate, validates the AEP
-artifacts, and checks the Vue service console.
+artifacts, checks the Vue service console, and verifies generated persistence fixtures. Missing
+PostgreSQL inputs, filtered proof cases, skipped cases and an incomplete workload matrix fail.
+The proof stops and restarts only the explicitly named disposable container. Run it against a
+dedicated fixture: it creates retained test schemas and exercises database loss and pool pressure.
 
 ## Consume the SDK
 
@@ -37,7 +49,7 @@ service-engine = { git = "https://github.com/beyond10x/service-sdk.git", rev = "
 service-runtime = { git = "https://github.com/beyond10x/service-sdk.git", rev = "<commit>" }
 ```
 
-A service repository supplies a unified `service/1` package and gives the generated tree exclusive
+A service repository supplies a unified `service/1` or `service/2` package and gives the generated tree exclusive
 ownership of its output directory:
 
 ```bash
@@ -56,8 +68,76 @@ consumer.
 When the package declares `release`, the same tree also contains validated `ess-component/1`,
 `ess-build/1`, `ess-realization/1`, and `ess-runtime/1` sources, their canonical IR, BuildKit
 executor inputs, and the component-owned Helm chart. The generated binary delegates environment,
-SQLite, listener, and shutdown behavior to `service-host`; the service repository does not need a
+selected persistence, listener, and shutdown behavior to `service-host`; the service repository does not need a
 handwritten host or Dockerfile.
+
+## Select persistence
+
+SQLite remains the generated host's default and retains the existing file database and durable
+volume. `service/2` adds the closed `release.persistence` selection, either `sqlite` or `postgres`.
+`service/1` rejects that field, including explicit null, and old builders refuse `service/2`.
+The PostgreSQL release supplies application configuration and secret slots through ESS runtime
+projection. It does not mount a SQLite volume or give the serving process migration credentials.
+
+For standalone PostgreSQL, set `<PREFIX>_PERSISTENCE=postgres`. The generated environment prefix
+is the uppercase service name with punctuation replaced by underscores. Supply every production
+setting explicitly:
+
+| Suffix after `<PREFIX>_` | Required value |
+| --- | --- |
+| `POSTGRES_URL`, `POSTGRES_SCHEMA`, `POSTGRES_CA_PEM` | DML connection URL, owner schema, and trusted CA PEM bytes. TLS certificate and hostname verification are mandatory. |
+| `POOL_MAX`, `POOL_WAITERS` | Finite connection and waiting-request bounds for one process. |
+| `ACQUISITION_MS`, `CONNECT_MS`, `STATEMENT_MS`, `LOCK_MS`, `TRANSACTION_MS`, `SHUTDOWN_MS` | Positive, bounded timeouts in milliseconds. |
+| `DATABASE_CONNECTIONS`, `REPLICAS`, `RESERVED_CONNECTIONS` | Verified allocation, replica count and migration/operations reserve. The provider checks the declared budget and the application role. |
+| `DRAIN_MS` | Positive HTTP drain deadline in milliseconds. |
+| `LISTEN`, `IDENTITY_ORIGIN` | Listener address and the existing Identity origin. |
+
+Create the deployment-owned schema and DML grants with the migration role. Run the generated
+binary with `--migrate`, supplying `POSTGRES_MIGRATION_URL` and the same trust, schema, pool and
+budget settings. Give the serving invocation only `POSTGRES_URL`. Application startup validates
+the existing schema and role; it does not perform DDL. Readiness reads the database, while
+liveness reports whether the process is running. Shutdown closes admissions and attempts the
+configured HTTP drain and pool close; an expired deadline reports incomplete shutdown.
+
+A composed host uses `service_host::Persistence` to migrate and open the same adapter, passing
+the complete service roster to `migrate_postgres` and `open_postgres`. Inject `persistence.store()`
+into every generated Connector factory, bind all services, then call `persistence.seal()` once
+before listening. An incomplete roster or registration after sealing refuses. Keep the
+`Persistence` handle for readiness, draining and shutdown alongside the injected store.
+
+The declared laboratory profile uses two SDK processes with two connections and four waiters
+each, a four-connection application role, and a separate four-connection reserve. Its fixed
+timeouts and six workload configurations are test inputs, not production sizing evidence.
+The current v3 profile admits steady driver requests through one shared gate, at least one
+millisecond apart, with measured pacing and request latency reported separately. Its original
+unpaced v2 sweep remains recorded as rejected after exhausting its request cap before the
+minimum duration. Independent unpaced saturation and cancellation cases remain required.
+Actual generated standalone and Connector factory cases run separately from the measured SDK
+execution boundary. The mandatory proof records complete source/binary hashes, operation
+counts, latency, provider refusals, sampled waiter-time and process/database resources.
+
+## Retry and existing data
+
+New accepted intents atomically record `service-intent-claim/1` through Eventlog's existing claim
+interface. Retrying the original idempotency identity and input returns the original stream,
+UUIDs, events and content references, including a completed transition. Current authentication
+and authorization are checked again. A changed input or incompatible service plan refuses.
+Receipt recovery reads a bounded original event range; unresolved outcomes never claim success
+or admit a new external effect. Effect preparation, claims and terminal outcomes retain their
+existing journal identities across restart.
+
+Existing event hashes and stream, feed, cursor, projection, effect and `service-content/1`
+encodings remain unchanged. The historical content digest includes tenant, exact optional realm,
+policy, idempotency key, media type and bytes; it does not add a service namespace. There is no
+public SDK content-download route. Tests cover the older `service-stream/1` identity vectors;
+no older SQL adapter was located, so SQL adapter compatibility is not claimed for that runtime.
+
+Before admitting writes on an existing deployment, its owner must stop intake, fence every old
+writer, drain and classify outstanding operations, and reconcile unresolved requests from
+retained client or owner evidence. Old SDK commands had no original-intent claim. An old lost
+response containing an unknown generated stream UUID cannot be recovered by the new bounded
+lookup; it blocks that deployment's write admission until reconciled. This release does not
+scan tenant feeds, synthesize legacy receipts or prove that a deployment completed this process.
 
 ## Why it is built on ESS
 
@@ -77,7 +157,7 @@ realization hooks.
 ## What it generates
 
 ```text
-service/1 package
+service/1 or service/2 package
   -> ESS fragments + service-definition/3 + scenarios + exact SDK lock
   -> compiler-minted EssIr and ESS SynthesisPlan
   -> validated service-runtime-ir/3 + versioned obligation catalogue
@@ -95,7 +175,8 @@ The workspace is split by responsibility:
 - `service-engine` executes generated plans over deployment-injected resources.
 - `service-eventlog` provides the Eventlog-backed persistence adapter.
 - `service-http` provides the Identity-authenticated HTTP server and generated-client transport.
-- `service-host` provides the generated binary's environment, SQLite, listener, and shutdown shell.
+- `service-host` provides the generated binary's environment, SQLite/PostgreSQL composition,
+  startup roster, listener, readiness and bounded shutdown.
 - Identity HTTP packages expose that host through the default `standalone-host` feature. Client-only
   consumers disable default features so they do not resolve the process host or persistence adapter.
 - `service-connectors` exposes inert factories for composed Connector runtimes.

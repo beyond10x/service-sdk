@@ -15,7 +15,13 @@ tasks:
 
   test:
     cmds:
+      - cargo build -p persistence-http-generated-service --locked
       - cargo test --workspace --locked
+
+  persistence-fixtures:
+    cmds:
+      - cargo run -p service-builder --locked -- check --package crates/service-host/tests/fixtures/persistence/standalone/service.yaml --output crates/service-host/tests/fixtures/persistence/standalone/generated
+      - cargo run -p service-builder --locked -- check --package crates/service-host/tests/fixtures/persistence/factory/service.yaml --output crates/service-host/tests/fixtures/persistence/factory/generated
 
   doc:
     env:
@@ -41,4 +47,4 @@ tasks:
       - "! grep -R -n -E 'ghcr\\.io|beyond10x/(workflow|todo|aep-service)' .github/actions/release-component"
 
   check:
-    deps: [fmt-check, clippy, test, doc, aep-check, web-check, release-action-check]
+    deps: [fmt-check, clippy, test, doc, aep-check, web-check, release-action-check, persistence-fixtures]

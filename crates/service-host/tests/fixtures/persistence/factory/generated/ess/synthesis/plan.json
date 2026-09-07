@@ -1,0 +1,169 @@
+{
+  "provenance": {
+    "system": "persistence_factory",
+    "specification_version": "v1",
+    "source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+    "contract_digest": "f081c5ffdabfff6b3ae5575185f94353ca8257af37615780abd6a5b7cde7495d"
+  },
+  "scope": {
+    "profile": "component-skeletons"
+  },
+  "capabilities": [
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.ContentRef",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.Document.State",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.Id",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.Owner",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.Row",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_factory.document.Scopes",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "entity_lifecycle",
+      "source": "persistence_factory.document.Document",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_factory.document.Close",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_factory.document.Close",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_factory.document.Close` input, decide and enact exactly one outcome — `closed` otherwise, takes `close` of `persistence_factory.document.Document`, emits `persistence_factory.document.Closed`"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_factory.document.Create",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_factory.document.Create",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_factory.document.Create` input, decide and enact exactly one outcome — `created` otherwise, creates `persistence_factory.document.Document`, emits `persistence_factory.document.Created`"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_factory.document.Revise",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_factory.document.Revise",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_factory.document.Revise` input, decide and enact exactly one outcome — `revised` otherwise, updates `persistence_factory.document.Document`, emits `persistence_factory.document.Revised`"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_factory.document.Closed",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_factory.document.Created",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_factory.document.Revised",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_type",
+      "source": "persistence_factory.document.ById",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_query",
+      "source": "persistence_factory.document.ById",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "projection_maintenance"
+        },
+        "contract": "a query answering `persistence_factory.document.ById` with rows projected from `persistence_factory.document.Document` at `read_your_writes` consistency"
+      }
+    },
+    {
+      "kind": "component_port",
+      "source": "persistence-service",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "component_transport",
+      "source": "persistence-service",
+      "disposition": {
+        "disposition": "generated"
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Closed payload",
+  "x-ess-name": "persistence_http.document.Closed",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/persistence_http.document.Id"
+    },
+    "revision": {
+      "$ref": "#/$defs/persistence_http.document.Id"
+    }
+  },
+  "required": [
+    "id",
+    "revision"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "e0ec1bd80e956fc71389fde69051d04e42ed83cb9200dbb2e2bc53b4e0fc96f3",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_http.document.Id": {
+      "title": "Id",
+      "x-ess-name": "persistence_http.document.Id",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    }
+  }
+}

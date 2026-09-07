@@ -1,0 +1,95 @@
+{
+  "format": "service-connector-contribution/1",
+  "service": "persistence_factory",
+  "ess_source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+  "operations": [
+    {
+      "operation": "close",
+      "semantic_ref": "persistence_factory.document.Close",
+      "kind": "intent",
+      "effect": "write",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "operation": "create",
+      "semantic_ref": "persistence_factory.document.Create",
+      "kind": "intent",
+      "effect": "write",
+      "inputs": [
+        {
+          "name": "content",
+          "type_ref": "Bytes",
+          "optional": false
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false
+        },
+        {
+          "name": "scopes",
+          "type_ref": "persistence_factory.document.Scopes",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "operation": "get",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "effect": "read",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false
+        }
+      ]
+    },
+    {
+      "operation": "list",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "effect": "read"
+    },
+    {
+      "operation": "revise",
+      "semantic_ref": "persistence_factory.document.Revise",
+      "kind": "intent",
+      "effect": "write",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false
+        }
+      ]
+    }
+  ]
+}

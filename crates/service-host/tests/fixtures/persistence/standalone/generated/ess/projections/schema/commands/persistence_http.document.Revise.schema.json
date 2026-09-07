@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Revise input",
+  "x-ess-name": "persistence_http.document.Revise",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/persistence_http.document.Id"
+    }
+  },
+  "required": [
+    "id"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "98fed2e90616f18d42401d738f8d74e90d5fcf4b4fd5cef1368f11e8049b5561",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_http.document.Id": {
+      "title": "Id",
+      "x-ess-name": "persistence_http.document.Id",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    }
+  }
+}

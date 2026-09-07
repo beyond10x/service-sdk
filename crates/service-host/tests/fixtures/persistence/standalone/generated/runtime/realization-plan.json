@@ -1,0 +1,426 @@
+{
+  "format": "service-realization-plan/3",
+  "service": "persistence_http",
+  "delivery": {
+    "kind": "identity_http",
+    "audience": "urn:b10x:persistence-proof"
+  },
+  "realm": "optional",
+  "ess_source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+  "obligation_catalog_digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+  "content": {
+    "body": {
+      "media_types": [
+        "text/plain"
+      ],
+      "max_bytes": 4096
+    }
+  },
+  "intents": {
+    "close": {
+      "command": "persistence_http.document.Close",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_http.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "command_field",
+        "field": "id"
+      },
+      "expected_version": {
+        "kind": "operation_field",
+        "field": "version"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_http.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+          "bindings": {
+            "owner": "persistence_http.document.Document.owner",
+            "scopes": "persistence_http.document.Document.scopes"
+          }
+        },
+        {
+          "provider": "sdk.lifecycle.require-state/v1",
+          "bindings": {
+            "allowed": "Open",
+            "entity": "persistence_http.document.Document"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "closed",
+        "events": [
+          {
+            "event": "persistence_http.document.Closed",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "input",
+                  "field": "id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    },
+    "create": {
+      "command": "persistence_http.document.Create",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "content",
+          "type_ref": "Bytes",
+          "optional": false,
+          "source": {
+            "kind": "content",
+            "policy": "body",
+            "command_field": "content_ref"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "scopes",
+          "type_ref": "persistence_http.document.Scopes",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "generated_uuid_v7"
+      },
+      "expected_version": {
+        "kind": "no_stream"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_http.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.requested-scopes/v1",
+          "bindings": {
+            "scopes": "scopes"
+          }
+        },
+        {
+          "provider": "sdk.content.external-erasable/v1",
+          "bindings": {
+            "content": "body"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "created",
+        "events": [
+          {
+            "event": "persistence_http.document.Created",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "stream_id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              },
+              {
+                "name": "owner",
+                "source": {
+                  "kind": "context",
+                  "value": "current_authority"
+                }
+              },
+              {
+                "name": "scopes",
+                "source": {
+                  "kind": "input",
+                  "field": "scopes"
+                }
+              },
+              {
+                "name": "content_ref",
+                "source": {
+                  "kind": "input",
+                  "field": "content_ref"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    },
+    "revise": {
+      "command": "persistence_http.document.Revise",
+      "scope": "documents.manage",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_http.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "stream": {
+        "kind": "command_field",
+        "field": "id"
+      },
+      "expected_version": {
+        "kind": "operation_field",
+        "field": "version"
+      },
+      "idempotency": {
+        "kind": "operation_field",
+        "field": "key"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.aggregate.event-sourced/v1",
+          "bindings": {
+            "aggregate": "persistence_http.document.Document",
+            "identity": "id"
+          }
+        },
+        {
+          "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+          "bindings": {
+            "owner": "persistence_http.document.Document.owner",
+            "scopes": "persistence_http.document.Document.scopes"
+          }
+        },
+        {
+          "provider": "sdk.lifecycle.require-state/v1",
+          "bindings": {
+            "allowed": "Open",
+            "entity": "persistence_http.document.Document"
+          }
+        }
+      ],
+      "outcome": {
+        "name": "revised",
+        "events": [
+          {
+            "event": "persistence_http.document.Revised",
+            "fields": [
+              {
+                "name": "id",
+                "source": {
+                  "kind": "input",
+                  "field": "id"
+                }
+              },
+              {
+                "name": "revision",
+                "source": {
+                  "kind": "generated_uuid_v7"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "projections": [
+        "documents"
+      ]
+    }
+  },
+  "queries": {
+    "get": {
+      "view": "persistence_http.document.ById",
+      "scope": "documents.read",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_http.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "selector",
+            "view_field": "id"
+          }
+        }
+      ],
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    },
+    "list": {
+      "view": "persistence_http.document.ById",
+      "scope": "documents.read",
+      "inputs": [],
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    }
+  },
+  "reducers": {
+    "persistence_http.document.Closed": {
+      "entity": "persistence_http.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "move",
+        "from": [
+          "Open"
+        ],
+        "to": "Closed"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    },
+    "persistence_http.document.Created": {
+      "entity": "persistence_http.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "create",
+        "initial_state": "Open"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    },
+    "persistence_http.document.Revised": {
+      "entity": "persistence_http.document.Document",
+      "identity_field": "id",
+      "effect": {
+        "kind": "update"
+      },
+      "fields": [
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ]
+    }
+  },
+  "views": {
+    "persistence_http.document.ById": {
+      "source": "persistence_http.document.Document",
+      "fields": [
+        "id",
+        "revision",
+        "owner",
+        "scopes",
+        "content_ref"
+      ],
+      "field_types": {
+        "content_ref": "persistence_http.document.ContentRef",
+        "id": "persistence_http.document.Id",
+        "owner": "persistence_http.document.Owner",
+        "revision": "persistence_http.document.Id",
+        "scopes": "persistence_http.document.Scopes"
+      },
+      "obligations": [
+        {
+          "provider": "sdk.projection.auth-partitioned-visibility/v1",
+          "bindings": {
+            "owner": "owner",
+            "scopes": "scopes"
+          }
+        }
+      ]
+    }
+  }
+}

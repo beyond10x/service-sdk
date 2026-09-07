@@ -1,0 +1,169 @@
+{
+  "provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "3d0faab36c842042317c0500936ab21cc2bf15e3f727183b029fa1f6dfbd2185"
+  },
+  "scope": {
+    "profile": "component-skeletons"
+  },
+  "capabilities": [
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.ContentRef",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.Document.State",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.Id",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.Owner",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.Row",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "domain_type",
+      "source": "persistence_http.document.Scopes",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "entity_lifecycle",
+      "source": "persistence_http.document.Document",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_http.document.Close",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_http.document.Close",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_http.document.Close` input, decide and enact exactly one outcome — `closed` otherwise, takes `close` of `persistence_http.document.Document`, emits `persistence_http.document.Closed`"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_http.document.Create",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_http.document.Create",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_http.document.Create` input, decide and enact exactly one outcome — `created` otherwise, creates `persistence_http.document.Document`, emits `persistence_http.document.Created`"
+      }
+    },
+    {
+      "kind": "command_contract",
+      "source": "persistence_http.document.Revise",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "command_behavior",
+      "source": "persistence_http.document.Revise",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "unspecified_algorithm"
+        },
+        "contract": "given `persistence_http.document.Revise` input, decide and enact exactly one outcome — `revised` otherwise, updates `persistence_http.document.Document`, emits `persistence_http.document.Revised`"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_http.document.Closed",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_http.document.Created",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "event_type",
+      "source": "persistence_http.document.Revised",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_type",
+      "source": "persistence_http.document.ById",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "view_query",
+      "source": "persistence_http.document.ById",
+      "disposition": {
+        "disposition": "obligation",
+        "reason": {
+          "class": "projection_maintenance"
+        },
+        "contract": "a query answering `persistence_http.document.ById` with rows projected from `persistence_http.document.Document` at `read_your_writes` consistency"
+      }
+    },
+    {
+      "kind": "component_port",
+      "source": "persistence-service",
+      "disposition": {
+        "disposition": "generated"
+      }
+    },
+    {
+      "kind": "component_transport",
+      "source": "persistence-service",
+      "disposition": {
+        "disposition": "generated"
+      }
+    }
+  ]
+}

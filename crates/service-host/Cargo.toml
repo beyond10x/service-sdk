@@ -12,10 +12,34 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 axum.workspace = true
+eventlog-core.workspace = true
+eventlog-postgres.workspace = true
 eventlog-sqlite.workspace = true
+rustls.workspace = true
+rustls-pemfile.workspace = true
+serde_json.workspace = true
 service-connectors = { path = "../service-connectors" }
+service-engine = { path = "../service-engine" }
+service-eventlog = { path = "../service-eventlog" }
 service-http = { path = "../service-http" }
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync", "time"] }
+
+[dev-dependencies]
+async-trait.workspace = true
+serde.workspace = true
+service-runtime = { path = "../service-runtime" }
+persistence-http-generated-service = { path = "tests/fixtures/persistence/standalone/generated/rust", default-features = false }
+persistence-factory-generated-service = { path = "tests/fixtures/persistence/factory/generated/rust" }
+connectors-protocol = { package = "protocol", git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329" }
+connectors-service = { package = "service", git = "https://github.com/beyond10x/connectors.git", rev = "235558c11f5fc2e4b8f8440474fb975df49d5329" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid.workspace = true
+time.workspace = true
+
+[[test]]
+name = "persistence"
+path = "tests/persistence.rs"
+harness = false
 
 [lints]
 workspace = true

@@ -1,0 +1,16 @@
+{
+  "name": "generated-service-console",
+  "private": true,
+  "type": "module",
+  "scripts": {"dev": "vite", "build": "vue-tsc --noEmit && vite build"},
+  "dependencies": {
+    "@b10x/service-console-vue": "git+https://github.com/beyond10x/service-sdk.git#6e5141f3ead0e4d0c8f75787aec7051e2a1f41d0",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "vue-tsc": "^3.0.0"
+  }
+}

@@ -1,0 +1,99 @@
+format: ess/1
+system: persistence_http
+version: v1
+domains: [persistence_http.document]
+domain: persistence_http.document
+types:
+  - { name: persistence_http.document.Id, kind: newtype, of: Uuid }
+  - { name: persistence_http.document.ContentRef, kind: newtype, of: String }
+  - { name: persistence_http.document.Owner, kind: newtype, of: String }
+  - name: persistence_http.document.Scopes
+    kind: struct
+    fields:
+      - { name: team, type: Optional<String> }
+  - name: persistence_http.document.Row
+    kind: struct
+    fields:
+      - { name: id, type: persistence_http.document.Id }
+      - { name: revision, type: persistence_http.document.Id }
+      - { name: owner, type: persistence_http.document.Owner }
+      - { name: scopes, type: persistence_http.document.Scopes }
+      - { name: content_ref, type: persistence_http.document.ContentRef }
+entities:
+  - name: persistence_http.document.Document
+    identity: { name: id, type: persistence_http.document.Id }
+    fields:
+      - { name: revision, type: persistence_http.document.Id }
+      - { name: owner, type: persistence_http.document.Owner }
+      - { name: scopes, type: persistence_http.document.Scopes }
+      - { name: content_ref, type: persistence_http.document.ContentRef }
+    lifecycle:
+      initial: Open
+      states: [Open, Closed]
+      terminal: [Closed]
+      transitions:
+        - { name: close, from: [Open], to: Closed }
+commands:
+  - name: persistence_http.document.Create
+    input:
+      - { name: content_ref, type: persistence_http.document.ContentRef }
+      - { name: scopes, type: persistence_http.document.Scopes }
+    outcomes:
+      - name: created
+        creates: persistence_http.document.Document
+        instance: id
+        emits: [persistence_http.document.Created]
+        payload:
+          persistence_http.document.Created:
+            content_ref: input.content_ref
+            scopes: input.scopes
+  - name: persistence_http.document.Revise
+    input:
+      - { name: id, type: persistence_http.document.Id }
+    outcomes:
+      - name: revised
+        updates: persistence_http.document.Document
+        instance: id
+        emits: [persistence_http.document.Revised]
+        payload:
+          persistence_http.document.Revised:
+            id: input.id
+  - name: persistence_http.document.Close
+    input:
+      - { name: id, type: persistence_http.document.Id }
+    outcomes:
+      - name: closed
+        moves: persistence_http.document.Document.close
+        instance: id
+        emits: [persistence_http.document.Closed]
+        payload:
+          persistence_http.document.Closed:
+            id: input.id
+events:
+  - name: persistence_http.document.Created
+    fields:
+      - { name: id, type: persistence_http.document.Id }
+      - { name: revision, type: persistence_http.document.Id }
+      - { name: owner, type: persistence_http.document.Owner }
+      - { name: scopes, type: persistence_http.document.Scopes }
+      - { name: content_ref, type: persistence_http.document.ContentRef }
+  - name: persistence_http.document.Revised
+    fields:
+      - { name: id, type: persistence_http.document.Id }
+      - { name: revision, type: persistence_http.document.Id }
+  - name: persistence_http.document.Closed
+    fields:
+      - { name: id, type: persistence_http.document.Id }
+      - { name: revision, type: persistence_http.document.Id }
+views:
+  - name: persistence_http.document.ById
+    source: persistence_http.document.Document
+    shape: persistence_http.document.Row
+    consistency: read_your_writes
+components:
+  - component: persistence-service
+    summary: SDK-owned persistence proof documents.
+    owns: { domains: [persistence_http.document] }
+    accepts: { commands: [persistence_http.document.Create, persistence_http.document.Revise, persistence_http.document.Close] }
+    publishes: { events: [persistence_http.document.Created, persistence_http.document.Revised, persistence_http.document.Closed] }
+    reached_by: network

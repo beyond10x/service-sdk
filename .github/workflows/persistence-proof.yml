@@ -1,0 +1,128 @@
+name: Required persistence proof
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "2"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  gate:
+    name: Repository gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.91.0
+          components: rustfmt, clippy
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version: "1.25.10"
+          cache: false
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install pinned repository tools
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@v3.52.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          corepack enable
+          corepack prepare pnpm@10.15.0 --activate
+          aep_version=0.52.0
+          aep_asset="aep-${aep_version}-x86_64-unknown-linux-gnu.tar.gz"
+          curl --fail --silent --show-error --location --remote-name \
+            "https://github.com/beyond10x/aep/releases/download/${aep_version}/${aep_asset}"
+          curl --fail --silent --show-error --location \
+            "https://github.com/beyond10x/aep/releases/download/${aep_version}/SHA256SUMS" \
+            | grep " ${aep_asset}$" \
+            | sha256sum --check --strict
+          tar --extract --gzip --file "$aep_asset" --strip-components=1
+          install -m 0755 aep "$CARGO_HOME/bin/aep"
+
+      - name: Provision bounded disposable PostgreSQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_fixture=sdk-persistence-proof
+          sdk_tls="$RUNNER_TEMP/sdk-persistence-tls"
+          mkdir -m 700 "$sdk_tls"
+          docker run --detach --name "$sdk_fixture" --cpus 2 --memory 1g --pids-limit 256 \
+            --publish 127.0.0.1::5432 --env POSTGRES_HOST_AUTH_METHOD=trust \
+            postgres@sha256:ef257d85f76e48da1c64832459b59fcaba1a4dac97bf5d7450c77753542eee94
+          for attempt in $(seq 1 100); do
+            if docker exec "$sdk_fixture" pg_isready -U postgres; then break; fi
+            test "$attempt" -lt 100
+            sleep 0.1
+          done
+          openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '/CN=SDK Disposable Test CA' \
+            -keyout "$sdk_tls/ca.key" -out "$sdk_tls/ca.crt"
+          openssl req -newkey rsa:2048 -nodes -subj '/CN=localhost' \
+            -keyout "$sdk_tls/server.key" -out "$sdk_tls/server.csr"
+          printf '%s\n' 'subjectAltName=DNS:localhost,IP:127.0.0.1' 'extendedKeyUsage=serverAuth' > "$sdk_tls/server.ext"
+          openssl x509 -req -in "$sdk_tls/server.csr" -CA "$sdk_tls/ca.crt" -CAkey "$sdk_tls/ca.key" \
+            -CAcreateserial -days 2 -extfile "$sdk_tls/server.ext" -out "$sdk_tls/server.crt"
+          chmod 600 "$sdk_tls/ca.key" "$sdk_tls/server.key"
+          docker exec "$sdk_fixture" mkdir -p /var/lib/postgresql/test-tls
+          docker cp "$sdk_tls/server.crt" "$sdk_fixture:/var/lib/postgresql/test-tls/server.crt"
+          docker cp "$sdk_tls/server.key" "$sdk_fixture:/var/lib/postgresql/test-tls/server.key"
+          docker exec "$sdk_fixture" chown postgres:postgres /var/lib/postgresql/test-tls/server.crt /var/lib/postgresql/test-tls/server.key
+          docker exec "$sdk_fixture" chmod 600 /var/lib/postgresql/test-tls/server.key
+          docker exec "$sdk_fixture" psql -U postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET ssl_cert_file='/var/lib/postgresql/test-tls/server.crt'"
+          docker exec "$sdk_fixture" psql -U postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET ssl_key_file='/var/lib/postgresql/test-tls/server.key'"
+          docker exec "$sdk_fixture" psql -U postgres -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET ssl=on"
+          docker exec "$sdk_fixture" psql -U postgres -v ON_ERROR_STOP=1 -c 'SELECT pg_reload_conf()'
+          docker exec "$sdk_fixture" psql -U postgres -v ON_ERROR_STOP=1 -c 'CREATE ROLE eventlog_test_application LOGIN CONNECTION LIMIT 4'
+          sdk_port=$(docker port "$sdk_fixture" 5432/tcp)
+          echo "EVENTLOG_TEST_HOSTED_POSTGRES_URL=postgresql://eventlog_test_application@$sdk_port/postgres" >> "$GITHUB_ENV"
+          echo "EVENTLOG_TEST_POSTGRES_MIGRATION_URL=postgresql://postgres@$sdk_port/postgres" >> "$GITHUB_ENV"
+          echo "EVENTLOG_TEST_POSTGRES_CA=$sdk_tls/ca.crt" >> "$GITHUB_ENV"
+          echo "EVENTLOG_TEST_POSTGRES_CONTAINER=$sdk_fixture" >> "$GITHUB_ENV"
+          available=$(df --output=avail -B1 . | tail -n 1)
+          test "$available" -ge 10737418240
+
+      - name: Run the complete repository gate
+        shell: bash
+        run: |
+          mkdir -p target
+          set +e
+          task --concurrency 1 check > target/sdk-gate.stdout 2> target/sdk-gate.stderr
+          status=$?
+          echo "$status" > target/sdk-gate.status
+          cat target/sdk-gate.stdout
+          cat target/sdk-gate.stderr >&2
+          exit "$status"
+
+      - name: Preserve complete proof evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sdk-persistence-proof
+          path: |
+            target/sdk-persistence-proof/
+            target/sdk-gate.stdout
+            target/sdk-gate.stderr
+            target/sdk-gate.status
+          if-no-files-found: error
+
+      - name: Stop disposable PostgreSQL
+        if: always()
+        shell: bash
+        run: docker rm --force --volumes sdk-persistence-proof

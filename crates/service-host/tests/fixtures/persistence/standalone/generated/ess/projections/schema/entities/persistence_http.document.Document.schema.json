@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document",
+  "x-ess-name": "persistence_http.document.Document",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/persistence_http.document.Id"
+    },
+    "revision": {
+      "$ref": "#/$defs/persistence_http.document.Id"
+    },
+    "owner": {
+      "$ref": "#/$defs/persistence_http.document.Owner"
+    },
+    "scopes": {
+      "$ref": "#/$defs/persistence_http.document.Scopes"
+    },
+    "content_ref": {
+      "$ref": "#/$defs/persistence_http.document.ContentRef"
+    },
+    "state": {
+      "$ref": "#/$defs/persistence_http.document.Document.State"
+    }
+  },
+  "required": [
+    "id",
+    "revision",
+    "owner",
+    "scopes",
+    "content_ref",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "0528745a9a01b2a8dc583fa1de2f708aae6fb678354318014f7c493b5b8f0bd9",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_http.document.ContentRef": {
+      "title": "ContentRef",
+      "x-ess-name": "persistence_http.document.ContentRef",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "persistence_http.document.Document.State": {
+      "title": "State",
+      "x-ess-name": "persistence_http.document.Document.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Closed",
+        "Open"
+      ]
+    },
+    "persistence_http.document.Id": {
+      "title": "Id",
+      "x-ess-name": "persistence_http.document.Id",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "persistence_http.document.Owner": {
+      "title": "Owner",
+      "x-ess-name": "persistence_http.document.Owner",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "persistence_http.document.Scopes": {
+      "title": "Scopes",
+      "x-ess-name": "persistence_http.document.Scopes",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

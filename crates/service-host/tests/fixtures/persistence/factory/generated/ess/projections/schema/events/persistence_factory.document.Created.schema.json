@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Created payload",
+  "x-ess-name": "persistence_factory.document.Created",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/persistence_factory.document.Id"
+    },
+    "revision": {
+      "$ref": "#/$defs/persistence_factory.document.Id"
+    },
+    "owner": {
+      "$ref": "#/$defs/persistence_factory.document.Owner"
+    },
+    "scopes": {
+      "$ref": "#/$defs/persistence_factory.document.Scopes"
+    },
+    "content_ref": {
+      "$ref": "#/$defs/persistence_factory.document.ContentRef"
+    }
+  },
+  "required": [
+    "id",
+    "revision",
+    "owner",
+    "scopes",
+    "content_ref"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "persistence_factory",
+    "specification_version": "v1",
+    "source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+    "contract_digest": "9d885dee302d21d9eaa19b9bf4fcf5b232a9a36d233d758173884e1dc608249a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_factory.document.ContentRef": {
+      "title": "ContentRef",
+      "x-ess-name": "persistence_factory.document.ContentRef",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "persistence_factory.document.Id": {
+      "title": "Id",
+      "x-ess-name": "persistence_factory.document.Id",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "persistence_factory.document.Owner": {
+      "title": "Owner",
+      "x-ess-name": "persistence_factory.document.Owner",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "persistence_factory.document.Scopes": {
+      "title": "Scopes",
+      "x-ess-name": "persistence_factory.document.Scopes",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

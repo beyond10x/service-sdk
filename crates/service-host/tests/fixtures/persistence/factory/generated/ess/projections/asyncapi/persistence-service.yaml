@@ -1,0 +1,178 @@
+# generated from persistence_factory v1
+# model digest 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+# contract digest f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+# do not edit: regenerate with `ess generate`
+asyncapi: 3.0.0
+info:
+  title: persistence-service
+  version: v1
+  description: |-
+    `persistence-service` in the `persistence_factory` specification.
+
+    SDK-owned persistence proof documents.
+
+    The specification declares no transport, so each address below is a name and not a topic on a named broker. Servers, protocol bindings, security schemes, message keys, partitioning, retention and ordering are absent because the model does not state them.
+  x-ess-component: persistence-service
+  x-ess-provenance:
+    system: persistence_factory
+    specification_version: v1
+    source_digest: 1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82
+    contract_digest: f3b5b5d5075512462423220ec9c230c5793eabfecc667bbd217c36dd2b244a25
+defaultContentType: application/json
+channels:
+  persistence_factory.document.Closed:
+    address: persistence_factory.document.Closed
+    title: Closed
+    messages:
+      persistence_factory.document.Closed:
+        $ref: '#/components/messages/persistence_factory.document.Closed'
+    x-ess-event: persistence_factory.document.Closed
+    x-ess-address-source: qualified-name
+  persistence_factory.document.Created:
+    address: persistence_factory.document.Created
+    title: Created
+    messages:
+      persistence_factory.document.Created:
+        $ref: '#/components/messages/persistence_factory.document.Created'
+    x-ess-event: persistence_factory.document.Created
+    x-ess-address-source: qualified-name
+  persistence_factory.document.Revised:
+    address: persistence_factory.document.Revised
+    title: Revised
+    messages:
+      persistence_factory.document.Revised:
+        $ref: '#/components/messages/persistence_factory.document.Revised'
+    x-ess-event: persistence_factory.document.Revised
+    x-ess-address-source: qualified-name
+operations:
+  send.persistence_factory.document.Closed:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_factory.document.Closed'
+    title: Publish Closed
+    summary: Publishes `persistence_factory.document.Closed`.
+    description: |-
+      Nothing in this specification reacts to `persistence_factory.document.Closed`.
+      `persistence_factory.document.Close` emits it on `closed`, which moves a `persistence_factory.document.Document` to `Closed` along `close`.
+    messages:
+    - $ref: '#/channels/persistence_factory.document.Closed/messages/persistence_factory.document.Closed'
+  send.persistence_factory.document.Created:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_factory.document.Created'
+    title: Publish Created
+    summary: Publishes `persistence_factory.document.Created`.
+    description: |-
+      Nothing in this specification reacts to `persistence_factory.document.Created`.
+      `persistence_factory.document.Create` emits it on `created`, which creates a `persistence_factory.document.Document` in `Open`. It carries the new instance's identity in `id`.
+    messages:
+    - $ref: '#/channels/persistence_factory.document.Created/messages/persistence_factory.document.Created'
+  send.persistence_factory.document.Revised:
+    action: send
+    channel:
+      $ref: '#/channels/persistence_factory.document.Revised'
+    title: Publish Revised
+    summary: Publishes `persistence_factory.document.Revised`.
+    description: |-
+      Nothing in this specification reacts to `persistence_factory.document.Revised`.
+      `persistence_factory.document.Revise` emits it on `revised`, which changes a `persistence_factory.document.Document` without moving it.
+    messages:
+    - $ref: '#/channels/persistence_factory.document.Revised/messages/persistence_factory.document.Revised'
+components:
+  messages:
+    persistence_factory.document.Closed:
+      name: persistence_factory.document.Closed
+      title: Closed
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_factory.document.Closed'
+    persistence_factory.document.Created:
+      name: persistence_factory.document.Created
+      title: Created
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_factory.document.Created'
+    persistence_factory.document.Revised:
+      name: persistence_factory.document.Revised
+      title: Revised
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/event.persistence_factory.document.Revised'
+  schemas:
+    event.persistence_factory.document.Closed:
+      title: Closed payload
+      x-ess-name: persistence_factory.document.Closed
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+      required:
+      - id
+      - revision
+      additionalProperties: false
+    event.persistence_factory.document.Created:
+      title: Created payload
+      x-ess-name: persistence_factory.document.Created
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+        owner:
+          $ref: '#/components/schemas/type.persistence_factory.document.Owner'
+        scopes:
+          $ref: '#/components/schemas/type.persistence_factory.document.Scopes'
+        content_ref:
+          $ref: '#/components/schemas/type.persistence_factory.document.ContentRef'
+      required:
+      - id
+      - revision
+      - owner
+      - scopes
+      - content_ref
+      additionalProperties: false
+    event.persistence_factory.document.Revised:
+      title: Revised payload
+      x-ess-name: persistence_factory.document.Revised
+      x-ess-kind: event-payload
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+        revision:
+          $ref: '#/components/schemas/type.persistence_factory.document.Id'
+      required:
+      - id
+      - revision
+      additionalProperties: false
+    type.persistence_factory.document.ContentRef:
+      title: ContentRef
+      x-ess-name: persistence_factory.document.ContentRef
+      x-ess-kind: newtype
+      type: string
+    type.persistence_factory.document.Id:
+      title: Id
+      x-ess-name: persistence_factory.document.Id
+      x-ess-kind: newtype
+      type: string
+      format: uuid
+      pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+    type.persistence_factory.document.Owner:
+      title: Owner
+      x-ess-name: persistence_factory.document.Owner
+      x-ess-kind: newtype
+      type: string
+    type.persistence_factory.document.Scopes:
+      title: Scopes
+      x-ess-name: persistence_factory.document.Scopes
+      x-ess-kind: struct
+      type: object
+      properties:
+        team:
+          type: string
+      additionalProperties: false

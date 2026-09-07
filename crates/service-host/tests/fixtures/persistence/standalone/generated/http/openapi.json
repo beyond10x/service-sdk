@@ -1,0 +1,691 @@
+{
+  "components": {
+    "schemas": {
+      "MutationReceipt": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "through_version": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "outcome",
+          "events",
+          "through_version",
+          "replayed"
+        ],
+        "type": "object"
+      },
+      "Problem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "status",
+          "detail"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "identityBearer": {
+        "bearerFormat": "opaque",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "persistence_http generated service",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "204": {
+            "description": "healthy"
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "responses": {
+          "204": {
+            "description": "ready"
+          }
+        }
+      }
+    },
+    "/v1/intents/close": {
+      "post": {
+        "operationId": "close",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {},
+                  "key": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "key",
+                  "version"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReceipt"
+                }
+              }
+            },
+            "description": "accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid input"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service invariant refused the operation"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service unavailable"
+          }
+        },
+        "security": [
+          {
+            "identityBearer": [
+              "documents.manage"
+            ]
+          }
+        ],
+        "x-b10x-scope": "documents.manage",
+        "x-b10x-semantic-ref": "persistence_http.document.Close"
+      }
+    },
+    "/v1/intents/create": {
+      "post": {
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "content": {},
+                  "key": {
+                    "type": "string"
+                  },
+                  "scopes": {}
+                },
+                "required": [
+                  "content",
+                  "key",
+                  "scopes"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReceipt"
+                }
+              }
+            },
+            "description": "accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid input"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service invariant refused the operation"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service unavailable"
+          }
+        },
+        "security": [
+          {
+            "identityBearer": [
+              "documents.manage"
+            ]
+          }
+        ],
+        "x-b10x-scope": "documents.manage",
+        "x-b10x-semantic-ref": "persistence_http.document.Create"
+      }
+    },
+    "/v1/intents/revise": {
+      "post": {
+        "operationId": "revise",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "id": {},
+                  "key": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "id",
+                  "key",
+                  "version"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MutationReceipt"
+                }
+              }
+            },
+            "description": "accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid input"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service invariant refused the operation"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service unavailable"
+          }
+        },
+        "security": [
+          {
+            "identityBearer": [
+              "documents.manage"
+            ]
+          }
+        ],
+        "x-b10x-scope": "documents.manage",
+        "x-b10x-semantic-ref": "persistence_http.document.Revise"
+      }
+    },
+    "/v1/queries/get": {
+      "post": {
+        "operationId": "get",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "$page": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cursor": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "limit"
+                    ],
+                    "type": "object"
+                  },
+                  "id": {}
+                },
+                "required": [
+                  "id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "content_ref": {},
+                          "id": {},
+                          "owner": {},
+                          "revision": {},
+                          "scopes": {}
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "partial": {
+                      "type": "boolean"
+                    },
+                    "through_version": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "through_version",
+                    "next_cursor",
+                    "partial"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid input"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service invariant refused the operation"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service unavailable"
+          }
+        },
+        "security": [
+          {
+            "identityBearer": [
+              "documents.read"
+            ]
+          }
+        ],
+        "x-b10x-scope": "documents.read",
+        "x-b10x-semantic-ref": "persistence_http.document.ById"
+      }
+    },
+    "/v1/queries/list": {
+      "post": {
+        "operationId": "list",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "$page": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "cursor": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "limit": {
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "limit"
+                    ],
+                    "type": "object"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "items": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "content_ref": {},
+                          "id": {},
+                          "owner": {},
+                          "revision": {},
+                          "scopes": {}
+                        },
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "next_cursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "partial": {
+                      "type": "boolean"
+                    },
+                    "through_version": {
+                      "minimum": 0,
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "through_version",
+                    "next_cursor",
+                    "partial"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "accepted"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid input"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service invariant refused the operation"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "service unavailable"
+          }
+        },
+        "security": [
+          {
+            "identityBearer": [
+              "documents.read"
+            ]
+          }
+        ],
+        "x-b10x-scope": "documents.read",
+        "x-b10x-semantic-ref": "persistence_http.document.ById"
+      }
+    }
+  },
+  "x-b10x-audience": "urn:b10x:persistence-proof"
+}

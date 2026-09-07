@@ -1,0 +1,99 @@
+format: ess/1
+system: persistence_factory
+version: v1
+domains: [persistence_factory.document]
+domain: persistence_factory.document
+types:
+  - { name: persistence_factory.document.Id, kind: newtype, of: Uuid }
+  - { name: persistence_factory.document.ContentRef, kind: newtype, of: String }
+  - { name: persistence_factory.document.Owner, kind: newtype, of: String }
+  - name: persistence_factory.document.Scopes
+    kind: struct
+    fields:
+      - { name: team, type: Optional<String> }
+  - name: persistence_factory.document.Row
+    kind: struct
+    fields:
+      - { name: id, type: persistence_factory.document.Id }
+      - { name: revision, type: persistence_factory.document.Id }
+      - { name: owner, type: persistence_factory.document.Owner }
+      - { name: scopes, type: persistence_factory.document.Scopes }
+      - { name: content_ref, type: persistence_factory.document.ContentRef }
+entities:
+  - name: persistence_factory.document.Document
+    identity: { name: id, type: persistence_factory.document.Id }
+    fields:
+      - { name: revision, type: persistence_factory.document.Id }
+      - { name: owner, type: persistence_factory.document.Owner }
+      - { name: scopes, type: persistence_factory.document.Scopes }
+      - { name: content_ref, type: persistence_factory.document.ContentRef }
+    lifecycle:
+      initial: Open
+      states: [Open, Closed]
+      terminal: [Closed]
+      transitions:
+        - { name: close, from: [Open], to: Closed }
+commands:
+  - name: persistence_factory.document.Create
+    input:
+      - { name: content_ref, type: persistence_factory.document.ContentRef }
+      - { name: scopes, type: persistence_factory.document.Scopes }
+    outcomes:
+      - name: created
+        creates: persistence_factory.document.Document
+        instance: id
+        emits: [persistence_factory.document.Created]
+        payload:
+          persistence_factory.document.Created:
+            content_ref: input.content_ref
+            scopes: input.scopes
+  - name: persistence_factory.document.Revise
+    input:
+      - { name: id, type: persistence_factory.document.Id }
+    outcomes:
+      - name: revised
+        updates: persistence_factory.document.Document
+        instance: id
+        emits: [persistence_factory.document.Revised]
+        payload:
+          persistence_factory.document.Revised:
+            id: input.id
+  - name: persistence_factory.document.Close
+    input:
+      - { name: id, type: persistence_factory.document.Id }
+    outcomes:
+      - name: closed
+        moves: persistence_factory.document.Document.close
+        instance: id
+        emits: [persistence_factory.document.Closed]
+        payload:
+          persistence_factory.document.Closed:
+            id: input.id
+events:
+  - name: persistence_factory.document.Created
+    fields:
+      - { name: id, type: persistence_factory.document.Id }
+      - { name: revision, type: persistence_factory.document.Id }
+      - { name: owner, type: persistence_factory.document.Owner }
+      - { name: scopes, type: persistence_factory.document.Scopes }
+      - { name: content_ref, type: persistence_factory.document.ContentRef }
+  - name: persistence_factory.document.Revised
+    fields:
+      - { name: id, type: persistence_factory.document.Id }
+      - { name: revision, type: persistence_factory.document.Id }
+  - name: persistence_factory.document.Closed
+    fields:
+      - { name: id, type: persistence_factory.document.Id }
+      - { name: revision, type: persistence_factory.document.Id }
+views:
+  - name: persistence_factory.document.ById
+    source: persistence_factory.document.Document
+    shape: persistence_factory.document.Row
+    consistency: read_your_writes
+components:
+  - component: persistence-service
+    summary: SDK-owned persistence proof documents.
+    owns: { domains: [persistence_factory.document] }
+    accepts: { commands: [persistence_factory.document.Create, persistence_factory.document.Revise, persistence_factory.document.Close] }
+    publishes: { events: [persistence_factory.document.Created, persistence_factory.document.Revised, persistence_factory.document.Closed] }
+    reached_by: network

@@ -1,0 +1,511 @@
+{
+  "format": "service-runtime-ir/3",
+  "ess": {
+    "system": "persistence_http",
+    "version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46"
+  },
+  "synthesis": {
+    "profile": "component-skeletons",
+    "digest": "c19c08abbc5ceeb9f084b48a78b9418e3bb9c05d87936ac521b5ad551d6eff53",
+    "capabilities": 20
+  },
+  "obligation_catalog": {
+    "digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+    "providers": [
+      "sdk.aggregate.event-sourced/v1",
+      "sdk.auth.owner-and-conjunctive-scopes/v1",
+      "sdk.auth.requested-scopes/v1",
+      "sdk.content.external-erasable/v1",
+      "sdk.lifecycle.require-state/v1",
+      "sdk.projection.auth-partitioned-visibility/v1"
+    ]
+  },
+  "admission": [
+    "verify_credential",
+    "enforce_realm_policy",
+    "decode_operation",
+    "bind_and_dispatch"
+  ],
+  "definition": {
+    "format": "service-definition/3",
+    "service": "persistence_http",
+    "delivery": {
+      "kind": "identity_http",
+      "audience": "urn:b10x:persistence-proof"
+    },
+    "realm": "optional",
+    "intents": [
+      {
+        "name": "create",
+        "scope": "documents.manage",
+        "command": "persistence_http.document.Create",
+        "stream_id": {
+          "kind": "generated_uuid_v7"
+        },
+        "expected_version": {
+          "kind": "no_stream"
+        },
+        "idempotency": {
+          "kind": "operation_field",
+          "field": "key"
+        },
+        "guards": [],
+        "content": [
+          {
+            "content": "body",
+            "input_field": "content",
+            "command_reference_field": "content_ref"
+          }
+        ],
+        "event_bindings": [
+          {
+            "event": "persistence_http.document.Created",
+            "field": "id",
+            "source": {
+              "kind": "stream_id"
+            }
+          },
+          {
+            "event": "persistence_http.document.Created",
+            "field": "revision",
+            "source": {
+              "kind": "generated_uuid_v7"
+            }
+          },
+          {
+            "event": "persistence_http.document.Created",
+            "field": "owner",
+            "source": {
+              "kind": "context",
+              "value": "current_authority"
+            }
+          }
+        ],
+        "projections": [
+          "documents"
+        ],
+        "obligations": [
+          "aggregate",
+          "requested",
+          "content"
+        ]
+      },
+      {
+        "name": "revise",
+        "scope": "documents.manage",
+        "command": "persistence_http.document.Revise",
+        "stream_id": {
+          "kind": "command_field",
+          "field": "id"
+        },
+        "expected_version": {
+          "kind": "operation_field",
+          "field": "version"
+        },
+        "idempotency": {
+          "kind": "operation_field",
+          "field": "key"
+        },
+        "guards": [],
+        "content": [],
+        "event_bindings": [
+          {
+            "event": "persistence_http.document.Revised",
+            "field": "revision",
+            "source": {
+              "kind": "generated_uuid_v7"
+            }
+          }
+        ],
+        "projections": [
+          "documents"
+        ],
+        "obligations": [
+          "aggregate",
+          "owner",
+          "open"
+        ]
+      },
+      {
+        "name": "close",
+        "scope": "documents.manage",
+        "command": "persistence_http.document.Close",
+        "stream_id": {
+          "kind": "command_field",
+          "field": "id"
+        },
+        "expected_version": {
+          "kind": "operation_field",
+          "field": "version"
+        },
+        "idempotency": {
+          "kind": "operation_field",
+          "field": "key"
+        },
+        "guards": [],
+        "content": [],
+        "event_bindings": [
+          {
+            "event": "persistence_http.document.Closed",
+            "field": "revision",
+            "source": {
+              "kind": "generated_uuid_v7"
+            }
+          }
+        ],
+        "projections": [
+          "documents"
+        ],
+        "obligations": [
+          "aggregate",
+          "owner",
+          "open"
+        ]
+      }
+    ],
+    "projections": [
+      {
+        "name": "documents",
+        "view": "persistence_http.document.ById",
+        "delivery": "inline_transactional",
+        "obligations": [
+          "visibility"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "name": "list",
+        "scope": "documents.read",
+        "view": "persistence_http.document.ById",
+        "projection": "documents",
+        "selectors": [],
+        "guards": [],
+        "sort": [
+          {
+            "view_field": "id",
+            "direction": "ascending"
+          }
+        ],
+        "delivery": "read_your_writes",
+        "obligations": [
+          "visibility"
+        ]
+      },
+      {
+        "name": "get",
+        "scope": "documents.read",
+        "view": "persistence_http.document.ById",
+        "projection": "documents",
+        "selectors": [
+          {
+            "parameter": "id",
+            "view_field": "id"
+          }
+        ],
+        "guards": [],
+        "sort": [
+          {
+            "view_field": "id",
+            "direction": "ascending"
+          }
+        ],
+        "delivery": "read_your_writes",
+        "obligations": [
+          "visibility"
+        ]
+      }
+    ],
+    "content": [
+      {
+        "name": "body",
+        "reference_type": "persistence_http.document.ContentRef",
+        "media_types": [
+          "text/plain"
+        ],
+        "max_bytes": 4096,
+        "custody": "external_erasable"
+      }
+    ],
+    "obligations": [
+      {
+        "name": "aggregate",
+        "provider": "sdk.aggregate.event-sourced/v1",
+        "bindings": {
+          "aggregate": "persistence_http.document.Document",
+          "identity": "id"
+        },
+        "description": "Guard one document stream."
+      },
+      {
+        "name": "requested",
+        "provider": "sdk.auth.requested-scopes/v1",
+        "bindings": {
+          "scopes": "scopes"
+        },
+        "description": "Recheck the requested team."
+      },
+      {
+        "name": "owner",
+        "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+        "bindings": {
+          "owner": "persistence_http.document.Document.owner",
+          "scopes": "persistence_http.document.Document.scopes"
+        },
+        "description": "Require current owner and team."
+      },
+      {
+        "name": "open",
+        "provider": "sdk.lifecycle.require-state/v1",
+        "bindings": {
+          "allowed": "Open",
+          "entity": "persistence_http.document.Document"
+        },
+        "description": "Only open documents accept new mutations."
+      },
+      {
+        "name": "content",
+        "provider": "sdk.content.external-erasable/v1",
+        "bindings": {
+          "content": "body"
+        },
+        "description": "Retain content separately from events."
+      },
+      {
+        "name": "visibility",
+        "provider": "sdk.projection.auth-partitioned-visibility/v1",
+        "bindings": {
+          "owner": "owner",
+          "scopes": "scopes"
+        },
+        "description": "Filter by verified owner and team."
+      }
+    ]
+  },
+  "obligations": {
+    "aggregate": {
+      "name": "aggregate",
+      "provider": "sdk.aggregate.event-sourced/v1",
+      "bindings": {
+        "aggregate": "persistence_http.document.Document",
+        "identity": "id"
+      }
+    },
+    "content": {
+      "name": "content",
+      "provider": "sdk.content.external-erasable/v1",
+      "bindings": {
+        "content": "body"
+      }
+    },
+    "open": {
+      "name": "open",
+      "provider": "sdk.lifecycle.require-state/v1",
+      "bindings": {
+        "allowed": "Open",
+        "entity": "persistence_http.document.Document"
+      }
+    },
+    "owner": {
+      "name": "owner",
+      "provider": "sdk.auth.owner-and-conjunctive-scopes/v1",
+      "bindings": {
+        "owner": "persistence_http.document.Document.owner",
+        "scopes": "persistence_http.document.Document.scopes"
+      }
+    },
+    "requested": {
+      "name": "requested",
+      "provider": "sdk.auth.requested-scopes/v1",
+      "bindings": {
+        "scopes": "scopes"
+      }
+    },
+    "visibility": {
+      "name": "visibility",
+      "provider": "sdk.projection.auth-partitioned-visibility/v1",
+      "bindings": {
+        "owner": "owner",
+        "scopes": "scopes"
+      }
+    }
+  },
+  "intents": {
+    "close": {
+      "command": "persistence_http.document.Close",
+      "input_fields": {
+        "id": "persistence_http.document.Id"
+      },
+      "emitted_events": [
+        "persistence_http.document.Closed"
+      ],
+      "contract": {
+        "disposition": "generated"
+      },
+      "behavior": {
+        "disposition": "obligation",
+        "reason": "the contract is declared; the algorithm is not",
+        "contract": "given `persistence_http.document.Close` input, decide and enact exactly one outcome — `closed` otherwise, takes `close` of `persistence_http.document.Document`, emits `persistence_http.document.Closed`"
+      },
+      "pipeline": [
+        "resolve_idempotency",
+        "resolve_stream",
+        "load",
+        "fold",
+        "guards",
+        "stage_content",
+        "construct_command",
+        "validate",
+        "decide",
+        "guarded_append",
+        "reduce",
+        "project",
+        "accept_content"
+      ]
+    },
+    "create": {
+      "command": "persistence_http.document.Create",
+      "input_fields": {
+        "content_ref": "persistence_http.document.ContentRef",
+        "scopes": "persistence_http.document.Scopes"
+      },
+      "emitted_events": [
+        "persistence_http.document.Created"
+      ],
+      "contract": {
+        "disposition": "generated"
+      },
+      "behavior": {
+        "disposition": "obligation",
+        "reason": "the contract is declared; the algorithm is not",
+        "contract": "given `persistence_http.document.Create` input, decide and enact exactly one outcome — `created` otherwise, creates `persistence_http.document.Document`, emits `persistence_http.document.Created`"
+      },
+      "pipeline": [
+        "resolve_idempotency",
+        "resolve_stream",
+        "load",
+        "fold",
+        "guards",
+        "stage_content",
+        "construct_command",
+        "validate",
+        "decide",
+        "guarded_append",
+        "reduce",
+        "project",
+        "accept_content"
+      ]
+    },
+    "revise": {
+      "command": "persistence_http.document.Revise",
+      "input_fields": {
+        "id": "persistence_http.document.Id"
+      },
+      "emitted_events": [
+        "persistence_http.document.Revised"
+      ],
+      "contract": {
+        "disposition": "generated"
+      },
+      "behavior": {
+        "disposition": "obligation",
+        "reason": "the contract is declared; the algorithm is not",
+        "contract": "given `persistence_http.document.Revise` input, decide and enact exactly one outcome — `revised` otherwise, updates `persistence_http.document.Document`, emits `persistence_http.document.Revised`"
+      },
+      "pipeline": [
+        "resolve_idempotency",
+        "resolve_stream",
+        "load",
+        "fold",
+        "guards",
+        "stage_content",
+        "construct_command",
+        "validate",
+        "decide",
+        "guarded_append",
+        "reduce",
+        "project",
+        "accept_content"
+      ]
+    }
+  },
+  "projections": {
+    "documents": {
+      "view": "persistence_http.document.ById",
+      "shape": "persistence_http.document.Row",
+      "fields": {
+        "content_ref": "persistence_http.document.ContentRef",
+        "id": "persistence_http.document.Id",
+        "owner": "persistence_http.document.Owner",
+        "revision": "persistence_http.document.Id",
+        "scopes": "persistence_http.document.Scopes"
+      },
+      "consistency": "read_your_writes",
+      "view_type": {
+        "disposition": "generated"
+      },
+      "view_query": {
+        "disposition": "obligation",
+        "reason": "how the projection is kept current is a storage decision",
+        "contract": "a query answering `persistence_http.document.ById` with rows projected from `persistence_http.document.Document` at `read_your_writes` consistency"
+      }
+    }
+  },
+  "queries": {
+    "get": {
+      "view": "persistence_http.document.ById",
+      "projection": "documents",
+      "fields": {
+        "content_ref": "persistence_http.document.ContentRef",
+        "id": "persistence_http.document.Id",
+        "owner": "persistence_http.document.Owner",
+        "revision": "persistence_http.document.Id",
+        "scopes": "persistence_http.document.Scopes"
+      },
+      "view_type": {
+        "disposition": "generated"
+      },
+      "view_query": {
+        "disposition": "obligation",
+        "reason": "how the projection is kept current is a storage decision",
+        "contract": "a query answering `persistence_http.document.ById` with rows projected from `persistence_http.document.Document` at `read_your_writes` consistency"
+      },
+      "pipeline": [
+        "guards",
+        "bind_selectors",
+        "read_projection"
+      ]
+    },
+    "list": {
+      "view": "persistence_http.document.ById",
+      "projection": "documents",
+      "fields": {
+        "content_ref": "persistence_http.document.ContentRef",
+        "id": "persistence_http.document.Id",
+        "owner": "persistence_http.document.Owner",
+        "revision": "persistence_http.document.Id",
+        "scopes": "persistence_http.document.Scopes"
+      },
+      "view_type": {
+        "disposition": "generated"
+      },
+      "view_query": {
+        "disposition": "obligation",
+        "reason": "how the projection is kept current is a storage decision",
+        "contract": "a query answering `persistence_http.document.ById` with rows projected from `persistence_http.document.Document` at `read_your_writes` consistency"
+      },
+      "pipeline": [
+        "guards",
+        "bind_selectors",
+        "read_projection"
+      ]
+    }
+  },
+  "content": {
+    "body": {
+      "reference_type": "persistence_http.document.ContentRef",
+      "representation": "String"
+    }
+  }
+}

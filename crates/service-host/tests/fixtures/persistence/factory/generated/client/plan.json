@@ -1,0 +1,181 @@
+{
+  "format": "service-client-plan/2",
+  "service": "persistence_factory",
+  "delivery": {
+    "kind": "composed_connector"
+  },
+  "ess_source_digest": "1f61c237f551ba7dd92f1e22a17ff302e51a365f030c9f9d37a2537432687e82",
+  "realm_policy": "optional",
+  "authentication": "session",
+  "operations": [
+    {
+      "operation": "close",
+      "scope": "documents.manage",
+      "semantic_ref": "persistence_factory.document.Close",
+      "kind": "intent",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "result": {
+        "kind": "intent",
+        "emitted_events": [
+          "persistence_factory.document.Closed"
+        ]
+      }
+    },
+    {
+      "operation": "create",
+      "scope": "documents.manage",
+      "semantic_ref": "persistence_factory.document.Create",
+      "kind": "intent",
+      "inputs": [
+        {
+          "name": "content",
+          "type_ref": "Bytes",
+          "optional": false,
+          "source": {
+            "kind": "content",
+            "policy": "body"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "scopes",
+          "type_ref": "persistence_factory.document.Scopes",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        }
+      ],
+      "result": {
+        "kind": "intent",
+        "emitted_events": [
+          "persistence_factory.document.Created"
+        ]
+      }
+    },
+    {
+      "operation": "get",
+      "scope": "documents.read",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "selector",
+            "view_field": "id"
+          }
+        }
+      ],
+      "result": {
+        "kind": "query",
+        "fields": {
+          "content_ref": "persistence_factory.document.ContentRef",
+          "id": "persistence_factory.document.Id",
+          "owner": "persistence_factory.document.Owner",
+          "revision": "persistence_factory.document.Id",
+          "scopes": "persistence_factory.document.Scopes"
+        }
+      },
+      "pagination": {
+        "envelope": "$page",
+        "maximum_limit": 1000,
+        "opaque_cursor": true
+      }
+    },
+    {
+      "operation": "list",
+      "scope": "documents.read",
+      "semantic_ref": "persistence_factory.document.ById",
+      "kind": "query",
+      "inputs": [],
+      "result": {
+        "kind": "query",
+        "fields": {
+          "content_ref": "persistence_factory.document.ContentRef",
+          "id": "persistence_factory.document.Id",
+          "owner": "persistence_factory.document.Owner",
+          "revision": "persistence_factory.document.Id",
+          "scopes": "persistence_factory.document.Scopes"
+        }
+      },
+      "pagination": {
+        "envelope": "$page",
+        "maximum_limit": 1000,
+        "opaque_cursor": true
+      }
+    },
+    {
+      "operation": "revise",
+      "scope": "documents.manage",
+      "semantic_ref": "persistence_factory.document.Revise",
+      "kind": "intent",
+      "inputs": [
+        {
+          "name": "id",
+          "type_ref": "persistence_factory.document.Id",
+          "optional": false,
+          "source": {
+            "kind": "command"
+          }
+        },
+        {
+          "name": "key",
+          "type_ref": "String",
+          "optional": false,
+          "source": {
+            "kind": "idempotency"
+          }
+        },
+        {
+          "name": "version",
+          "type_ref": "Integer",
+          "optional": false,
+          "source": {
+            "kind": "expected_version"
+          }
+        }
+      ],
+      "result": {
+        "kind": "intent",
+        "emitted_events": [
+          "persistence_factory.document.Revised"
+        ]
+      }
+    }
+  ]
+}

@@ -17,9 +17,9 @@ use serde_json::Value;
 use service_engine::{
     AppendDisposition, AppendExpectation, AppendReceipt, AppendRequest, AuthorityCheck,
     AuthorityEvaluator, BoxFuture, Clock, ContentPayload, ContentStore, DomainEvent, EventStore,
-    IdGenerator, IntentResult, LoadedStream, ProjectionRead, ProjectionRow, ProjectionState,
-    ProjectionStore, ProjectionWrite, RequestMetadata, ResourceError, ServiceEngine,
-    ServiceResources, ServiceStream, StagedContent, StoredEvent,
+    IdGenerator, IntentClaimRequest, IntentResult, LoadedStream, ProjectionRead, ProjectionRow,
+    ProjectionState, ProjectionStore, ProjectionWrite, RecordedIntent, RequestMetadata,
+    ResourceError, ServiceEngine, ServiceResources, ServiceStream, StagedContent, StoredEvent,
 };
 use service_runtime::VerifiedAuthContext;
 use service_runtime::{
@@ -198,6 +198,21 @@ impl std::fmt::Debug for EventlogService {
 }
 
 impl EventlogService {
+    /// Declares the unchanged generated projection names for an exact host roster.
+    pub fn projection_declaration(service: &str) -> (&'static str, &'static [ProjectionSpec]) {
+        let layout = ProjectionLayout::for_service(service);
+        (layout.projector_name, layout.specs())
+    }
+
+    /// Performs a real bounded backend read without minting a tenant or a feed identity.
+    pub async fn readiness(&self) -> Result<(), EventLogError> {
+        let probe = StreamId::new(
+            TenantId::new("sdk-host-probe")?,
+            "sdk-host-probe",
+            "readiness",
+        )?;
+        self.store.stream_version(&probe).await.map(|_| ())
+    }
     /// Exact generated plan executed by this initialized service.
     #[must_use]
     pub fn plan(&self) -> &service_engine::ServicePlan {
@@ -241,7 +256,7 @@ impl EventlogService {
         operation: &str,
         body: &[u8],
     ) -> Result<IntentResult, service_engine::ExecutionError> {
-        let mut events = EventlogEvents::new(Arc::clone(&self.store));
+        let mut events = EventlogEvents::new(Arc::clone(&self.store), self.projection);
         let mut projections = EventlogProjections::new(
             Arc::clone(&self.store),
             self.projection.rows,
@@ -272,7 +287,7 @@ impl EventlogService {
         operation: &str,
         body: &[u8],
     ) -> Result<Vec<BTreeMap<String, Value>>, service_engine::ExecutionError> {
-        let mut events = EventlogEvents::new(Arc::clone(&self.store));
+        let mut events = EventlogEvents::new(Arc::clone(&self.store), self.projection);
         let mut projections = EventlogProjections::new(
             Arc::clone(&self.store),
             self.projection.rows,
@@ -304,7 +319,7 @@ impl EventlogService {
         body: &[u8],
         page: PageRequest,
     ) -> Result<QueryPage, service_engine::ExecutionError> {
-        let mut events = EventlogEvents::new(Arc::clone(&self.store));
+        let mut events = EventlogEvents::new(Arc::clone(&self.store), self.projection);
         let mut projections = EventlogProjections::paged(
             Arc::clone(&self.store),
             self.projection.rows,
@@ -707,15 +722,87 @@ impl Projector for ServiceProjector {
 
 struct EventlogEvents {
     store: Arc<dyn DurableEventStore>,
+    layout: ProjectionLayout,
 }
 
 impl EventlogEvents {
-    fn new(store: Arc<dyn DurableEventStore>) -> Self {
-        Self { store }
+    fn new(store: Arc<dyn DurableEventStore>, layout: ProjectionLayout) -> Self {
+        Self { store, layout }
     }
 }
 
 impl EventStore for EventlogEvents {
+    fn recorded_intent<'a>(
+        &'a mut self,
+        claim: &'a IntentClaimRequest,
+    ) -> BoxFuture<'a, Result<Option<RecordedIntent>, ResourceError>> {
+        Box::pin(async move {
+            let tenant = TenantId::new(&claim.tenant).map_err(|_| ResourceError)?;
+            let durable_claim = intent_claim(claim)?;
+            let Some(recorded) = self
+                .store
+                .recorded_claim(&tenant, &durable_claim)
+                .await
+                .map_err(|_| ResourceError)?
+            else {
+                return Ok(None);
+            };
+            let count = recorded
+                .last_version
+                .checked_sub(recorded.first_version)
+                .and_then(|distance| distance.checked_add(1))
+                .filter(|count| *count <= eventlog_core::MAX_EVENTS_PER_APPEND as u64)
+                .ok_or(ResourceError)?;
+            if recorded.first_version == 0 {
+                return Err(ResourceError);
+            }
+            let mut events = Vec::with_capacity(usize::try_from(count).map_err(|_| ResourceError)?);
+            let mut after = recorded.first_version - 1;
+            while after < recorded.last_version {
+                let remaining =
+                    usize::try_from(recorded.last_version - after).map_err(|_| ResourceError)?;
+                let expected_count = remaining.min(eventlog_core::MAX_READ_LIMIT);
+                let page = self
+                    .store
+                    .read_stream(&recorded.stream, after, expected_count)
+                    .await
+                    .map_err(|_| ResourceError)?;
+                if page.events.len() != expected_count {
+                    return Err(ResourceError);
+                }
+                for event in page.events {
+                    if event.version != after + 1 {
+                        return Err(ResourceError);
+                    }
+                    after = event.version;
+                    events.push(event);
+                }
+            }
+            Ok(Some(recorded_intent(
+                claim,
+                &events,
+                recorded.first_version,
+                recorded.last_version,
+            )?))
+        })
+    }
+
+    fn authorization_state<'a>(
+        &'a mut self,
+        stream: &'a ServiceStream,
+    ) -> BoxFuture<'a, Result<ProjectionState, ResourceError>> {
+        Box::pin(async move {
+            let durable = durable_stream(stream).map_err(|_| ResourceError)?;
+            let state = self
+                .store
+                .projection_get(self.layout.state, durable.tenant(), durable.stream_id())
+                .await
+                .map_err(|_| ResourceError)?
+                .ok_or(ResourceError)?;
+            serde_json::from_value(state).map_err(|_| ResourceError)
+        })
+    }
+
     fn load<'a>(
         &'a mut self,
         stream: &'a ServiceStream,
@@ -789,7 +876,7 @@ impl EventStore for EventlogEvents {
                 causation_depth: 0,
                 occurred_at: OffsetDateTime::parse(&request.metadata.occurred_at, &Rfc3339)
                     .map_err(|_| ResourceError)?,
-                claim: None,
+                claim: Some(intent_claim(&request.claim)?),
             };
             let expected = match request.expected {
                 AppendExpectation::NoStream => Expected::NoStream,
@@ -800,6 +887,12 @@ impl EventStore for EventlogEvents {
                 .append(&stream, expected, &events, &meta)
                 .await
                 .map_err(|_| ResourceError)?;
+            let recorded = recorded_intent(
+                &request.claim,
+                &result.events,
+                result.first_version,
+                result.last_version,
+            )?;
             Ok(AppendReceipt {
                 disposition: if result.deduplicated {
                     AppendDisposition::Replayed
@@ -807,9 +900,94 @@ impl EventStore for EventlogEvents {
                     AppendDisposition::Committed
                 },
                 through_version: result.last_version,
+                stream: recorded.stream,
+                events: recorded.events,
             })
         })
     }
+}
+
+fn intent_claim(claim: &IntentClaimRequest) -> Result<eventlog_core::Claim, ResourceError> {
+    let scope = eventlog_core::request_hash(&serde_json::json!({
+        "protocol": "service-intent-claim/1",
+        "service": claim.service,
+        "realm": claim.realm,
+        "category": claim.category,
+        "selector": match &claim.stream_key {
+            Some(key) => serde_json::json!({"kind": "command_field", "key": key}),
+            None => serde_json::json!({"kind": "generated_uuid_v7"}),
+        },
+    }))
+    .map_err(|_| ResourceError)?;
+    eventlog_core::Claim::new(
+        format!("service-intent-claim/1:{scope}"),
+        &claim.key,
+        &claim.digest,
+    )
+    .map_err(|_| ResourceError)
+}
+
+fn recorded_intent(
+    claim: &IntentClaimRequest,
+    events: &[eventlog_core::RecordedEvent],
+    first: u64,
+    last: u64,
+) -> Result<RecordedIntent, ResourceError> {
+    let first_event = events.first().ok_or(ResourceError)?;
+    let (realm, category, key) =
+        decode_stream_id(&first_event.stream_id).map_err(|_| ResourceError)?;
+    let expected_count = last
+        .checked_sub(first)
+        .and_then(|distance| distance.checked_add(1))
+        .ok_or(ResourceError)?;
+    if first == 0
+        || events.len() > eventlog_core::MAX_EVENTS_PER_APPEND
+        || expected_count != events.len() as u64
+        || first_event.tenant.as_str() != claim.tenant
+        || first_event.stream_type != stream_type(&claim.service)
+        || realm != claim.realm
+        || category != claim.category
+        || claim
+            .stream_key
+            .as_ref()
+            .is_some_and(|expected| expected != &key)
+    {
+        return Err(ResourceError);
+    }
+    let mut domain_events = Vec::with_capacity(events.len());
+    for (offset, event) in events.iter().enumerate() {
+        if event.is_redacted()
+            || event.schema_version != 1
+            || event.version != first + offset as u64
+            || event.tenant != first_event.tenant
+            || event.stream_type != first_event.stream_type
+            || event.stream_id != first_event.stream_id
+        {
+            return Err(ResourceError);
+        }
+        let fields = event
+            .data
+            .as_object()
+            .ok_or(ResourceError)?
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        domain_events.push(DomainEvent {
+            name: event.name.clone(),
+            fields,
+        });
+    }
+    Ok(RecordedIntent {
+        stream: ServiceStream {
+            service: claim.service.clone(),
+            tenant: claim.tenant.clone(),
+            realm,
+            category,
+            key,
+        },
+        events: domain_events,
+        through_version: last,
+    })
 }
 
 struct EventlogProjections {
@@ -1350,6 +1528,1085 @@ mod tests {
         AuthorityId, EFFECT_PLAN_FORMAT, EffectPlan, EffectRisk, ExecutorId,
         TenantId as ServiceTenantId, UserId, VerifiedIdentity,
     };
+
+    #[test]
+    fn historical_generated_stream_projection_feed_and_effect_vectors_remain_exact() {
+        let layout = ProjectionLayout::for_service("fixture");
+        assert_eq!(layout.projector_name, "sdk_f16d05ec6b29248d2c61adb1");
+        assert_eq!(layout.state.name, "sdk_f16d05ec6b29248d2c61adb1_state");
+        assert_eq!(layout.rows.name, "sdk_f16d05ec6b29248d2c61adb1_rows");
+        let service = ServiceStream {
+            service: "fixture".into(),
+            tenant: "tenant-a".into(),
+            realm: None,
+            category: "document".into(),
+            key: "doc-a".into(),
+        };
+        let stream = durable_stream(&service).unwrap();
+        assert_eq!(stream.stream_type(), "generated-service:fixture");
+        assert_eq!(stream.stream_id(), "0:|8:document|5:doc-a");
+        assert_eq!(
+            encode_stream_id(Some("default"), "document", "doc-a"),
+            "1:7:default|8:document|5:doc-a"
+        );
+        let digest = "d631cfee0cf1235d4e100fd0a53b1b0895580356531ea086f5dbc4ffae9f848f";
+        assert_eq!(feed_identity("store-a", &stream), digest);
+        assert_eq!(
+            encode_event_cursor(digest, 42),
+            format!("service-event-cursor/1:{digest}:42")
+        );
+        let effect = effect_stream(&retry_context(None), "fixture", "effect-a").unwrap();
+        assert_eq!(effect.stream_type(), "generated-service-effect:fixture");
+        assert_eq!(effect.stream_id(), "0:|15:external-effect|8:effect-a");
+    }
+
+    #[tokio::test]
+    async fn historical_content_digest_and_cross_service_custody_are_unchanged() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_content_vector")
+                .await
+                .unwrap(),
+        );
+        let mut content = EventlogContent::new(store.clone());
+        let caller = retry_context(None);
+        let staged = content
+            .stage(
+                &caller,
+                "body",
+                "same-create-key",
+                ContentPayload {
+                    media_type: "text/plain",
+                    bytes: b"retained content",
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            staged.reference,
+            "content:sha256:769f7ade05a6173c4b427e086bd860b060d4279e566a3790755910440ab4e971"
+        );
+        // The existing digest has no service field; changing that would fork retained references.
+        let mut another_adapter = EventlogContent::new(store);
+        let same = another_adapter
+            .stage(
+                &caller,
+                "body",
+                "same-create-key",
+                ContentPayload {
+                    media_type: "text/plain",
+                    bytes: b"retained content",
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(same.reference, staged.reference);
+    }
+
+    #[tokio::test]
+    async fn recorded_receipt_refuses_gaps_redaction_schema_partition_and_unbounded_batches() {
+        let store = SqliteEventStore::in_memory("sdk_receipt_validation")
+            .await
+            .unwrap();
+        let stream = StreamId::new(
+            TenantId::new("tenant-a").unwrap(),
+            "generated-service:fixture",
+            "0:|8:document|5:doc-a",
+        )
+        .unwrap();
+        let event =
+            NewEvent::new("fixture.Created", 1, serde_json::json!({"id": "doc-a"})).unwrap();
+        let meta = CommandMeta {
+            idempotency_key: "old-command".into(),
+            request_hash: "old-event-hash".into(),
+            subject: "person-a".into(),
+            actor: "person-a".into(),
+            request_id: "request-a".into(),
+            trace_id: "trace-a".into(),
+            causation_id: None,
+            causation_depth: 0,
+            occurred_at: OffsetDateTime::UNIX_EPOCH,
+            claim: None,
+        };
+        let result = store
+            .append(&stream, Expected::NoStream, &[event], &meta)
+            .await
+            .unwrap();
+        let claim = IntentClaimRequest {
+            tenant: "tenant-a".into(),
+            service: "fixture".into(),
+            realm: None,
+            category: "document".into(),
+            stream_key: Some("doc-a".into()),
+            key: "original-intent".into(),
+            digest: "a".repeat(64),
+        };
+        assert!(
+            store
+                .recorded_claim(stream.tenant(), &intent_claim(&claim).unwrap())
+                .await
+                .unwrap()
+                .is_none(),
+            "legacy records must not acquire fabricated original-input receipts"
+        );
+        assert!(recorded_intent(&claim, &result.events, 1, 1).is_ok());
+        for (first, last) in [(0, 0), (2, 1), (1, 2), (1, u64::MAX)] {
+            assert!(recorded_intent(&claim, &result.events, first, last).is_err());
+        }
+        let mut unsupported = result.events.clone();
+        unsupported[0].schema_version = 2;
+        assert!(recorded_intent(&claim, &unsupported, 1, 1).is_err());
+        let mut foreign = result.events.clone();
+        foreign[0].tenant = TenantId::new("tenant-b").unwrap();
+        assert!(recorded_intent(&claim, &foreign, 1, 1).is_err());
+        let mut oversized = vec![result.events[0].clone(); 1025];
+        for (index, event) in oversized.iter_mut().enumerate() {
+            event.version = u64::try_from(index).unwrap() + 1;
+        }
+        assert!(recorded_intent(&claim, &oversized, 1, 1025).is_err());
+        let redacted = store.redact(&stream, 1, "fixture erasure").await.unwrap();
+        assert!(recorded_intent(&claim, &[redacted], 1, 1).is_err());
+    }
+
+    #[tokio::test]
+    async fn retries_recheck_current_owner_transfer_and_scheduler_facts() {
+        for provider in [
+            "sdk.auth.same-partition-owner-transfer/v1",
+            "sdk.auth.trusted-scheduler/v1",
+        ] {
+            let store: Arc<dyn DurableEventStore> =
+                Arc::new(SqliteEventStore::in_memory("sdk_more_auth").await.unwrap());
+            let mut plan = retry_plan("fixture", true);
+            let intent = plan.intents.get_mut("create").unwrap();
+            intent.inputs.push(service_engine::InputPlan {
+                name: "new_owner".into(),
+                type_ref: "String".into(),
+                optional: false,
+                source: service_engine::InputSource::Command,
+            });
+            intent.obligations.push(service_engine::ObligationUse {
+                provider: provider.into(),
+                bindings: BTreeMap::from([
+                    ("owner".into(), "fixture.Document.owner".into()),
+                    ("capability".into(), "scheduler".into()),
+                ]),
+            });
+            let service = EventlogService::initialize(store.clone(), ServiceEngine::new(plan))
+                .await
+                .unwrap();
+            let mut body: Value = serde_json::from_slice(&create_body(true)).unwrap();
+            body["new_owner"] = Value::String("next-owner".into());
+            let body = serde_json::to_vec(&body).unwrap();
+            let mut allowed = retry_facts();
+            allowed.principals.insert("next-owner".into());
+            allowed.capabilities.insert("scheduler".into());
+            let first = service
+                .intent(
+                    &retry_context(None),
+                    allowed.clone(),
+                    RequestMetadata::default(),
+                    "create",
+                    &body,
+                )
+                .await
+                .unwrap();
+            assert!(matches!(
+                service.intent(&retry_context(None), retry_facts(), RequestMetadata::default(), "create", &body).await,
+                Err(service_engine::ExecutionError::ObligationRefused(ref reason)) if reason == "forbidden"
+            ));
+            let replay = service
+                .intent(
+                    &retry_context(None),
+                    allowed,
+                    RequestMetadata::default(),
+                    "create",
+                    &body,
+                )
+                .await
+                .unwrap();
+            assert!(replay.replayed);
+            assert_eq!(replay.events, first.events);
+            assert_eq!(
+                store
+                    .read_feed(&TenantId::new("tenant-a").unwrap(), 0, 100)
+                    .await
+                    .unwrap()
+                    .events
+                    .len(),
+                1
+            );
+        }
+    }
+
+    // An SDK-owned test plan exercises reusable execution semantics. No application
+    // definition or generated application artifact is modified by this fixture.
+    use service_engine::{
+        ContentPolicyPlan, ContextSource, EventFieldPlan, ExpectedVersionPlan, IdempotencyPlan,
+        InputPlan, InputSource, IntentPlan, ObligationUse, OutcomePlan, PlanDelivery,
+        PlanRealmPolicy, ProducedEventPlan, REALIZATION_PLAN_FORMAT, ReducerEffect, ReducerPlan,
+        ServicePlan, StreamPlan, ValueSource,
+    };
+
+    fn retry_input(name: &str, source: InputSource) -> InputPlan {
+        InputPlan {
+            name: name.to_owned(),
+            type_ref: "String".to_owned(),
+            optional: false,
+            source,
+        }
+    }
+    fn retry_field(name: &str, source: ValueSource) -> EventFieldPlan {
+        EventFieldPlan {
+            name: name.to_owned(),
+            source,
+        }
+    }
+
+    fn retry_create(generated_stream: bool) -> IntentPlan {
+        let aggregate = ObligationUse {
+            provider: "sdk.aggregate.event-sourced/v1".to_owned(),
+            bindings: BTreeMap::from([("category".to_owned(), "document".to_owned())]),
+        };
+        let scoped = ObligationUse {
+            provider: "sdk.auth.requested-scopes/v1".to_owned(),
+            bindings: BTreeMap::from([("scopes".to_owned(), "scopes".to_owned())]),
+        };
+        let mut create_inputs = vec![
+            retry_input("scopes", InputSource::Command),
+            retry_input("key", InputSource::Idempotency),
+            retry_input(
+                "content",
+                InputSource::Content {
+                    policy: "body".to_owned(),
+                    command_field: "content_ref".to_owned(),
+                },
+            ),
+        ];
+        if !generated_stream {
+            create_inputs.push(retry_input("id", InputSource::Command));
+        }
+        IntentPlan {
+            command: "fixture.Create".to_owned(),
+            scope: "documents.manage".to_owned(),
+            inputs: create_inputs,
+            stream: if generated_stream {
+                StreamPlan::GeneratedUuidV7
+            } else {
+                StreamPlan::CommandField {
+                    field: "id".to_owned(),
+                }
+            },
+            expected_version: ExpectedVersionPlan::NoStream,
+            idempotency: IdempotencyPlan::OperationField {
+                field: "key".to_owned(),
+            },
+            obligations: vec![aggregate, scoped],
+            outcome: OutcomePlan {
+                name: "created".to_owned(),
+                events: vec![ProducedEventPlan {
+                    event: "fixture.Created".to_owned(),
+                    fields: vec![
+                        retry_field("id", ValueSource::StreamId),
+                        retry_field("revision_id", ValueSource::GeneratedUuidV7),
+                        retry_field(
+                            "owner",
+                            ValueSource::Context {
+                                value: ContextSource::CurrentAuthority,
+                            },
+                        ),
+                        retry_field(
+                            "scopes",
+                            ValueSource::Input {
+                                field: "scopes".to_owned(),
+                            },
+                        ),
+                        retry_field(
+                            "content_ref",
+                            ValueSource::Input {
+                                field: "content_ref".to_owned(),
+                            },
+                        ),
+                    ],
+                }],
+            },
+            projections: Vec::new(),
+        }
+    }
+
+    fn retry_close() -> IntentPlan {
+        let aggregate = ObligationUse {
+            provider: "sdk.aggregate.event-sourced/v1".to_owned(),
+            bindings: BTreeMap::from([("category".to_owned(), "document".to_owned())]),
+        };
+        IntentPlan {
+            command: "fixture.Close".to_owned(),
+            scope: "documents.manage".to_owned(),
+            inputs: vec![
+                retry_input("id", InputSource::Command),
+                retry_input("key", InputSource::Idempotency),
+                retry_input("version", InputSource::ExpectedVersion),
+            ],
+            stream: StreamPlan::CommandField {
+                field: "id".to_owned(),
+            },
+            expected_version: ExpectedVersionPlan::OperationField {
+                field: "version".to_owned(),
+            },
+            idempotency: IdempotencyPlan::OperationField {
+                field: "key".to_owned(),
+            },
+            obligations: vec![
+                aggregate,
+                ObligationUse {
+                    provider: "sdk.auth.owner-and-conjunctive-scopes/v1".to_owned(),
+                    bindings: BTreeMap::from([
+                        ("owner".to_owned(), "fixture.Document.owner".to_owned()),
+                        ("scopes".to_owned(), "fixture.Document.scopes".to_owned()),
+                    ]),
+                },
+                ObligationUse {
+                    provider: "sdk.lifecycle.require-state/v1".to_owned(),
+                    bindings: BTreeMap::from([
+                        ("entity".to_owned(), "fixture.Document".to_owned()),
+                        ("allowed".to_owned(), "Open".to_owned()),
+                    ]),
+                },
+            ],
+            outcome: OutcomePlan {
+                name: "closed".to_owned(),
+                events: vec![ProducedEventPlan {
+                    event: "fixture.Closed".to_owned(),
+                    fields: vec![
+                        retry_field(
+                            "id",
+                            ValueSource::Input {
+                                field: "id".to_owned(),
+                            },
+                        ),
+                        retry_field("revision_id", ValueSource::GeneratedUuidV7),
+                    ],
+                }],
+            },
+            projections: Vec::new(),
+        }
+    }
+
+    fn retry_plan(service: &str, generated_stream: bool) -> service_engine::ServicePlan {
+        ServicePlan {
+            format: REALIZATION_PLAN_FORMAT.to_owned(),
+            service: service.to_owned(),
+            delivery: PlanDelivery::ComposedConnector,
+            realm: PlanRealmPolicy::Optional,
+            ess_source_digest: "a".repeat(64),
+            obligation_catalog_digest: "b".repeat(64),
+            content: BTreeMap::from([(
+                "body".to_owned(),
+                ContentPolicyPlan {
+                    media_types: BTreeSet::from(["text/plain".to_owned()]),
+                    max_bytes: 4096,
+                },
+            )]),
+            intents: BTreeMap::from([
+                ("create".to_owned(), retry_create(generated_stream)),
+                ("close".to_owned(), retry_close()),
+            ]),
+            queries: BTreeMap::new(),
+            reducers: BTreeMap::from([
+                (
+                    "fixture.Created".to_owned(),
+                    ReducerPlan {
+                        entity: "fixture.Document".to_owned(),
+                        identity_field: "id".to_owned(),
+                        effect: ReducerEffect::Create {
+                            initial_state: "Open".to_owned(),
+                        },
+                        fields: vec![
+                            "revision_id".to_owned(),
+                            "owner".to_owned(),
+                            "scopes".to_owned(),
+                            "content_ref".to_owned(),
+                        ],
+                        inherit: None,
+                    },
+                ),
+                (
+                    "fixture.Closed".to_owned(),
+                    ReducerPlan {
+                        entity: "fixture.Document".to_owned(),
+                        identity_field: "id".to_owned(),
+                        effect: ReducerEffect::Move {
+                            from: BTreeSet::from(["Open".to_owned()]),
+                            to: "Closed".to_owned(),
+                        },
+                        fields: Vec::new(),
+                        inherit: None,
+                    },
+                ),
+            ]),
+            views: BTreeMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn original_intent_digest_does_not_redefine_the_historical_event_batch_hash() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_hash_vector")
+                .await
+                .unwrap(),
+        );
+        let stream = ServiceStream {
+            service: "fixture".into(),
+            tenant: "tenant-a".into(),
+            realm: None,
+            category: "document".into(),
+            key: "doc-a".into(),
+        };
+        let claim = IntentClaimRequest {
+            tenant: "tenant-a".into(),
+            service: "fixture".into(),
+            realm: None,
+            category: "document".into(),
+            stream_key: Some("doc-a".into()),
+            key: "new-command".into(),
+            digest: "a".repeat(64),
+        };
+        let events = vec![DomainEvent {
+            name: "fixture.Created".into(),
+            fields: BTreeMap::from([("id".into(), Value::String("doc-a".into()))]),
+        }];
+        let direct_hash = "03c00c1814d0ba26114ffecb8e792aca1fa95e4adddc5cd84e116d06bed80710";
+        assert_eq!(eventlog_core::request_hash(&events).unwrap(), direct_hash);
+        // The historical adapter first converts to Value; its object keys are sorted.
+        let expected_hash = "c8820f39516d39986f30a25116e21e63aef877a8c061d2ddf2f00c85f5f117ca";
+        assert_eq!(
+            eventlog_core::request_hash(&serde_json::to_value(&events).unwrap()).unwrap(),
+            expected_hash
+        );
+        let mut adapter =
+            EventlogEvents::new(store.clone(), ProjectionLayout::for_service("fixture"));
+        adapter
+            .append(AppendRequest {
+                stream: stream.clone(),
+                expected: AppendExpectation::NoStream,
+                idempotency_key: claim.key.clone(),
+                claim: claim.clone(),
+                events,
+                metadata: service_engine::AppendMetadata {
+                    subject: "person-a".into(),
+                    actor: "person-a".into(),
+                    request_id: "request-a".into(),
+                    trace_id: "trace-a".into(),
+                    occurred_at: "1970-01-01T00:00:00Z".into(),
+                },
+            })
+            .await
+            .unwrap();
+        let durable = durable_stream(&stream).unwrap();
+        assert!(
+            store
+                .recorded_command(&durable, "new-command", expected_hash)
+                .await
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            store
+                .recorded_command(&durable, "new-command", &claim.digest)
+                .await
+                .is_err(),
+            "the distinct original-input digest must not replace the old event-batch hash"
+        );
+        assert!(
+            store
+                .recorded_claim(durable.tenant(), &intent_claim(&claim).unwrap())
+                .await
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    fn retry_context(realm: Option<&str>) -> VerifiedAuthContext {
+        retry_context_in("tenant-a", realm)
+    }
+
+    fn retry_context_in(tenant: &str, realm: Option<&str>) -> VerifiedAuthContext {
+        VerifiedAuthContext::from_verified(VerifiedIdentity::after_verification(
+            ServiceTenantId::new(tenant).unwrap(),
+            AuthorityId::new("person-a").unwrap(),
+            UserId::new("person-a").unwrap(),
+            None,
+            realm.map(|realm| service_runtime::RealmId::new(realm).unwrap()),
+        ))
+    }
+
+    fn retry_facts() -> AuthorityFacts {
+        AuthorityFacts {
+            teams: BTreeSet::from(["engineering".to_owned()]),
+            ..AuthorityFacts::default()
+        }
+    }
+
+    fn create_body(generated_stream: bool) -> Vec<u8> {
+        let mut body = serde_json::json!({
+            "key": "same-create-key",
+            "scopes": {"team": "engineering"},
+            "content": {"media_type": "text/plain", "text": "retained content"}
+        });
+        if !generated_stream {
+            body["id"] = Value::String("document-a".to_owned());
+        }
+        serde_json::to_vec(&body).unwrap()
+    }
+
+    struct PostCommitReadRefusal {
+        inner: EventlogEvents,
+        fail_next_load: bool,
+        refused: usize,
+        appends: usize,
+    }
+    impl EventStore for PostCommitReadRefusal {
+        fn recorded_intent<'a>(
+            &'a mut self,
+            claim: &'a IntentClaimRequest,
+        ) -> BoxFuture<'a, Result<Option<RecordedIntent>, ResourceError>> {
+            self.inner.recorded_intent(claim)
+        }
+        fn authorization_state<'a>(
+            &'a mut self,
+            stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<ProjectionState, ResourceError>> {
+            self.inner.authorization_state(stream)
+        }
+        fn load<'a>(
+            &'a mut self,
+            stream: &'a ServiceStream,
+        ) -> BoxFuture<'a, Result<LoadedStream, ResourceError>> {
+            if std::mem::take(&mut self.fail_next_load) {
+                self.refused += 1;
+                Box::pin(std::future::ready(Err(ResourceError)))
+            } else {
+                self.inner.load(stream)
+            }
+        }
+        fn append(
+            &mut self,
+            request: AppendRequest,
+        ) -> BoxFuture<'_, Result<AppendReceipt, ResourceError>> {
+            Box::pin(async move {
+                let result = self.inner.append(request).await?;
+                self.appends += 1;
+                self.fail_next_load = true;
+                Ok(result)
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn first_dispatch_recovers_one_committed_batch_after_post_commit_read_refusal() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_first_recovered")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            store.clone(),
+            ServiceEngine::new(retry_plan("fixture", true)),
+        )
+        .await
+        .unwrap();
+        let mut events = PostCommitReadRefusal {
+            inner: EventlogEvents::new(store.clone(), service.projection),
+            fail_next_load: false,
+            refused: 0,
+            appends: 0,
+        };
+        let mut projections =
+            EventlogProjections::new(store.clone(), service.projection.rows, "fixture");
+        let mut content = EventlogContent::new(store.clone());
+        let mut authority = VerifiedAuthority::new(retry_facts());
+        let mut clock = SystemClock;
+        let mut ids = UuidV7;
+        let mut resources = ServiceResources {
+            events: &mut events,
+            projections: &mut projections,
+            content: &mut content,
+            authority: &mut authority,
+            clock: &mut clock,
+            ids: &mut ids,
+        };
+        let body = create_body(true);
+        let first = service
+            .engine
+            .intent(
+                &mut resources,
+                &retry_context(None),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert!(first.replayed);
+        assert_eq!(events.appends, 1);
+        assert_eq!(events.refused, 1);
+        let tenant = TenantId::new("tenant-a").unwrap();
+        let before_retry = store.read_feed(&tenant, 0, 100).await.unwrap().events;
+        assert_eq!(before_retry.len(), 1);
+        assert_eq!(
+            before_retry[0].data,
+            serde_json::to_value(&first.events[0].fields).unwrap()
+        );
+        let digest = first.events[0].fields["content_ref"]
+            .as_str()
+            .unwrap()
+            .strip_prefix("content:")
+            .unwrap();
+        assert_eq!(
+            store.get_blob(&tenant, digest).await.unwrap().unwrap(),
+            b"retained content"
+        );
+        let replay = service
+            .intent(
+                &retry_context(None),
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.events, first.events);
+        assert_eq!(replay.through_version, first.through_version);
+        assert_eq!(
+            store.read_feed(&tenant, 0, 100).await.unwrap().events,
+            before_retry
+        );
+    }
+
+    #[tokio::test]
+    async fn caller_key_create_retry_returns_original_uuid_and_content() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_retry_fixed")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", false)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        let body = create_body(false);
+        let first = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        let replay = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata {
+                    request_id: Some("new-transport-request"),
+                },
+                "create",
+                &body,
+            )
+            .await
+            .expect("lost Create response must be recovered before deciding again");
+        assert!(replay.replayed);
+        assert_eq!(replay.events, first.events);
+        assert_eq!(replay.through_version, first.through_version);
+        let reference = first.events[0].fields["content_ref"].as_str().unwrap();
+        assert_eq!(
+            store
+                .get_blob(
+                    &TenantId::new("tenant-a").unwrap(),
+                    reference.strip_prefix("content:").unwrap()
+                )
+                .await
+                .unwrap()
+                .unwrap(),
+            b"retained content"
+        );
+        let stream = durable_stream(&ServiceStream {
+            service: "fixture".to_owned(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            category: "document".to_owned(),
+            key: "document-a".to_owned(),
+        })
+        .unwrap();
+        assert_eq!(store.stream_version(&stream).await.unwrap(), Some(1));
+    }
+
+    #[tokio::test]
+    async fn generated_stream_create_retry_does_not_create_another_aggregate() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_retry_generated")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", true)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        let body = create_body(true);
+        let first = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        let replay = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert!(
+            replay.replayed,
+            "generated Create retry must resolve the original claim"
+        );
+        assert_eq!(replay.events, first.events);
+        assert_eq!(
+            store
+                .read_feed(&TenantId::new("tenant-a").unwrap(), 0, 100)
+                .await
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn completed_transition_retry_rechecks_authority_and_returns_original_decision() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_retry_transition")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", false)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &create_body(false),
+            )
+            .await
+            .unwrap();
+        let body = br#"{"id":"document-a","key":"close-key","version":1}"#;
+        let first = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "close",
+                body,
+            )
+            .await
+            .unwrap();
+        let revoked = service
+            .intent(
+                &context,
+                AuthorityFacts::default(),
+                RequestMetadata::default(),
+                "close",
+                body,
+            )
+            .await;
+        assert!(
+            matches!(revoked, Err(service_engine::ExecutionError::ObligationRefused(ref reason)) if reason == "forbidden")
+        );
+        let replay = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "close",
+                body,
+            )
+            .await
+            .expect(
+                "completed transition must replay without rerunning its old state precondition",
+            );
+        assert!(replay.replayed);
+        assert_eq!(replay.events, first.events);
+        assert_eq!(replay.through_version, 2);
+    }
+
+    #[tokio::test]
+    async fn same_claim_key_changed_original_input_is_refused_for_generated_create() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_retry_changed")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", true)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &create_body(true),
+            )
+            .await
+            .unwrap();
+        let mut changed: Value = serde_json::from_slice(&create_body(true)).unwrap();
+        changed["content"]["text"] = Value::String("different original intent".to_owned());
+        assert!(
+            service
+                .intent(
+                    &context,
+                    retry_facts(),
+                    RequestMetadata::default(),
+                    "create",
+                    &serde_json::to_vec(&changed).unwrap()
+                )
+                .await
+                .is_err(),
+            "same claim key with changed caller content must refuse before minting another stream"
+        );
+        assert_eq!(
+            store
+                .read_feed(&TenantId::new("tenant-a").unwrap(), 0, 100)
+                .await
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_create_claim_survives_file_sqlite_reopen() {
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/sdk-persistence-tests")
+            .join(Uuid::now_v7().to_string());
+        std::fs::create_dir_all(&directory).unwrap();
+        let database = directory.join("retry.sqlite3");
+        let context = retry_context(Some("default"));
+        let body = create_body(true);
+        let first = {
+            let store: Arc<dyn DurableEventStore> = Arc::new(
+                SqliteEventStore::open(database.to_str().unwrap(), "sdk_restart")
+                    .await
+                    .unwrap(),
+            );
+            let service =
+                EventlogService::initialize(store, ServiceEngine::new(retry_plan("fixture", true)))
+                    .await
+                    .unwrap();
+            service
+                .intent(
+                    &context,
+                    retry_facts(),
+                    RequestMetadata::default(),
+                    "create",
+                    &body,
+                )
+                .await
+                .unwrap()
+        };
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::open(database.to_str().unwrap(), "sdk_restart")
+                .await
+                .unwrap(),
+        );
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", true)),
+        )
+        .await
+        .unwrap();
+        let replay = service
+            .intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body,
+            )
+            .await
+            .unwrap();
+        assert!(
+            replay.replayed,
+            "file-backed retry evidence must survive reopening every SDK resource"
+        );
+        assert_eq!(replay.events, first.events);
+        let reference = replay.events[0].fields["content_ref"].as_str().unwrap();
+        assert_eq!(
+            store
+                .get_blob(
+                    &TenantId::new("tenant-a").unwrap(),
+                    reference.strip_prefix("content:").unwrap()
+                )
+                .await
+                .unwrap()
+                .unwrap(),
+            b"retained content"
+        );
+        assert_eq!(
+            store
+                .read_feed(&TenantId::new("tenant-a").unwrap(), 0, 100)
+                .await
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn concurrent_generated_creates_return_one_original_batch() {
+        let store: Arc<dyn DurableEventStore> =
+            Arc::new(SqliteEventStore::in_memory("sdk_claim_race").await.unwrap());
+        let service = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("fixture", true)),
+        )
+        .await
+        .unwrap();
+        let context = retry_context(None);
+        let body = create_body(true);
+        let (left, right) = tokio::join!(
+            service.intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body
+            ),
+            service.intent(
+                &context,
+                retry_facts(),
+                RequestMetadata::default(),
+                "create",
+                &body
+            ),
+        );
+        let left = left.unwrap();
+        let right = right.unwrap();
+        assert_ne!(
+            left.replayed, right.replayed,
+            "one contender commits and the other resolves its claim"
+        );
+        assert_eq!(left.events, right.events);
+        assert_eq!(left.through_version, right.through_version);
+        assert_eq!(
+            store
+                .read_feed(&TenantId::new("tenant-a").unwrap(), 0, 100)
+                .await
+                .unwrap()
+                .events
+                .len(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn tenant_service_and_exact_optional_realm_keep_retry_claims_separate() {
+        let store: Arc<dyn DurableEventStore> = Arc::new(
+            SqliteEventStore::in_memory("sdk_claim_partitions")
+                .await
+                .unwrap(),
+        );
+        let first = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("first", false)),
+        )
+        .await
+        .unwrap();
+        let second = EventlogService::initialize(
+            Arc::clone(&store),
+            ServiceEngine::new(retry_plan("second", false)),
+        )
+        .await
+        .unwrap();
+        let body = create_body(false);
+        let mut identities = BTreeSet::new();
+        for tenant in ["tenant-a", "tenant-b"] {
+            for service in [&first, &second] {
+                for realm in [None, Some("default")] {
+                    let context = retry_context_in(tenant, realm);
+                    let committed = service
+                        .intent(
+                            &context,
+                            retry_facts(),
+                            RequestMetadata::default(),
+                            "create",
+                            &body,
+                        )
+                        .await
+                        .unwrap();
+                    assert!(!committed.replayed);
+                    assert!(
+                        identities.insert(
+                            committed.events[0].fields["revision_id"]
+                                .as_str()
+                                .unwrap()
+                                .to_owned()
+                        )
+                    );
+                    let replay = service
+                        .intent(
+                            &context,
+                            retry_facts(),
+                            RequestMetadata::default(),
+                            "create",
+                            &body,
+                        )
+                        .await
+                        .unwrap();
+                    assert!(replay.replayed);
+                    assert_eq!(replay.events, committed.events);
+                }
+            }
+            assert_eq!(
+                store
+                    .read_feed(&TenantId::new(tenant).unwrap(), 0, 100)
+                    .await
+                    .unwrap()
+                    .events
+                    .len(),
+                4
+            );
+        }
+        assert_eq!(identities.len(), 8);
+    }
 
     #[test]
     fn stream_encoding_preserves_absent_and_literal_default_realms() {

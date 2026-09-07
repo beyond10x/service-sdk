@@ -788,7 +788,10 @@ impl GeneratedBackend {
 #[async_trait]
 impl ConnectorBackend for GeneratedBackend {
     async fn ready(&self) -> Result<(), BackendReadinessError> {
-        Ok(())
+        self.runtime
+            .readiness()
+            .await
+            .map_err(|_| BackendReadinessError)
     }
 
     fn capabilities(&self) -> BackendCapabilities {

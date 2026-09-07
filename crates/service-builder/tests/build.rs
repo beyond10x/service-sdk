@@ -18,6 +18,127 @@ use service_definition::{RealmPolicy, ServiceDefinition};
 
 const ESS: &str = include_str!("fixtures/service.ess.yaml");
 
+#[test]
+fn persistence_claim_model_resolves_through_the_pinned_ess_compiler() {
+    let sources =
+        EssSources::read(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ess/persistence"))
+            .unwrap();
+    let ir = sources
+        .compile()
+        .expect("persistence claim model resolves through ESS");
+    assert_eq!(ir.system().to_string(), "service_sdk");
+    assert!(
+        !ir.entities().is_empty(),
+        "claim type must have an ESS entity home"
+    );
+}
+
+fn persistence_package(directory: &Path, format: &str, persistence: Option<&str>) {
+    fs::create_dir_all(directory.join("ess")).unwrap();
+    fs::write(directory.join("ess/system.yaml"), ESS).unwrap();
+    fs::write(
+        directory.join("runtime.yaml"),
+        DEFINITION.replace("service: demo_todo", "service: demo"),
+    )
+    .unwrap();
+    let persistence = persistence.map_or_else(String::new, |selection| {
+        format!("  persistence: {selection}\n")
+    });
+    fs::write(directory.join("service.yaml"), format!(
+        "format: {format}\nservice: demo\nsdk:\n  repository: https://github.com/beyond10x/service-sdk.git\n  revision: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nsemantic:\n  root: ess\n  sources: [system.yaml]\nruntime: runtime.yaml\nrelease:\n  image_repository: ghcr.io/example/demo\n  version: 0.1.0\n  build_base:\n    repository: docker.io/library/rust\n    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000\n{persistence}"
+    )).unwrap();
+}
+
+#[test]
+fn service_v2_postgres_release_declares_application_configuration_without_sqlite_volume() {
+    let temporary = TestDirectory::new();
+    persistence_package(temporary.path(), "service/2", Some("postgres"));
+    let output = temporary.path().join("generated");
+    let generated = Command::new(env!("CARGO_BIN_EXE_service-builder"))
+        .args(["generate", "--package"])
+        .arg(temporary.path().join("service.yaml"))
+        .arg("--output")
+        .arg(&output)
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "explicit service/2 production composition must generate: {}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let runtime = fs::read_to_string(output.join("deployment/runtime.yaml")).unwrap();
+    assert!(runtime.contains("DEMO_PERSISTENCE"));
+    assert!(runtime.contains("postgres"));
+    assert!(runtime.contains("DEMO_POSTGRES_URL"));
+    assert!(runtime.contains("DEMO_POSTGRES_SCHEMA"));
+    assert!(runtime.contains("DEMO_POSTGRES_CA_PEM"));
+    assert!(
+        !runtime.contains("MIGRATION_URL"),
+        "the serving process must not receive migration credentials"
+    );
+    assert!(!runtime.contains("sqlite3"));
+    assert!(!runtime.contains("volume_mounts"));
+    let realization = fs::read_to_string(output.join("deployment/realization.yaml")).unwrap();
+    assert!(
+        !realization.contains("filesystem"),
+        "PostgreSQL must not declare local durable storage"
+    );
+    let main = fs::read_to_string(output.join("rust/src/main.rs")).unwrap();
+    assert!(main.contains("service_host::run_postgres"));
+    assert!(
+        main.contains("service_host::run_sqlite"),
+        "generated local default remains available"
+    );
+}
+
+#[test]
+fn service_v1_strict_reader_refuses_persistence_extension_including_null() {
+    for selection in ["postgres", "sqlite", "null", "{backend: postgres}"] {
+        let temporary = TestDirectory::new();
+        persistence_package(temporary.path(), "service/1", Some(selection));
+        let output = temporary.path().join("generated");
+        let generated = Command::new(env!("CARGO_BIN_EXE_service-builder"))
+            .args(["generate", "--package"])
+            .arg(temporary.path().join("service.yaml"))
+            .arg("--output")
+            .arg(&output)
+            .output()
+            .unwrap();
+        assert!(
+            !generated.status.success(),
+            "service/1 must not silently admit release.persistence: {selection}"
+        );
+        assert!(
+            !output.exists(),
+            "refused input must not publish partial generated output"
+        );
+    }
+}
+
+#[test]
+fn service_v1_release_preserves_sqlite_and_its_durable_volume() {
+    let temporary = TestDirectory::new();
+    persistence_package(temporary.path(), "service/1", None);
+    let output = temporary.path().join("generated");
+    let generated = Command::new(env!("CARGO_BIN_EXE_service-builder"))
+        .args(["generate", "--package"])
+        .arg(temporary.path().join("service.yaml"))
+        .arg("--output")
+        .arg(&output)
+        .output()
+        .unwrap();
+    assert!(
+        generated.status.success(),
+        "old service/1 input must remain supported: {}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
+    let runtime = fs::read_to_string(output.join("deployment/runtime.yaml")).unwrap();
+    assert!(runtime.contains("DEMO_DATABASE_PATH"));
+    assert!(runtime.contains("/var/lib/demo/demo.sqlite3"));
+    assert!(runtime.contains("volume_mounts"));
+    assert!(!runtime.contains("DEMO_POSTGRES_URL"));
+}
+
 const DEFINITION: &str = r"
 format: service-definition/3
 service: demo_todo

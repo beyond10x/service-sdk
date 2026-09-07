@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Create input",
+  "x-ess-name": "persistence_http.document.Create",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "content_ref": {
+      "$ref": "#/$defs/persistence_http.document.ContentRef"
+    },
+    "scopes": {
+      "$ref": "#/$defs/persistence_http.document.Scopes"
+    }
+  },
+  "required": [
+    "content_ref",
+    "scopes"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "persistence_http",
+    "specification_version": "v1",
+    "source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
+    "contract_digest": "581c6181620ab29b153f6ace18bbd5105a3b5b95f09ecfd2fee5b71d15bb9323",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "persistence_http.document.ContentRef": {
+      "title": "ContentRef",
+      "x-ess-name": "persistence_http.document.ContentRef",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "persistence_http.document.Scopes": {
+      "title": "Scopes",
+      "x-ess-name": "persistence_http.document.Scopes",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "team": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

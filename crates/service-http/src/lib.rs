@@ -295,7 +295,7 @@ impl IdentityHttpService {
     pub fn router(self) -> Router {
         Router::new()
             .route("/healthz", get(health))
-            .route("/readyz", get(health))
+            .route("/readyz", get(ready))
             .route("/v1/intents/{operation}", post(intent))
             .route("/v1/queries/{operation}", post(query))
             .with_state(self.state)
@@ -304,6 +304,13 @@ impl IdentityHttpService {
 
 async fn health() -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+async fn ready(State(state): State<HttpState>) -> StatusCode {
+    match state.service.readiness().await {
+        Ok(()) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+    }
 }
 
 async fn intent(
