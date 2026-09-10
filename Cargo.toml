@@ -53,12 +53,13 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-pemfile = "2"
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/3.
-ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
-ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
-ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
-ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
-ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
-ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "95ef5be70dbce966056d0484b66db7ed836fa406" }
+ess-service-contract = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078", features = ["synthesis"] }
+ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
+ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
+ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
+ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
+ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
+ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "d453c50769f08d1c348daad3c2e8b721be571078" }
 
 [workspace.lints.rust]
 missing_docs = "warn"

@@ -173,11 +173,43 @@ fn inputs() -> (EssIr, SynthesisPlan, ServiceDefinition) {
 }
 
 #[test]
+fn existing_host_runtime_documents_keep_their_exact_bytes() {
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../service-host/tests/fixtures/persistence");
+    for profile in ["factory", "standalone"] {
+        let root = fixtures.join(profile);
+        let source = std::fs::read_to_string(root.join("ess/system.yaml")).unwrap();
+        let ir = ess(&source);
+        let plan = SynthesisPlan::of(&ir);
+        let definition = ServiceDefinition::from_yaml(
+            &std::fs::read_to_string(root.join("runtime.yaml")).unwrap(),
+        )
+        .unwrap();
+        let expected = std::fs::read_to_string(root.join("generated/runtime/ir.json")).unwrap();
+        let runtime = compile_runtime(&ir, &plan, &definition).unwrap();
+        assert_eq!(
+            runtime.to_canonical_json(),
+            expected,
+            "{profile} runtime bytes changed"
+        );
+        assert_eq!(
+            ServiceRuntimeIr::from_json_bound(&expected, &ir, &plan).unwrap(),
+            runtime
+        );
+    }
+}
+
+#[test]
 fn canonical_roundtrip_binds_exact_ess_and_synthesis_and_loses_no_annotations() {
     let (ir, plan, definition) = inputs();
     let first = compile_runtime(&ir, &plan, &definition).expect("runtime annotations resolve");
     let second = compile_runtime(&ir, &plan, &definition).expect("same compilation resolves");
     let canonical = first.to_canonical_json();
+    assert_eq!(
+        canonical,
+        include_str!("fixtures/runtime-before-service-contract.json"),
+        "service-runtime-ir/3 bytes must match the pre-extraction SDK compiler"
+    );
 
     assert_eq!(canonical, second.to_canonical_json());
     assert_eq!(first.ess_source_digest(), ir.source_digest());
@@ -244,6 +276,16 @@ fn persisted_ir_is_closed_and_recompiled_before_acceptance() {
     );
     let error = ServiceRuntimeIr::from_json_bound(&unknown, &ir, &plan)
         .expect_err("unknown persisted fields must fail");
+    assert_eq!(error.diagnostics()[0].code, RuntimeCode::InvalidPersistedIr);
+
+    let mut unknown_disposition: serde_json::Value = serde_json::from_str(&canonical).unwrap();
+    unknown_disposition["intents"]["add_item"]["contract"]["extra"] = true.into();
+    let error = ServiceRuntimeIr::from_json_bound(
+        &serde_json::to_string(&unknown_disposition).unwrap(),
+        &ir,
+        &plan,
+    )
+    .expect_err("a generated disposition cannot silently discard unknown fields");
     assert_eq!(error.diagnostics()[0].code, RuntimeCode::InvalidPersistedIr);
 
     let tampered = canonical.replacen(

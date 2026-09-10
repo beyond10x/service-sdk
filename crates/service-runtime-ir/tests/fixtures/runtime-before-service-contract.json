@@ -1,0 +1,331 @@
+{
+  "format": "service-runtime-ir/3",
+  "ess": {
+    "system": "demo",
+    "version": "v1",
+    "source_digest": "7108013373cdcfaa7d5dcb2652b1454513eea8e293e119bbc94fe54e14bbf193"
+  },
+  "synthesis": {
+    "profile": "component-skeletons",
+    "digest": "a49c6d621163ddc2062b1da743e401c7f21e3c40140bcf973f54219d4f678d6c",
+    "capabilities": 11
+  },
+  "obligation_catalog": {
+    "digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+    "providers": [
+      "sdk.aggregate.event-sourced/v1",
+      "sdk.content.external-erasable/v1",
+      "sdk.derive.inherit-parent-authority/v1",
+      "sdk.projection.auth-partitioned-visibility/v1"
+    ]
+  },
+  "admission": [
+    "verify_credential",
+    "enforce_realm_policy",
+    "decode_operation",
+    "bind_and_dispatch"
+  ],
+  "definition": {
+    "format": "service-definition/3",
+    "service": "demo_todo",
+    "delivery": {
+      "kind": "composed_connector"
+    },
+    "realm": "optional",
+    "intents": [
+      {
+        "name": "add_item",
+        "scope": "items.manage",
+        "command": "demo.todo.AddItem",
+        "stream_id": {
+          "kind": "command_field",
+          "field": "item_id"
+        },
+        "expected_version": {
+          "kind": "no_stream"
+        },
+        "idempotency": {
+          "kind": "operation_field",
+          "field": "idempotency_key"
+        },
+        "guards": [
+          {
+            "name": "may_add",
+            "refusal_code": "forbidden",
+            "reads": [
+              {
+                "kind": "command_field",
+                "field": "item_id"
+              },
+              {
+                "kind": "context",
+                "value": "current_authority"
+              }
+            ]
+          }
+        ],
+        "content": [
+          {
+            "content": "item_content",
+            "input_field": "body",
+            "command_reference_field": "content_ref"
+          }
+        ],
+        "event_bindings": [
+          {
+            "event": "demo.todo.ItemAdded",
+            "field": "owner",
+            "source": {
+              "kind": "context",
+              "value": "current_authority"
+            }
+          },
+          {
+            "event": "demo.todo.ItemAdded",
+            "field": "authority_id",
+            "source": {
+              "kind": "context",
+              "value": "current_authority"
+            }
+          }
+        ],
+        "projections": [
+          "item_by_id"
+        ],
+        "obligations": [
+          "aggregate",
+          "bind_owner",
+          "content_lifecycle"
+        ]
+      }
+    ],
+    "projections": [
+      {
+        "name": "item_by_id",
+        "view": "demo.todo.ItemById",
+        "delivery": "inline_transactional",
+        "obligations": [
+          "bind_owner",
+          "visibility"
+        ]
+      }
+    ],
+    "queries": [
+      {
+        "name": "get_item",
+        "scope": "items.read",
+        "view": "demo.todo.ItemById",
+        "projection": "item_by_id",
+        "selectors": [
+          {
+            "parameter": "item_id",
+            "view_field": "item_id"
+          }
+        ],
+        "guards": [
+          {
+            "name": "may_read",
+            "refusal_code": "forbidden",
+            "reads": [
+              {
+                "kind": "view_field",
+                "field": "owner"
+              },
+              {
+                "kind": "context",
+                "value": "current_authority"
+              }
+            ]
+          }
+        ],
+        "sort": [
+          {
+            "view_field": "item_id",
+            "direction": "ascending"
+          }
+        ],
+        "delivery": "read_your_writes",
+        "obligations": [
+          "visibility"
+        ]
+      }
+    ],
+    "content": [
+      {
+        "name": "item_content",
+        "reference_type": "demo.todo.ContentRef",
+        "media_types": [
+          "text/plain",
+          "text/markdown"
+        ],
+        "max_bytes": 65536,
+        "custody": "external_erasable"
+      }
+    ],
+    "obligations": [
+      {
+        "name": "bind_owner",
+        "provider": "sdk.derive.inherit-parent-authority/v1",
+        "bindings": {
+          "child": "demo.todo.Item",
+          "child_owner": "demo.todo.Item.owner",
+          "child_scopes": "demo.todo.Item.authority_id",
+          "parent": "demo.todo.Item",
+          "parent_owner": "demo.todo.Item.owner",
+          "parent_scopes": "demo.todo.Item.authority_id"
+        },
+        "description": "Bind owner from current authenticated authority."
+      },
+      {
+        "name": "aggregate",
+        "provider": "sdk.aggregate.event-sourced/v1",
+        "bindings": {
+          "aggregate": "demo.todo.Item",
+          "identity": "item_id"
+        },
+        "description": "Execute the item as one guarded event-sourced aggregate."
+      },
+      {
+        "name": "content_lifecycle",
+        "provider": "sdk.content.external-erasable/v1",
+        "bindings": {
+          "content": "item_content"
+        },
+        "description": "Stage and finalize external erasable content around append."
+      },
+      {
+        "name": "visibility",
+        "provider": "sdk.projection.auth-partitioned-visibility/v1",
+        "bindings": {
+          "owner": "owner",
+          "scopes": "authority_id"
+        },
+        "description": "Partition projection access by authenticated authority."
+      }
+    ]
+  },
+  "obligations": {
+    "aggregate": {
+      "name": "aggregate",
+      "provider": "sdk.aggregate.event-sourced/v1",
+      "bindings": {
+        "aggregate": "demo.todo.Item",
+        "identity": "item_id"
+      }
+    },
+    "bind_owner": {
+      "name": "bind_owner",
+      "provider": "sdk.derive.inherit-parent-authority/v1",
+      "bindings": {
+        "child": "demo.todo.Item",
+        "child_owner": "demo.todo.Item.owner",
+        "child_scopes": "demo.todo.Item.authority_id",
+        "parent": "demo.todo.Item",
+        "parent_owner": "demo.todo.Item.owner",
+        "parent_scopes": "demo.todo.Item.authority_id"
+      }
+    },
+    "content_lifecycle": {
+      "name": "content_lifecycle",
+      "provider": "sdk.content.external-erasable/v1",
+      "bindings": {
+        "content": "item_content"
+      }
+    },
+    "visibility": {
+      "name": "visibility",
+      "provider": "sdk.projection.auth-partitioned-visibility/v1",
+      "bindings": {
+        "owner": "owner",
+        "scopes": "authority_id"
+      }
+    }
+  },
+  "intents": {
+    "add_item": {
+      "command": "demo.todo.AddItem",
+      "input_fields": {
+        "content_ref": "demo.todo.ContentRef",
+        "item_id": "demo.todo.ItemId"
+      },
+      "emitted_events": [
+        "demo.todo.ItemAdded"
+      ],
+      "contract": {
+        "disposition": "generated"
+      },
+      "behavior": {
+        "disposition": "obligation",
+        "reason": "the contract is declared; the algorithm is not",
+        "contract": "given `demo.todo.AddItem` input, decide and enact exactly one outcome — `added` otherwise, creates `demo.todo.Item`, emits `demo.todo.ItemAdded`"
+      },
+      "pipeline": [
+        "resolve_idempotency",
+        "resolve_stream",
+        "load",
+        "fold",
+        "guards",
+        "stage_content",
+        "construct_command",
+        "validate",
+        "decide",
+        "guarded_append",
+        "reduce",
+        "project",
+        "accept_content"
+      ]
+    }
+  },
+  "projections": {
+    "item_by_id": {
+      "view": "demo.todo.ItemById",
+      "shape": "demo.todo.ItemRow",
+      "fields": {
+        "authority_id": "String",
+        "content_ref": "demo.todo.ContentRef",
+        "item_id": "demo.todo.ItemId",
+        "owner": "demo.todo.OwnerRef"
+      },
+      "consistency": "read_your_writes",
+      "view_type": {
+        "disposition": "generated"
+      },
+      "view_query": {
+        "disposition": "obligation",
+        "reason": "how the projection is kept current is a storage decision",
+        "contract": "a query answering `demo.todo.ItemById` with rows projected from `demo.todo.Item` at `read_your_writes` consistency"
+      }
+    }
+  },
+  "queries": {
+    "get_item": {
+      "view": "demo.todo.ItemById",
+      "projection": "item_by_id",
+      "fields": {
+        "authority_id": "String",
+        "content_ref": "demo.todo.ContentRef",
+        "item_id": "demo.todo.ItemId",
+        "owner": "demo.todo.OwnerRef"
+      },
+      "view_type": {
+        "disposition": "generated"
+      },
+      "view_query": {
+        "disposition": "obligation",
+        "reason": "how the projection is kept current is a storage decision",
+        "contract": "a query answering `demo.todo.ItemById` with rows projected from `demo.todo.Item` at `read_your_writes` consistency"
+      },
+      "pipeline": [
+        "guards",
+        "bind_selectors",
+        "read_projection"
+      ]
+    }
+  },
+  "content": {
+    "item_content": {
+      "reference_type": "demo.todo.ContentRef",
+      "representation": "String"
+    }
+  }
+}

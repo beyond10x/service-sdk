@@ -193,6 +193,9 @@ The workspace is split by responsibility:
 
 - `service-definition` describes author-facing runtime annotations against ESS semantic names.
 - `service-runtime-ir` is the closed, digest-bound realization contract.
+- `ess-service-contract` owns reusable ESS field summaries and synthesis disposition resolution.
+  The SDK retains `service_runtime_ir::RequiredDisposition` as a re-export and preserves valid
+  `service-runtime-ir/3` bytes. Unknown fields in generated dispositions are now refused.
 - `service-obligations` provides versioned runtime implementations and coverage checks.
 - `service-runtime` supplies transport-independent authenticated execution and durable effects.
 - `service-engine` executes generated plans over deployment-injected resources.
