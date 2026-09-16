@@ -252,7 +252,10 @@ the ER `through_version`; restart rebuilds from the verified complete ER history
 same rows even for removals and zero-event decisions.
 
 Declared external effects are prepared from the recorded selected outcome/response and use the
-existing effect journal. They are never inferred from event count. A retry or repair reuses the
+existing effect journal. The effect boundary receives the same verified authentication context,
+declared intent obligations, selected decision, and immutable commit receipt, so it can prepare
+the existing authenticated effect plan without reconstructing authority from application data.
+Effects are never inferred from event count. A retry or repair reuses the
 recorded effect claim. Content acceptance likewise follows proven commit and can resume from the
 atomic claim. These host activities cannot modify the recorded ER result.
 

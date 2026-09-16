@@ -62,6 +62,7 @@ pub trait HostResourcesV4 {
     /// Updates declared SDK projections from durable authority.
     fn project(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &service_engine::v4::IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
@@ -69,6 +70,7 @@ pub trait HostResourcesV4 {
     /// Runs declared SDK/provider effects from the durable selected result.
     fn effects(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &service_engine::v4::IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
@@ -221,19 +223,21 @@ impl<H: HostResourcesV4> ResourcesV4 for EventlogResourcesV4<'_, H> {
 
     fn project(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &service_engine::v4::IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
     ) -> Result<(), String> {
-        self.host.project(intent, decision, receipt)
+        self.host.project(context, intent, decision, receipt)
     }
 
     fn effects(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &service_engine::v4::IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
     ) -> Result<(), String> {
-        self.host.effects(intent, decision, receipt)
+        self.host.effects(context, intent, decision, receipt)
     }
 }

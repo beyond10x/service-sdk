@@ -122,12 +122,24 @@ impl HostResourcesV4 for Host {
         Ok(())
     }
 
-    fn project(&mut self, _: &IntentPlanV4, _: &Decision, _: &CommitReceipt) -> Result<(), String> {
+    fn project(
+        &mut self,
+        _: &VerifiedAuthContext,
+        _: &IntentPlanV4,
+        _: &Decision,
+        _: &CommitReceipt,
+    ) -> Result<(), String> {
         self.projections += 1;
         Ok(())
     }
 
-    fn effects(&mut self, _: &IntentPlanV4, _: &Decision, _: &CommitReceipt) -> Result<(), String> {
+    fn effects(
+        &mut self,
+        _: &VerifiedAuthContext,
+        _: &IntentPlanV4,
+        _: &Decision,
+        _: &CommitReceipt,
+    ) -> Result<(), String> {
         self.effects += 1;
         Ok(())
     }

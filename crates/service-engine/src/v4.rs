@@ -777,6 +777,7 @@ pub trait ResourcesV4 {
     /// Applies declared projections from the durable authoritative result.
     fn project(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
@@ -784,6 +785,7 @@ pub trait ResourcesV4 {
     /// Runs declared external effects from the durable selected result.
     fn effects(
         &mut self,
+        context: &VerifiedAuthContext,
         intent: &IntentPlanV4,
         decision: &Decision,
         receipt: &CommitReceipt,
@@ -1251,7 +1253,7 @@ impl<'a> EngineV4<'a> {
             let receipt = outcome.receipt().cloned().ok_or_else(|| {
                 ExecutionErrorV4::Integrity("append returned no committed receipt".to_owned())
             })?;
-            deliver_after_commit(resources, intent, &decision, &receipt, &claim)?;
+            deliver_after_commit(resources, context, intent, &decision, &receipt, &claim)?;
             Ok(MutationResultV4::Committed {
                 decision: Box::new(decision),
                 receipt,
@@ -1663,14 +1665,15 @@ fn recover(
 
 fn deliver_after_commit(
     resources: &mut dyn ResourcesV4,
+    context: &VerifiedAuthContext,
     intent: &IntentPlanV4,
     decision: &Decision,
     receipt: &CommitReceipt,
     claim: &str,
 ) -> Result<(), ExecutionErrorV4> {
     resources
-        .project(intent, decision, receipt)
-        .and_then(|()| resources.effects(intent, decision, receipt))
+        .project(context, intent, decision, receipt)
+        .and_then(|()| resources.effects(context, intent, decision, receipt))
         .map_err(|cause| ExecutionErrorV4::CommittedAftercare {
             receipt: Box::new(receipt.clone()),
             repair_token: format!("sdk-er-repair-{claim}"),

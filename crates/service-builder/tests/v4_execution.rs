@@ -173,7 +173,13 @@ impl ResourcesV4 for Resources {
         Ok(())
     }
 
-    fn project(&mut self, _: &IntentPlanV4, _: &Decision, _: &CommitReceipt) -> Result<(), String> {
+    fn project(
+        &mut self,
+        _: &VerifiedAuthContext,
+        _: &IntentPlanV4,
+        _: &Decision,
+        _: &CommitReceipt,
+    ) -> Result<(), String> {
         self.calls.project += 1;
         if self.fail_projection {
             Err("projection unavailable".into())
@@ -182,7 +188,13 @@ impl ResourcesV4 for Resources {
         }
     }
 
-    fn effects(&mut self, _: &IntentPlanV4, _: &Decision, _: &CommitReceipt) -> Result<(), String> {
+    fn effects(
+        &mut self,
+        _: &VerifiedAuthContext,
+        _: &IntentPlanV4,
+        _: &Decision,
+        _: &CommitReceipt,
+    ) -> Result<(), String> {
         self.calls.effects += 1;
         Ok(())
     }
