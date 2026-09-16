@@ -30,8 +30,8 @@ use service_definition::v4::ServiceDefinitionV4;
 use service_engine::{
     ObligationUse,
     v4::{
-        AuthenticatedPartition, EngineV4, IntentPlanV4, MutationResultV4, ServicePlanV4,
-        StagedContentV4,
+        AuthenticatedPartition, EngineV4, ExecutionErrorV4, IntentPlanV4, MutationResultV4,
+        ServicePlanV4, StagedContentV4,
     },
 };
 use service_eventlog::{
@@ -57,6 +57,7 @@ struct Host {
     slot: usize,
     projections: usize,
     effects: usize,
+    fail_projection: bool,
 }
 
 impl HostResourcesV4 for Host {
@@ -118,6 +119,16 @@ impl HostResourcesV4 for Host {
         Ok(())
     }
 
+    fn accept_recorded_content(
+        &mut self,
+        _: &VerifiedAuthContext,
+        _: &str,
+        _: &str,
+        _: &str,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     fn abandon_content(&mut self, _: &VerifiedAuthContext, _: String) -> Result<(), String> {
         Ok(())
     }
@@ -130,7 +141,11 @@ impl HostResourcesV4 for Host {
         _: &CommitReceipt,
     ) -> Result<(), String> {
         self.projections += 1;
-        Ok(())
+        if self.fail_projection {
+            Err("projection unavailable".to_owned())
+        } else {
+            Ok(())
+        }
     }
 
     fn effects(
@@ -335,7 +350,10 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
         "amount": {"amount": 12.5, "currency": "EUR"}
     }))
     .unwrap();
-    let mut first_host = Host::default();
+    let mut first_host = Host {
+        fail_projection: true,
+        ..Host::default()
+    };
     let mut first_resources = EventlogResourcesV4::new(
         &bridge,
         &authority,
@@ -343,7 +361,7 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
         CallWait::Forever,
         &mut first_host,
     );
-    let first = engine
+    let aftercare = engine
         .execute_json(
             &context,
             "create_invoice",
@@ -351,6 +369,25 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
             0,
             "create-1",
             recording("first"),
+            &mut first_resources,
+        )
+        .unwrap_err();
+    let ExecutionErrorV4::CommittedAftercare {
+        receipt: aftercare_receipt,
+        repair_token,
+        ..
+    } = aftercare
+    else {
+        panic!("projection failure did not retain committed evidence");
+    };
+    let first = engine
+        .execute_json(
+            &context,
+            "create_invoice",
+            &input,
+            0,
+            "create-1",
+            recording("first-retry"),
             &mut first_resources,
         )
         .unwrap();
@@ -362,7 +399,8 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
     else {
         panic!("creation unexpectedly refused");
     };
-    assert!(!replayed);
+    assert!(replayed, "ordinary retry recovers the committed decision");
+    assert_eq!(first_receipt, *aftercare_receipt);
     assert_eq!(
         (
             first_host.uuid,
@@ -370,7 +408,7 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
             first_host.projections,
             first_host.effects
         ),
-        (1, 1, 1, 1)
+        (1, 1, 1, 0)
     );
     assert_eq!(
         bridge.shutdown(ShutdownMode::Drain, CallWait::Forever),
@@ -456,6 +494,46 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
         retried["commit"],
         serde_json::to_value(&first_receipt).unwrap()
     );
+    let unauthenticated_repair = client
+        .post(format!("{service_origin}/v1/repairs/{repair_token}"))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthenticated_repair.status(), StatusCode::UNAUTHORIZED);
+    {
+        let before_repair = backend.host().unwrap();
+        assert_eq!(
+            (
+                before_repair.uuid,
+                before_repair.slot,
+                before_repair.projections,
+                before_repair.effects
+            ),
+            (0, 0, 0, 0),
+            "ordinary HTTP retry cannot redeliver committed aftercare"
+        );
+    }
+    let repaired = client
+        .post(format!("{service_origin}/v1/repairs/{repair_token}"))
+        .bearer_auth("tenant-tenant-a")
+        .header("x-request-id", "record-repair")
+        .send()
+        .await
+        .unwrap();
+    let repaired_status = repaired.status();
+    let repaired_body = repaired.bytes().await.unwrap();
+    assert_eq!(
+        repaired_status,
+        StatusCode::OK,
+        "{}",
+        String::from_utf8_lossy(&repaired_body)
+    );
+    let repaired: Value = serde_json::from_slice(&repaired_body).unwrap();
+    assert_eq!(repaired["replayed"], true);
+    assert_eq!(
+        repaired["commit"],
+        serde_json::to_value(&first_receipt).unwrap()
+    );
     let invoice_id = first_decision.instance.fields["invoice_id"].clone();
     let queried = client
         .post(format!("{service_origin}/v1/queries/get_invoice"))
@@ -475,7 +553,7 @@ async fn complete_decision_and_observation_reopen_without_provider_reexecution()
             restarted_host.projections,
             restarted_host.effects
         ),
-        (0, 0, 0, 0)
+        (0, 0, 1, 1)
     );
     drop(restarted_host);
     service_task.abort();

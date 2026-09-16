@@ -53,6 +53,14 @@ pub trait HostResourcesV4 {
         context: &VerifiedAuthContext,
         token: String,
     ) -> Result<(), String>;
+    /// Accepts committed staged content after repair reconstructs its durable coordinates.
+    fn accept_recorded_content(
+        &mut self,
+        context: &VerifiedAuthContext,
+        policy: &str,
+        idempotency_key: &str,
+        reference: &str,
+    ) -> Result<(), String>;
     /// Abandons one conclusively unreferenced staged object.
     fn abandon_content(
         &mut self,
@@ -211,6 +219,17 @@ impl<H: HostResourcesV4> ResourcesV4 for EventlogResourcesV4<'_, H> {
         token: String,
     ) -> Result<(), String> {
         self.host.accept_content(context, token)
+    }
+
+    fn accept_recorded_content(
+        &mut self,
+        context: &VerifiedAuthContext,
+        policy: &str,
+        idempotency_key: &str,
+        reference: &str,
+    ) -> Result<(), String> {
+        self.host
+            .accept_recorded_content(context, policy, idempotency_key, reference)
     }
 
     fn abandon_content(

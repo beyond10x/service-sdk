@@ -16,9 +16,11 @@ use service_engine::v4::{
     AuthenticatedPartition, EngineV4, ExecutionErrorV4, IntentPlanV4, MutationResultV4,
     ResourcesV4, StagedContentV4, project_query_v4,
 };
+use service_engine::{ContentPolicyPlan, InputSource};
 use service_runtime::{
     AuthorityId, RealmId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
 };
+use sha2::{Digest as _, Sha256};
 
 mod support;
 
@@ -36,6 +38,9 @@ struct Calls {
     field: usize,
     project: usize,
     effects: usize,
+    stage_content: usize,
+    accept_content: usize,
+    accept_recorded_content: usize,
 }
 
 struct Resources {
@@ -44,6 +49,8 @@ struct Resources {
     calls: Calls,
     deny: bool,
     fail_projection: bool,
+    fail_accept_content: bool,
+    recorded_content: Vec<(String, String, String)>,
 }
 
 impl Resources {
@@ -54,6 +61,8 @@ impl Resources {
             calls: Calls::default(),
             deny: false,
             fail_projection: false,
+            fail_accept_content: false,
+            recorded_content: Vec::new(),
         }
     }
 }
@@ -159,6 +168,7 @@ impl ResourcesV4 for Resources {
         _: &str,
         _: &[u8],
     ) -> Result<StagedContentV4, String> {
+        self.calls.stage_content += 1;
         Ok(StagedContentV4 {
             reference: "content-reference".into(),
             token: "content-token".into(),
@@ -166,6 +176,27 @@ impl ResourcesV4 for Resources {
     }
 
     fn accept_content(&mut self, _: &VerifiedAuthContext, _: String) -> Result<(), String> {
+        self.calls.accept_content += 1;
+        if self.fail_accept_content {
+            Err("content acceptance unavailable".to_owned())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn accept_recorded_content(
+        &mut self,
+        _: &VerifiedAuthContext,
+        policy: &str,
+        idempotency_key: &str,
+        reference: &str,
+    ) -> Result<(), String> {
+        self.calls.accept_recorded_content += 1;
+        self.recorded_content.push((
+            policy.to_owned(),
+            idempotency_key.to_owned(),
+            reference.to_owned(),
+        ));
         Ok(())
     }
 
@@ -563,6 +594,55 @@ fn billing_delegates_refusal_fulfillment_atomic_retry_uncertainty_and_replay() {
         resources.calls.history >= 2,
         "recovery verifies complete ER history"
     );
+
+    let calls = (
+        resources.calls.uuid,
+        resources.calls.slot,
+        resources.calls.field,
+        resources.calls.append,
+        resources.calls.effects,
+    );
+    let (retried_create, replayed) = committed(
+        engine
+            .execute_json(
+                &context,
+                "create_invoice",
+                &bytes,
+                0,
+                "create-1",
+                recording("create-after-payment"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    assert!(replayed);
+    assert_eq!(retried_create, created);
+    let (retried_issue, replayed) = committed(
+        engine
+            .execute_json(
+                &context,
+                "issue_invoice",
+                &issue,
+                1,
+                "issue-1",
+                recording("issue-after-payment"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    assert!(replayed);
+    assert_eq!(retried_issue, issued);
+    assert_eq!(
+        (
+            resources.calls.uuid,
+            resources.calls.slot,
+            resources.calls.field,
+            resources.calls.append,
+            resources.calls.effects,
+        ),
+        calls,
+        "historical retries return original evidence without rerunning fulfillment, append, or effects"
+    );
 }
 
 #[test]
@@ -613,8 +693,152 @@ fn admission_precedes_decode_and_committed_projection_failure_keeps_receipt() {
     else {
         panic!("expected committed-aftercare result: {error:?}");
     };
-    assert!(matches!(*receipt, CommitReceipt::Batch(batch) if batch.members.len() == 2));
+    assert!(matches!(&*receipt, CommitReceipt::Batch(batch) if batch.members.len() == 2));
     assert!(repair_token.starts_with("sdk-er-repair-"));
     assert_eq!(resources.calls.append, 1);
     assert_eq!(resources.calls.effects, 0);
+
+    let retried = engine
+        .execute_public_json(
+            &context,
+            "create_invoice",
+            &input,
+            recording("aftercare-retry"),
+            &mut resources,
+        )
+        .unwrap();
+    assert!(matches!(
+        retried,
+        MutationResultV4::Committed { replayed: true, .. }
+    ));
+    assert_eq!(resources.calls.project, 1, "ordinary retry does not repair");
+    assert_eq!(
+        resources.calls.effects, 0,
+        "ordinary retry does not deliver"
+    );
+
+    resources.fail_projection = false;
+    let repaired = engine
+        .repair(&context, &repair_token, &mut resources)
+        .unwrap();
+    let MutationResultV4::Committed {
+        receipt: repaired_receipt,
+        replayed,
+        ..
+    } = repaired
+    else {
+        panic!("repair did not recover a committed decision");
+    };
+    assert!(replayed);
+    assert_eq!(repaired_receipt, *receipt);
+    assert_eq!(resources.calls.append, 1, "repair cannot append");
+    assert_eq!(resources.calls.uuid, 1, "repair cannot rerun fulfillment");
+    assert_eq!(resources.calls.slot, 1, "repair cannot rerun fulfillment");
+    assert_eq!(resources.calls.project, 2, "repair replays projection once");
+    assert_eq!(resources.calls.effects, 1, "repair resumes effects once");
+}
+
+#[test]
+fn committed_content_acceptance_repairs_from_recorded_reference() {
+    let mut build = billing();
+    build.realization_plan.content.insert(
+        "proof-content".to_owned(),
+        ContentPolicyPlan {
+            media_types: std::collections::BTreeSet::from(["text/plain".to_owned()]),
+            max_bytes: 1024,
+        },
+    );
+    let create = build
+        .realization_plan
+        .intents
+        .get_mut("create_invoice")
+        .unwrap();
+    create
+        .inputs
+        .iter_mut()
+        .find(|field| field.name == "customer_email")
+        .unwrap()
+        .source = InputSource::Content {
+        policy: "proof-content".to_owned(),
+        command_field: "customer_email".to_owned(),
+    };
+    build.realization_plan.plan_digest.clear();
+    build.realization_plan.plan_digest = hex::encode(Sha256::digest(
+        serde_json::to_vec(&build.realization_plan).unwrap(),
+    ));
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let context = context(None);
+    let mut resources = Resources::new("billing", &context);
+    resources.fail_accept_content = true;
+    let input = serde_json::to_vec(&json!({
+        "account_id": "018f7f4c-9b68-7abc-8def-111111111111",
+        "customer_email": {"media_type": "text/plain", "text": "person@example.test"},
+        "amount": {"amount": 12.5, "currency": "EUR"},
+        "idempotency_key": "content-1"
+    }))
+    .unwrap();
+
+    let error = engine
+        .execute_public_json(
+            &context,
+            "create_invoice",
+            &input,
+            recording("content"),
+            &mut resources,
+        )
+        .unwrap_err();
+    let ExecutionErrorV4::CommittedAftercare {
+        receipt,
+        repair_token,
+        ..
+    } = error
+    else {
+        panic!("content acceptance failure did not retain committed evidence");
+    };
+    assert_eq!(resources.calls.stage_content, 1);
+    assert_eq!(resources.calls.accept_content, 1);
+    assert_eq!(resources.calls.accept_recorded_content, 0);
+
+    let retried = engine
+        .execute_public_json(
+            &context,
+            "create_invoice",
+            &input,
+            recording("content-retry"),
+            &mut resources,
+        )
+        .unwrap();
+    assert!(matches!(
+        retried,
+        MutationResultV4::Committed { replayed: true, .. }
+    ));
+    assert_eq!(resources.calls.stage_content, 1);
+    assert_eq!(resources.calls.accept_content, 1);
+
+    resources.fail_accept_content = false;
+    let repaired = engine
+        .repair(&context, &repair_token, &mut resources)
+        .unwrap();
+    assert!(matches!(
+        repaired,
+        MutationResultV4::Committed {
+            receipt: repaired,
+            replayed: true,
+            ..
+        } if repaired == *receipt
+    ));
+    assert_eq!(resources.calls.stage_content, 1, "repair cannot restage");
+    assert_eq!(
+        resources.calls.accept_content, 1,
+        "repair has no staging token"
+    );
+    assert_eq!(resources.calls.accept_recorded_content, 1);
+    assert_eq!(
+        resources.recorded_content,
+        vec![(
+            "proof-content".to_owned(),
+            "content-1".to_owned(),
+            "content-reference".to_owned()
+        )]
+    );
 }

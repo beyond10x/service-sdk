@@ -4,7 +4,9 @@
 
 - Add strict opt-in `service-definition/4`, runtime IR, realization plan, and generated service
   support that delegates domain decisions and replay to Entity Runtime while retaining SDK
-  authentication, queries, durable Eventlog recovery, projections, and declared effects.
+  authentication, queries, durable Eventlog recovery, projections, and declared effects. Historical
+  retries return their original receipt after later subject changes, while an authenticated repair
+  route redelivers failed post-commit projections and durable effects from recorded authority.
 - Stop service generation when ESS returns a checked target failure, refusal, weakening, or
   unexpected target, preserving the original diagnostic before any generated output is written.
   Keep valid output and current ESS dependency pins unchanged.

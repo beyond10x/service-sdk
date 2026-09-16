@@ -215,9 +215,26 @@ business decision or fulfillment provider is called. For an existing subject, th
 also separates an exact retry from a new command that now sees a later revision.
 
 Append uncertainty is preserved unless lookup proves the complete matching batch committed or
-proves a conflict. The SDK never loops through a new decision. Projection or effect failure after a
-commit returns an error carrying the immutable batch receipt and a repair token. Repair reloads the
-authoritative subject and recorded result; it does not execute the business command again.
+proves a conflict. The SDK never loops through a new decision. An ordinary idempotent retry returns
+the original result and receipt without invoking projection or effects again, including when later
+decisions have advanced the subject: recovery verifies the complete current history, then replays
+the exact prefix through the recorded decision revision.
+
+Projection or effect failure after a commit returns the immutable batch receipt and a closed
+`sdk-er-repair-v1-{operation-hex}-{claim}` token. `operation-hex` is the lowercase hexadecimal
+UTF-8 public operation name and `claim` is the existing lowercase claim digest. The generated
+`POST /v1/repairs/{token}` route extracts the operation without reading application input,
+authenticates and authorizes its exact declared scope, binds the authenticated partition, and
+looks up that named batch. Repair requires the recorded original intent to match the current plan,
+operation, tenant, exact optional realm, authority, user, executor, and recomputed claim. It
+verifies the complete history and recorded decision prefix before rerunning only idempotent
+projection and durable effect delivery from the recorded decision and immutable receipt. It does
+not execute the business command or fulfillment again. For each content input present in the
+recorded original intent, repair extracts only the committed record-safe reference from the
+recorded decision arguments and asks the content provider to accept by authenticated partition,
+declared policy, original idempotency key, and exact reference. The transient staging token and
+plaintext are never persisted or reconstructed; a content provider must make this recorded
+acceptance coordinate idempotent.
 
 ## Version meanings
 

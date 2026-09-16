@@ -17,7 +17,7 @@ use service_engine::{
     PlanRealmPolicy,
     v4::{
         AuthenticatedPartition, EngineV4, ExecutionErrorV4, MutationResultV4, ServicePlanV4,
-        project_query_v4,
+        project_query_v4, repair_operation,
     },
 };
 use service_eventlog::{
@@ -87,6 +87,14 @@ pub trait ServiceBackendV4: Send + Sync {
         facts: AuthorityFacts,
         operation: &str,
         body: &[u8],
+        recording: Recording,
+    ) -> Result<MutationResultV4, ExecutionErrorV4>;
+    /// Redelivers committed aftercare from authoritative recorded evidence.
+    fn repair(
+        &self,
+        context: &VerifiedAuthContext,
+        facts: AuthorityFacts,
+        token: &str,
         recording: Recording,
     ) -> Result<MutationResultV4, ExecutionErrorV4>;
     /// Reads one authenticated SDK-owned projection.
@@ -191,6 +199,46 @@ impl<H: HostResourcesV4 + Send> ServiceBackendV4 for RecordedServiceBackendV4<H>
         EngineV4::new(&self.plan)
             .map_err(|error| ExecutionErrorV4::Binding(error.to_string()))?
             .execute_public_json(context, operation, body, recording, &mut resources)
+    }
+
+    fn repair(
+        &self,
+        context: &VerifiedAuthContext,
+        _: AuthorityFacts,
+        token: &str,
+        recording: Recording,
+    ) -> Result<MutationResultV4, ExecutionErrorV4> {
+        let mut host = self
+            .host
+            .lock()
+            .map_err(|_| ExecutionErrorV4::Persistence("host resource lock poisoned".into()))?;
+        let occurred_at = OffsetDateTime::parse(&recording.recorded_at, &Rfc3339)
+            .map_err(|error| ExecutionErrorV4::Input(error.to_string()))?;
+        let eventlog_operation = entity_eventlog::EventlogOperationContext {
+            subject: context.user().as_str().to_owned(),
+            actor: recording
+                .actor
+                .clone()
+                .unwrap_or_else(|| context.user().as_str().to_owned()),
+            request_id: recording.record_id.clone(),
+            trace_id: recording
+                .correlation
+                .clone()
+                .unwrap_or_else(|| recording.record_id.clone()),
+            causation_id: recording.causation,
+            causation_depth: 0,
+            occurred_at,
+        };
+        let mut resources = EventlogResourcesV4::new(
+            &self.bridge,
+            &self.authority,
+            eventlog_operation,
+            self.wait,
+            &mut *host,
+        );
+        EngineV4::new(&self.plan)
+            .map_err(|error| ExecutionErrorV4::Binding(error.to_string()))?
+            .repair(context, token, &mut resources)
     }
 
     fn query(
@@ -298,6 +346,7 @@ impl IdentityHttpServiceV4 {
             .route("/healthz", get(health))
             .route("/readyz", get(ready))
             .route("/v1/intents/{operation}", post(intent))
+            .route("/v1/repairs/{repair_token}", post(repair))
             .route("/v1/queries/{operation}", post(query))
             .with_state(self.state)
     }
@@ -338,10 +387,56 @@ async fn intent(
             Ok(recording) => recording,
             Err(response) => return *response,
         };
-    match state
-        .backend
-        .intent(&context, facts, &operation, &body, recording)
-    {
+    mutation_response(
+        state
+            .backend
+            .intent(&context, facts, &operation, &body, recording),
+    )
+}
+
+async fn repair(
+    State(state): State<HttpStateV4>,
+    Path(repair_token): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let Some(operation) = repair_operation(&repair_token) else {
+        return problem(
+            StatusCode::BAD_REQUEST,
+            "invalid_repair_token",
+            "the repair token is malformed",
+        );
+    };
+    let Some(plan) = state.plan.intents.get(&operation) else {
+        return problem(
+            StatusCode::NOT_FOUND,
+            "unknown_operation",
+            "unknown generated repair operation",
+        );
+    };
+    let (context, facts) =
+        match authorize_parts(&state.identity, &state.audience, &headers, &plan.scope).await {
+            Ok(value) => value,
+            Err(response) => return *response,
+        };
+    let recording = match request_recording(
+        &state.plan.service,
+        &format!("repair:{operation}"),
+        &context,
+        &headers,
+        &[],
+    ) {
+        Ok(recording) => recording,
+        Err(response) => return *response,
+    };
+    mutation_response(
+        state
+            .backend
+            .repair(&context, facts, &repair_token, recording),
+    )
+}
+
+fn mutation_response(result: Result<MutationResultV4, ExecutionErrorV4>) -> Response {
+    match result {
         Ok(MutationResultV4::Refused(refusal)) => (
             StatusCode::CONFLICT,
             Json(Problem {

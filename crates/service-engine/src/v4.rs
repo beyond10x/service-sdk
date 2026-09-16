@@ -4,7 +4,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use entity_core::{
-    Decision, Evaluation, LoadedDecision, OperationFieldAction, PreloadDecision, Registry, Runtime,
+    Decision, DecisionCommand, Evaluation, LoadedDecision, OperationFieldAction, PreloadDecision,
+    Registry, Runtime,
 };
 use entity_store::asynchronous::{
     AppendMember, AppendOutcome, AppendRequest, BatchKey, CommitReceipt, RecordedEntry,
@@ -768,6 +769,14 @@ pub trait ResourcesV4 {
         context: &VerifiedAuthContext,
         token: String,
     ) -> Result<(), String>;
+    /// Idempotently accepts committed staged content from its durable record-safe coordinates.
+    fn accept_recorded_content(
+        &mut self,
+        context: &VerifiedAuthContext,
+        policy: &str,
+        idempotency_key: &str,
+        reference: &str,
+    ) -> Result<(), String>;
     /// Abandons content after a conclusively uncommitted refusal or failure.
     fn abandon_content(
         &mut self,
@@ -985,6 +994,114 @@ impl<'a> EngineV4<'a> {
             recording,
             resources,
         )
+    }
+
+    /// Repairs projection and durable effect delivery from one authoritative committed batch.
+    ///
+    /// The token selects no application input. The recorded original intent, selected ER decision,
+    /// immutable receipt, and complete subject history remain the only delivery authority.
+    pub fn repair(
+        &self,
+        context: &VerifiedAuthContext,
+        token: &str,
+        resources: &mut dyn ResourcesV4,
+    ) -> Result<MutationResultV4, ExecutionErrorV4> {
+        let (operation, claim) = repair_coordinates(token)
+            .ok_or_else(|| ExecutionErrorV4::Input("invalid repair token".to_owned()))?;
+        let intent = self.plan.intents.get(&operation).ok_or_else(|| {
+            ExecutionErrorV4::Binding(format!("unknown repair operation {operation:?}"))
+        })?;
+        resources
+            .authorize(context, &intent.scope)
+            .map_err(ExecutionErrorV4::Admission)?;
+        enforce_realm(self.plan.realm, context)?;
+        let partition = AuthenticatedPartition::derive(&self.plan.service, context);
+        resources
+            .bind_partition(&partition)
+            .map_err(ExecutionErrorV4::Admission)?;
+        let batch_key = BatchKey::Named(claim.clone());
+        let batch = resources
+            .lookup_batch(&batch_key)
+            .map_err(ExecutionErrorV4::Persistence)?
+            .ok_or_else(|| ExecutionErrorV4::Persistence("repair batch is absent".to_owned()))?;
+        if batch.key != batch_key {
+            return Err(ExecutionErrorV4::Integrity(
+                "repair lookup returned a different batch key".to_owned(),
+            ));
+        }
+        let [_, observation_record] = batch.records.as_slice() else {
+            return Err(ExecutionErrorV4::Integrity(
+                "intent batch must contain exactly decision and observation".to_owned(),
+            ));
+        };
+        let RecordedEntry::Observation(observed) = &observation_record.entry else {
+            return Err(ExecutionErrorV4::Integrity(
+                "second intent batch member is not an observation".to_owned(),
+            ));
+        };
+        let observation: IntentObservationV4 =
+            serde_json::from_value(observed.envelope.record.clone())
+                .map_err(|error| ExecutionErrorV4::Integrity(error.to_string()))?;
+        if observation.format != "service-intent-observation/4"
+            || observation.intent_digest != digest_json(&observation.intent)
+        {
+            return Err(ExecutionErrorV4::Integrity(
+                "intent observation digest or format is invalid".to_owned(),
+            ));
+        }
+        let original = &observation.intent;
+        let binding = self
+            .plan
+            .er
+            .bindings
+            .commands
+            .get(&intent.command)
+            .ok_or_else(|| {
+                ExecutionErrorV4::Binding(format!("missing command {}", intent.command))
+            })?;
+        if original.plan_digest != self.plan.plan_digest
+            || original.operation != operation
+            || original.service != self.plan.service
+            || original.tenant != context.tenant().as_str()
+            || original.realm.as_deref() != context.realm().map(service_runtime::RealmId::as_str)
+            || original.authority != context.authority().as_str()
+            || original.user != context.user().as_str()
+            || original.executor.as_deref()
+                != context.executor().map(service_runtime::ExecutorId::as_str)
+            || original.category != binding.entity
+            || claim_key(&partition, original) != claim
+        {
+            return Err(ExecutionErrorV4::Integrity(
+                "repair token does not match the recorded authenticated intent".to_owned(),
+            ));
+        }
+        let recovered = recover(resources, &batch, original)?;
+        let MutationResultV4::Committed {
+            decision, receipt, ..
+        } = recovered
+        else {
+            return Err(ExecutionErrorV4::Integrity(
+                "repair batch does not contain a committed decision".to_owned(),
+            ));
+        };
+        let recorded_content = recorded_content_acceptances(intent, &decision, original)?;
+        deliver_after_commit(
+            resources, context, &operation, intent, &decision, &receipt, &claim,
+        )?;
+        for (policy, reference) in recorded_content {
+            resources
+                .accept_recorded_content(context, &policy, &original.idempotency_key, &reference)
+                .map_err(|cause| ExecutionErrorV4::CommittedAftercare {
+                    receipt: Box::new(receipt.clone()),
+                    repair_token: repair_token(&operation, &claim),
+                    cause,
+                })?;
+        }
+        Ok(MutationResultV4::Committed {
+            decision,
+            receipt,
+            replayed: true,
+        })
     }
 
     #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -1253,7 +1370,9 @@ impl<'a> EngineV4<'a> {
             let receipt = outcome.receipt().cloned().ok_or_else(|| {
                 ExecutionErrorV4::Integrity("append returned no committed receipt".to_owned())
             })?;
-            deliver_after_commit(resources, context, intent, &decision, &receipt, &claim)?;
+            deliver_after_commit(
+                resources, context, operation, intent, &decision, &receipt, &claim,
+            )?;
             Ok(MutationResultV4::Committed {
                 decision: Box::new(decision),
                 receipt,
@@ -1271,7 +1390,7 @@ impl<'a> EngineV4<'a> {
                         .accept_content(context, content.token)
                         .map_err(|cause| ExecutionErrorV4::CommittedAftercare {
                             receipt: Box::new(receipt.clone()),
-                            repair_token: format!("sdk-er-repair-{claim}"),
+                            repair_token: repair_token(operation, &claim),
                             cause,
                         })?;
                 }
@@ -1392,6 +1511,59 @@ fn prepare_content(
         });
     }
     Ok((claim_input, pending))
+}
+
+fn recorded_content_acceptances(
+    intent: &IntentPlanV4,
+    decision: &Decision,
+    original: &OriginalIntentV4,
+) -> Result<Vec<(String, String)>, ExecutionErrorV4> {
+    let original_input = original.input.as_object().ok_or_else(|| {
+        ExecutionErrorV4::Integrity("recorded original intent input is not an object".to_owned())
+    })?;
+    let arguments = match &decision.record.command {
+        DecisionCommand::Create { arguments, .. } | DecisionCommand::Execute { arguments, .. } => {
+            arguments
+        }
+        DecisionCommand::LegacyImport => {
+            return Err(ExecutionErrorV4::Integrity(
+                "committed service intent cannot be a legacy import".to_owned(),
+            ));
+        }
+    };
+    let decided_input = arguments
+        .get("input")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            ExecutionErrorV4::Integrity(
+                "recorded service decision omits normalized input".to_owned(),
+            )
+        })?;
+    let mut recorded = Vec::new();
+    for field in &intent.inputs {
+        let crate::InputSource::Content {
+            policy,
+            command_field,
+        } = &field.source
+        else {
+            continue;
+        };
+        if !original_input.contains_key(&field.name) {
+            continue;
+        }
+        let reference = decided_input
+            .get(command_field)
+            .and_then(Value::as_str)
+            .filter(|reference| !reference.trim().is_empty())
+            .ok_or_else(|| {
+                ExecutionErrorV4::Integrity(format!(
+                    "recorded content input {:?} omits committed reference {command_field:?}",
+                    field.name
+                ))
+            })?;
+        recorded.push((policy.clone(), reference.to_owned()));
+    }
+    Ok(recorded)
 }
 
 fn abandon_content(
@@ -1649,11 +1821,26 @@ fn recover(
     let history = resources
         .history(&subject)
         .map_err(ExecutionErrorV4::Persistence)?;
-    let replayed = entity_core::replay(&history)
+    let _latest = entity_core::replay(&history)
+        .map_err(|error| ExecutionErrorV4::Integrity(error.to_string()))?;
+    let target = history
+        .iter()
+        .position(|record| record.revision == commit.instance.revision)
+        .ok_or_else(|| {
+            ExecutionErrorV4::Integrity(
+                "verified ER history omits the winning decision revision".to_owned(),
+            )
+        })?;
+    if history[target] != commit.envelope.record {
+        return Err(ExecutionErrorV4::Integrity(
+            "verified ER history differs from the winning decision record".to_owned(),
+        ));
+    }
+    let replayed = entity_core::replay(&history[..=target])
         .map_err(|error| ExecutionErrorV4::Integrity(error.to_string()))?;
     if replayed != commit.instance {
         return Err(ExecutionErrorV4::Integrity(
-            "verified ER history does not reproduce the winning instance".to_owned(),
+            "verified ER history prefix does not reproduce the winning instance".to_owned(),
         ));
     }
     Ok(MutationResultV4::Committed {
@@ -1666,6 +1853,7 @@ fn recover(
 fn deliver_after_commit(
     resources: &mut dyn ResourcesV4,
     context: &VerifiedAuthContext,
+    operation: &str,
     intent: &IntentPlanV4,
     decision: &Decision,
     receipt: &CommitReceipt,
@@ -1676,9 +1864,38 @@ fn deliver_after_commit(
         .and_then(|()| resources.effects(context, intent, decision, receipt))
         .map_err(|cause| ExecutionErrorV4::CommittedAftercare {
             receipt: Box::new(receipt.clone()),
-            repair_token: format!("sdk-er-repair-{claim}"),
+            repair_token: repair_token(operation, claim),
             cause,
         })
+}
+
+fn repair_token(operation: &str, claim: &str) -> String {
+    format!("sdk-er-repair-v1-{}-{claim}", hex::encode(operation))
+}
+
+fn repair_coordinates(token: &str) -> Option<(String, String)> {
+    let encoded = token.strip_prefix("sdk-er-repair-v1-")?;
+    let (operation, claim) = encoded.split_once('-')?;
+    if operation.is_empty()
+        || claim.len() != 64
+        || !operation
+            .bytes()
+            .chain(claim.bytes())
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return None;
+    }
+    let operation = String::from_utf8(hex::decode(operation).ok()?).ok()?;
+    if operation.is_empty() {
+        return None;
+    }
+    Some((operation, claim.to_owned()))
+}
+
+/// Returns the exact public operation encoded in a closed `/4` repair token.
+#[must_use]
+pub fn repair_operation(token: &str) -> Option<String> {
+    repair_coordinates(token).map(|(operation, _)| operation)
 }
 
 fn digest_json(value: &impl Serialize) -> String {
@@ -1745,6 +1962,66 @@ mod tests {
                 .unwrap()
                 .contains("private body")
         );
+    }
+
+    #[test]
+    fn committed_content_reference_is_the_only_repair_coordinate() {
+        let instance = entity_core::EntityInstance {
+            entity: "demo.Document".to_owned(),
+            version: 1,
+            id: "document-a".to_owned(),
+            lifecycle_state: "Created".to_owned(),
+            revision: 1,
+            fields: Map::new(),
+        };
+        let mut decision = Decision::legacy_import(instance, Vec::new());
+        decision.record.command = DecisionCommand::Execute {
+            operation: "demo.document.Create".to_owned(),
+            arguments: serde_json::from_value(serde_json::json!({
+                "input": {"content_ref": "content:sha256:recorded"},
+                "bound": {}
+            }))
+            .unwrap(),
+            fulfillments: BTreeMap::new(),
+        };
+        let original = OriginalIntentV4 {
+            plan_digest: "plan".to_owned(),
+            operation: "create_document".to_owned(),
+            input: serde_json::json!({
+                "content": {"media_type": "text/plain", "sha256": "a".repeat(64)}
+            }),
+            service: "demo".to_owned(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            authority: "account-a".to_owned(),
+            user: "user-a".to_owned(),
+            executor: None,
+            idempotency_key: "create-1".to_owned(),
+            category: "demo.Document".to_owned(),
+            selector: ClaimSelectorV4::GeneratedUuidV7,
+        };
+        assert_eq!(
+            recorded_content_acceptances(&content_intent(false), &decision, &original).unwrap(),
+            vec![("body".to_owned(), "content:sha256:recorded".to_owned())]
+        );
+
+        let mut absent = original.clone();
+        absent.input = serde_json::json!({});
+        assert!(
+            recorded_content_acceptances(&content_intent(true), &decision, &absent)
+                .unwrap()
+                .is_empty()
+        );
+        decision.record.command = DecisionCommand::Execute {
+            operation: "demo.document.Create".to_owned(),
+            arguments: serde_json::from_value(serde_json::json!({"input": {}, "bound": {}}))
+                .unwrap(),
+            fulfillments: BTreeMap::new(),
+        };
+        assert!(matches!(
+            recorded_content_acceptances(&content_intent(false), &decision, &original),
+            Err(ExecutionErrorV4::Integrity(_))
+        ));
     }
 
     #[test]
