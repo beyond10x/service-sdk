@@ -1,0 +1,19 @@
+# The demonstration specification: one system, two synthesised applications, one surface.
+#
+# `examples/billing/` is the normative example and stays the reference for what the model can
+# express. This one exists for a narrower claim, and states it in its own words: its component is
+# reached over a network, so the surface it serves is the published contract rather than a document
+# beside one — and the Rust binary and the Go binary synthesised from these files serve that same
+# contract, byte for byte, with the same startup log.
+format: ess/1
+system: gatepass
+version: v1
+
+summary: >-
+  Visitor passes for a building: who is expected, who is inside, and who has left. Three commands,
+  two of which can be refused for two different reasons, one lifecycle, two projections and no
+  binding — because the one transport this system has is the one its component's own words require,
+  and nothing here reacts to an event.
+
+domains:
+  - gatepass.visit

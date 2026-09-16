@@ -8,6 +8,7 @@ use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use service_definition::ServiceDefinition;
+use service_definition::v4::ServiceDefinitionV4;
 
 use crate::client::{ClientOperationKind, ClientPlan};
 use crate::ess::EssSources;
@@ -125,6 +126,18 @@ pub struct ServicePackage {
     /// Strict runtime definition.
     pub definition: ServiceDefinition,
     /// Validated scenario source bytes in manifest order.
+    pub(crate) scenarios: Vec<ScenarioSource>,
+}
+
+/// Complete opt-in package input whose runtime definition is strict `/4`.
+pub struct ServicePackageV4 {
+    /// Validated human-authored manifest, unchanged from the existing package envelope.
+    pub manifest: ServicePackageManifest,
+    /// Exact ESS fragment set.
+    pub sources: EssSources,
+    /// Strict Entity Runtime delegated definition.
+    pub definition: ServiceDefinitionV4,
+    /// Validated scenario sources in manifest order.
     pub(crate) scenarios: Vec<ScenarioSource>,
 }
 
@@ -317,6 +330,93 @@ impl ServicePackage {
     }
 
     /// Validates every declarative scenario against the generated public operation surface.
+    pub(crate) fn validate_scenarios(&self, client: &ClientPlan) -> Result<()> {
+        for source in &self.scenarios {
+            source.document.validate_operations(client, &source.path)?;
+        }
+        Ok(())
+    }
+}
+
+impl ServicePackageV4 {
+    /// Reads every package input with the strict `/4` runtime reader.
+    pub fn read(manifest_path: &Path) -> Result<Self> {
+        let text = fs::read_to_string(manifest_path)
+            .with_context(|| format!("reading service package {}", manifest_path.display()))?;
+        let manifest: ServicePackageManifest =
+            match manifest_path.extension().and_then(std::ffi::OsStr::to_str) {
+                Some("yaml" | "yml") => serde_yaml::from_str(&text).with_context(|| {
+                    format!("parsing YAML service package {}", manifest_path.display())
+                })?,
+                Some("json") => serde_json::from_str(&text).with_context(|| {
+                    format!("parsing JSON service package {}", manifest_path.display())
+                })?,
+                _ => bail!("service package manifest must be YAML or JSON"),
+            };
+        validate_manifest(&manifest)?;
+        let package_root = manifest_path
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .canonicalize()
+            .with_context(|| format!("resolving package root for {}", manifest_path.display()))?;
+        let semantic_root = resolve_directory(&package_root, &manifest.semantic.root)?;
+        let mut source_files = BTreeMap::new();
+        for source in &manifest.semantic.sources {
+            let path = resolve_file(&semantic_root, source)?;
+            source_files.insert(
+                source.clone(),
+                fs::read_to_string(&path)
+                    .with_context(|| format!("reading ESS fragment {}", path.display()))?,
+            );
+        }
+        let sources = EssSources::new(source_files)?;
+        let runtime_path = resolve_file(&package_root, &manifest.runtime)?;
+        let runtime_text = fs::read_to_string(&runtime_path)
+            .with_context(|| format!("reading runtime definition {}", runtime_path.display()))?;
+        let definition = match runtime_path.extension().and_then(std::ffi::OsStr::to_str) {
+            Some("yaml" | "yml") => ServiceDefinitionV4::from_yaml(&runtime_text),
+            Some("json") => ServiceDefinitionV4::from_json(&runtime_text),
+            _ => bail!("runtime definition must be YAML or JSON"),
+        }
+        .with_context(|| format!("validating runtime definition {}", runtime_path.display()))?;
+        let ir = sources.compile()?;
+        if definition.service.as_str() != manifest.service {
+            bail!(
+                "package service {:?} differs from runtime service {:?}",
+                manifest.service,
+                definition.service.as_str()
+            );
+        }
+        if ir.system().to_string() != manifest.service {
+            bail!(
+                "package service {:?} differs from ESS system {:?}",
+                manifest.service,
+                ir.system().to_string()
+            );
+        }
+        let mut scenarios = Vec::with_capacity(manifest.scenarios.len());
+        for scenario in &manifest.scenarios {
+            let path = resolve_file(&package_root, scenario)?;
+            let contents = fs::read_to_string(&path)
+                .with_context(|| format!("reading scenario {}", path.display()))?;
+            let document: ScenarioDocument = serde_yaml::from_str(&contents)
+                .with_context(|| format!("parsing scenario {}", path.display()))?;
+            document.validate_header(&manifest.service, scenario)?;
+            scenarios.push(ScenarioSource {
+                path: scenario.clone(),
+                contents,
+                document,
+            });
+        }
+        Ok(Self {
+            manifest,
+            sources,
+            definition,
+            scenarios,
+        })
+    }
+
+    /// Validates every scenario against the generated public operation surface.
     pub(crate) fn validate_scenarios(&self, client: &ClientPlan) -> Result<()> {
         for source in &self.scenarios {
             source.document.validate_operations(client, &source.path)?;

@@ -1,0 +1,15 @@
+format: service/2
+service: billing
+sdk:
+  repository: https://github.com/beyond10x/service-sdk.git
+  revision: b5a1c1562984b11b5b945c5f95710497b2a69d80
+semantic:
+  root: ess
+  sources:
+    - system.yaml
+    - components.yaml
+    - domains/email.yaml
+    - domains/invoice.yaml
+    - topology.yaml
+runtime: runtime.yaml
+

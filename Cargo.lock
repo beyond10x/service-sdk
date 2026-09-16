@@ -600,6 +600,54 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity-core"
+version = "0.18.1"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11#7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "entity-eventlog"
+version = "0.18.1"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11#7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11"
+dependencies = [
+ "entity-core",
+ "entity-executor",
+ "entity-store",
+ "eventlog-core",
+ "eventlog-postgres",
+ "eventlog-sqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "time",
+ "tokio",
+]
+
+[[package]]
+name = "entity-executor"
+version = "0.18.1"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11#7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11"
+dependencies = [
+ "entity-core",
+ "entity-store",
+ "serde_json",
+]
+
+[[package]]
+name = "entity-store"
+version = "0.18.1"
+source = "git+https://github.com/beyond10x/entity-runtime?rev=7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11#7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11"
+dependencies = [
+ "entity-core",
+ "fs2",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -612,13 +660,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "ess-compiler"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -629,8 +677,8 @@ dependencies = [
 
 [[package]]
 name = "ess-deployment"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-compiler",
  "ess-realization",
@@ -644,8 +692,8 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -656,9 +704,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-entity-runtime"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
+dependencies = [
+ "entity-core",
+ "ess-compiler",
+ "ess-domain",
+ "ess-primitives",
+ "ess-service-contract",
+ "ess-synth",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "ess-gen"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -672,8 +735,8 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -683,8 +746,8 @@ dependencies = [
 
 [[package]]
 name = "ess-realization"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -695,21 +758,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-service-contract"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
+dependencies = [
+ "ess-compiler",
+ "ess-domain",
+ "ess-synth",
+]
+
+[[package]]
 name = "ess-synth"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.24.0"
+source = "git+https://github.com/beyond10x/ess.git?rev=b5e980fe0aff382bca91a08ebd3827ee8ff4b73e#b5e980fe0aff382bca91a08ebd3827ee8ff4b73e"
 dependencies = [
  "ess-compiler",
  "ess-domain",
  "ess-gen",
+ "ess-primitives",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "eventlog-core"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.2.1"
+source = "git+https://github.com/beyond10x/eventlog?rev=43ceaa09ceec610e25891815e33e03e8df92ee28#43ceaa09ceec610e25891815e33e03e8df92ee28"
 dependencies = [
  "serde",
  "serde_json",
@@ -721,8 +795,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-postgres"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.2.1"
+source = "git+https://github.com/beyond10x/eventlog?rev=43ceaa09ceec610e25891815e33e03e8df92ee28#43ceaa09ceec610e25891815e33e03e8df92ee28"
 dependencies = [
  "eventlog-core",
  "rustls",
@@ -738,8 +812,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-sqlite"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.2.1"
+source = "git+https://github.com/beyond10x/eventlog?rev=43ceaa09ceec610e25891815e33e03e8df92ee28#43ceaa09ceec610e25891815e33e03e8df92ee28"
 dependencies = [
  "eventlog-core",
  "rusqlite",
@@ -776,6 +850,12 @@ dependencies = [
  "regex-automata",
  "regex-syntax",
 ]
+
+[[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "fiat-crypto"
@@ -1825,7 +1905,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2050,7 +2130,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2302,12 +2382,15 @@ version = "0.5.11"
 dependencies = [
  "anyhow",
  "clap",
+ "entity-core",
+ "entity-store",
  "ess-compiler",
  "ess-deployment",
  "ess-domain",
  "ess-gen",
  "ess-realization",
  "ess-synth",
+ "futures",
  "hex",
  "semver",
  "serde",
@@ -2317,6 +2400,7 @@ dependencies = [
  "service-connectors",
  "service-definition",
  "service-engine",
+ "service-runtime",
  "service-runtime-ir",
  "sha2 0.11.0",
  "thiserror",
@@ -2378,6 +2462,7 @@ name = "service-definition"
 version = "0.5.11"
 dependencies = [
  "ess-compiler",
+ "ess-domain",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2387,11 +2472,16 @@ dependencies = [
 name = "service-engine"
 version = "0.5.11"
 dependencies = [
+ "entity-core",
+ "entity-store",
+ "ess-primitives",
  "futures",
  "hex",
  "serde",
  "serde_json",
+ "service-definition",
  "service-runtime",
+ "service-runtime-ir",
  "sha2 0.11.0",
  "thiserror",
  "time",
@@ -2401,6 +2491,9 @@ dependencies = [
 name = "service-eventlog"
 version = "0.5.11"
 dependencies = [
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-sqlite",
  "hex",
@@ -2422,6 +2515,9 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-postgres",
  "eventlog-sqlite",
@@ -2434,11 +2530,14 @@ dependencies = [
  "serde",
  "serde_json",
  "service",
+ "service-builder",
  "service-connectors",
+ "service-definition",
  "service-engine",
  "service-eventlog",
  "service-http",
  "service-runtime",
+ "tempfile",
  "time",
  "tokio",
  "uuid",
@@ -2450,8 +2549,12 @@ version = "0.5.11"
 dependencies = [
  "axum",
  "bytes",
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-sqlite",
+ "hex",
  "identity-client",
  "reqwest",
  "serde",
@@ -2459,7 +2562,9 @@ dependencies = [
  "service-engine",
  "service-eventlog",
  "service-runtime",
+ "sha2 0.11.0",
  "thiserror",
+ "time",
  "tokio",
 ]
 
@@ -2489,8 +2594,12 @@ dependencies = [
 name = "service-runtime-ir"
 version = "0.5.11"
 dependencies = [
+ "entity-core",
  "ess-compiler",
  "ess-domain",
+ "ess-entity-runtime",
+ "ess-primitives",
+ "ess-service-contract",
  "ess-synth",
  "serde",
  "serde_json",
@@ -2674,6 +2783,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

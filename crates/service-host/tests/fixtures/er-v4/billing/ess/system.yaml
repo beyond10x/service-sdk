@@ -1,0 +1,14 @@
+# The normative example. `ess-domain` parses this in a test, so it cannot drift from the model.
+format: ess/1
+system: billing
+version: v3
+
+summary: >-
+  Invoicing and the notification that follows it: the smallest system that still exercises every
+  construct the model has — two bounded contexts, a command that can be refused, a command with an
+  outcome its input cannot decide, both consistency levels, a state machine, actors, and a type of
+  every kind.
+
+domains:
+  - billing.invoice
+  - billing.email

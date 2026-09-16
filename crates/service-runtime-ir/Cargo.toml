@@ -10,7 +10,12 @@ publish.workspace = true
 
 [dependencies]
 ess-compiler.workspace = true
+ess-domain.workspace = true
+ess-entity-runtime.workspace = true
+ess-primitives.workspace = true
+ess-service-contract.workspace = true
 ess-synth.workspace = true
+entity-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

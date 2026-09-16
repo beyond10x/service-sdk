@@ -16,7 +16,12 @@ sha2.workspace = true
 hex.workspace = true
 thiserror.workspace = true
 time.workspace = true
+entity-core.workspace = true
+entity-store.workspace = true
+ess-primitives.workspace = true
+service-definition = { path = "../service-definition" }
 service-runtime = { path = "../service-runtime" }
+service-runtime-ir = { path = "../service-runtime-ir" }
 
 [dev-dependencies]
 futures = "0.3"

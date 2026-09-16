@@ -1,0 +1,440 @@
+domain: billing.invoice
+
+summary: Issuing invoices and tracking whether they are paid.
+
+naming:
+  wire: invoices
+  display: Invoicing
+
+types:
+  # A wrapper, not an alias. `Email` is not `String`: the value of naming it separately is entirely
+  # in the conversions the model then refuses.
+  - name: billing.invoice.InvoiceId
+    kind: newtype
+    of: Uuid
+
+  - name: billing.invoice.Email
+    kind: newtype
+    of: String
+
+  - name: billing.invoice.AccountId
+    kind: newtype
+    of: Uuid
+
+  - name: billing.invoice.Money
+    kind: struct
+    fields:
+      - name: amount
+        type: Decimal
+      - name: currency
+        type: String
+    # Checked against this type's own fields, not stored as a sentence.
+    invariants:
+      - amount >= 0
+
+  # A closed set of names, so a projection of it cannot be spelt wrong.
+  - name: billing.invoice.Channel
+    kind: enum
+    variants: [Email, Post, Portal]
+    naming:
+      display: Delivery channel
+
+  # Tagged, always. An untagged union cannot round-trip through JSON Schema, OpenAPI or Serde
+  # without ambiguity, and the ambiguity surfaces as a decoder picking the wrong branch at runtime.
+  - name: billing.invoice.Payee
+    kind: union
+    tag: kind
+    variants:
+      person: billing.invoice.Email
+      company: billing.invoice.CompanyRef
+
+  - name: billing.invoice.CompanyRef
+    kind: newtype
+    of: String
+
+  - name: billing.invoice.LineItem
+    kind: struct
+    fields:
+      - name: description
+        type: String
+      - name: quantity
+        type: Integer
+      - name: unit_price
+        type: billing.invoice.Money
+
+entities:
+  # The owner. An account is what invoices belong to, and `relations:` is where that belonging is
+  # written down: without it the ownership would be `Invoice.account_id` plus an invariant somebody
+  # remembers, which is prose to every projection and refusable by nothing.
+  - name: billing.invoice.Account
+
+    identity:
+      name: account_id
+      type: billing.invoice.AccountId
+
+    fields:
+      - name: display_name
+        type: String
+
+    relations:
+      # Declared here and nowhere else. `via:` names the field on the *target* that carries it,
+      # because that is where an owner's identity lives on the thing it owns; `cardinality:` says
+      # how many invoices one account has, and says nothing about that field, which is one account
+      # whether the account has one invoice or a thousand.
+      - name: invoices
+        kind: owns
+        target: billing.invoice.Invoice
+        cardinality: many
+        via: account_id
+
+    # An account is reference data here: one state, no moves, and therefore no command that has to
+    # cause one.
+    lifecycle:
+      initial: Active
+      states: [Active]
+      terminal: [Active]
+
+  - name: billing.invoice.Invoice
+
+    # The identity carries a name as well as a type. Without the name, every generator would invent
+    # its own, and the view below could not agree with any of them.
+    identity:
+      name: invoice_id
+      type: billing.invoice.InvoiceId
+
+    fields:
+      # The field the ownership above is carried by. Typed as the account's identity, which is what
+      # `ess validate` checks: a `String` here, or the invoice's own id type, is refused.
+      - name: account_id
+        type: billing.invoice.AccountId
+      - name: total
+        type: billing.invoice.Money
+      - name: payee
+        type: billing.invoice.Payee
+      - name: channel
+        type: billing.invoice.Channel
+      - name: lines
+        type: List<billing.invoice.LineItem>
+      - name: note
+        type: Optional<String>
+      - name: metadata
+        type: Map<String, String>
+      - name: issued_at
+        type: Optional<Timestamp>
+      - name: settlement_window
+        type: Duration
+      - name: is_recurring
+        type: Boolean
+      - name: signature
+        type: Bytes
+      # A top-level Integer, and the reason it is one is the invariant below.
+      - name: reminder_count
+        type: Integer
+
+    invariants:
+      - total.amount >= 0
+      # A field of this entity's own, named without a dot — which is how anybody writes an
+      # invariant over a top-level field, and the shape the Go runner used to read as the *word*
+      # `reminder_count` rather than the value. Left out of the examples until 0.10.0, so nothing
+      # shipped here caught it: `total.amount` above has a dot and parses the same either way.
+      - reminder_count >= 0
+
+    # Illegal transitions are illegal by absence. `Paid → Cancelled` is not forbidden by a rule,
+    # because a rule would be a second place for the same truth to live.
+    #
+    # Every move below has to be caused by some command outcome — see the `moves:` keys under
+    # `commands:`. A transition nothing takes is a state change nothing can trigger, which is refused
+    # as `missing_causation`: the lifecycle equivalent of a type no value can inhabit.
+    lifecycle:
+      initial: Draft
+      states: [Draft, Issued, Paid, Cancelled]
+      terminal: [Paid, Cancelled]
+      transitions:
+        - name: issue
+          from: [Draft]
+          to: Issued
+        - name: settle
+          from: [Issued]
+          to: Paid
+        - name: cancel
+          from: [Draft, Issued]
+          to: Cancelled
+
+actors:
+  - name: billing.invoice.Customer
+    may:
+      - billing.invoice.CreateInvoice
+    naming:
+      display: Customer
+
+  # An actor that only observes still belongs in the model: "who is in this picture" is part of what
+  # the specification describes.
+  - name: billing.invoice.Auditor
+
+errors:
+  - name: billing.invoice.InvalidAmount
+    summary: The requested amount is not positive.
+    # An error carries what a caller needs in order to react, not just a name.
+    fields:
+      - name: submitted
+        type: billing.invoice.Money
+
+  # What every lifecycle command reports when it is asked to act from a state it does not act from.
+  # It carries the state the invoice is actually in, because "no" without "it is already paid" sends
+  # the caller back to guess.
+  - name: billing.invoice.InvoiceStateConflict
+    summary: The invoice is not in a state this command acts from, so nothing moved.
+    fields:
+      - name: state
+        type: billing.invoice.Invoice.State
+
+commands:
+  - name: billing.invoice.CreateInvoice
+
+    naming:
+      wire: create-invoice
+      display: Create invoice
+
+    input:
+      - name: account_id
+        type: billing.invoice.AccountId
+      - name: customer_email
+        type: billing.invoice.Email
+      - name: amount
+        type: billing.invoice.Money
+
+    # Two outcomes, because this command can be refused. A specification that recorded only the
+    # first would generate a suite that never checks what happens when the amount is wrong.
+    #
+    # The subject hangs off the *outcome*, not off the command: `accepted` brings an invoice into
+    # existence and `rejected` brings nothing into existence, and a subject on the command would have
+    # attached a state change to the refusal. `creates:` is not a transition — a new instance has no
+    # state to move out of — so it starts at the lifecycle's `initial`.
+    outcomes:
+      - name: accepted
+        when: amount.amount > 0
+        creates: billing.invoice.Invoice
+        # Which invoice. `creates:` is the one verb whose instance the caller cannot name — the
+        # invoice does not exist when the command is issued and its id is the implementation's to
+        # assign — so `instance:` names the field of an *emitted* event the new identity is
+        # published in. That is what lets the next scenario say "the invoice the previous step
+        # created" instead of inventing one.
+        instance: invoice_id
+        emits:
+          - billing.invoice.InvoiceCreated
+        # Where the announced fact's fields come from. Without this block the event's *types* are
+        # declared and its *values* are not, so an implementation announcing an amount nobody
+        # submitted contradicts nothing — the one fault the conformance matrix recorded as caught
+        # by nothing. `invoice_id` has no line here on purpose: the identity is the
+        # implementation's to assign, so it stays undetermined and a suite asserts its presence
+        # and type, never its value.
+        payload:
+          billing.invoice.InvoiceCreated:
+            account_id: input.account_id
+            customer_email: input.customer_email
+            amount: input.amount
+        # The same relation, pointed at the invoice instead of the announcement. `payload:` says
+        # what the event carries; this says what the *invoice* holds, which is what every view of
+        # it later shows. Without it a generated scenario can find the row it created and say
+        # nothing about what is in it, so an implementation that stored somebody else's amount
+        # passes — the ordering half of the same gap is why `OutstandingInvoices` could be asserted
+        # to be in order and never to be in the right order.
+        #
+        # `invoice_id` has no line here for the reason it has none above: the identity is the
+        # implementation's to assign. `issued_at` has none because `CreateInvoice` is not what
+        # sets it and `IssueInvoice` does not take it — a clock is not an input, and the model says
+        # so by staying quiet rather than by naming a source that does not exist.
+        sets:
+          account_id: input.account_id
+          total: input.amount
+        summary: The invoice is created in Draft.
+
+      - name: rejected
+        error: billing.invoice.InvalidAmount
+        summary: The amount was not positive, and nothing was created.
+
+  # The three commands that drive the lifecycle. `moves:` names the entity and the transition
+  # together — `billing.invoice.Invoice.issue` — because a transition is declared inside an entity,
+  # and nothing infers the driving command from a name: a heuristic on spelling is exactly the
+  # invention the conformance design refuses.
+  - name: billing.invoice.IssueInvoice
+
+    naming:
+      wire: issue-invoice
+      display: Issue invoice
+
+    input:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+
+    outcomes:
+      - name: issued
+        moves: billing.invoice.Invoice.issue
+        instance: invoice_id
+        emits:
+          - billing.invoice.InvoiceIssued
+        # The event announces the invoice the caller named, and this says so: `instance:` already
+        # links the input field to the *entity*, and this line links it to the *announcement*,
+        # which nothing infers from the shared spelling.
+        payload:
+          billing.invoice.InvoiceIssued:
+            invoice_id: input.invoice_id
+        summary: The invoice leaves Draft and is now Issued.
+
+      # What happens when the invoice is not in Draft. `wrong_state` names no state, and writing one
+      # would be the `forbids` rule the lifecycle refuses: `issue` already says it runs `from:
+      # [Draft]`, so every other declared state is a state this command answers in, and a transition
+      # that later gains a `from` moves this branch with it. The error is the one thing the lifecycle
+      # cannot imply, and without it a generated suite could only check that nothing happened —
+      # which passes against an implementation that refuses for the wrong reason.
+      - name: wrong-state
+        wrong_state: true
+        error: billing.invoice.InvoiceStateConflict
+        summary: The invoice is not in Draft, so it was not issued.
+
+  # The transition design §19 uses as its worked example: `Issued → Paid`, and the command that
+  # makes it happen. Without this link a generated scenario knows the move is legal and has no verb
+  # to reach it with.
+  - name: billing.invoice.PayInvoice
+
+    naming:
+      wire: pay-invoice
+      display: Pay invoice
+
+    input:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+      - name: amount
+        type: billing.invoice.Money
+
+    outcomes:
+      - name: settled
+        when: amount.amount > 0
+        moves: billing.invoice.Invoice.settle
+        # For `moves:` and `updates:` the instance already exists, so `instance:` names the *input*
+        # field that carries its identity. `PayInvoice` takes two fields and only one of them
+        # identifies an invoice; nothing here matches on the type to work that out.
+        instance: invoice_id
+        emits:
+          - billing.invoice.InvoicePaid
+        # The settled amount is the submitted amount — the sentence every consumer of
+        # `InvoicePaid` already assumed, now a declaration a suite may hold an implementation to.
+        payload:
+          billing.invoice.InvoicePaid:
+            invoice_id: input.invoice_id
+            amount: input.amount
+        summary: The payment is accepted and the invoice becomes Paid.
+
+      # A refusal declares no subject, and declaring one is refused as `refusal_mutated_state`: a
+      # refused command changes nothing, so a branch that reports an error cannot also move an
+      # invoice.
+      - name: rejected
+        error: billing.invoice.InvalidAmount
+        summary: The payment was not positive, so the invoice did not move.
+
+      # Two refusals, two errors, and the difference is which of them a caller can act on.
+      # `rejected` is about the amount that was sent; this one is about the invoice that was named.
+      - name: wrong-state
+        wrong_state: true
+        error: billing.invoice.InvoiceStateConflict
+        summary: The invoice is not Issued, so the payment did not settle it.
+
+  - name: billing.invoice.CancelInvoice
+
+    naming:
+      wire: cancel-invoice
+      display: Cancel invoice
+
+    input:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+
+    outcomes:
+      - name: cancelled
+        moves: billing.invoice.Invoice.cancel
+        instance: invoice_id
+        emits:
+          - billing.invoice.InvoiceCancelled
+        payload:
+          billing.invoice.InvoiceCancelled:
+            invoice_id: input.invoice_id
+        summary: The invoice is cancelled, from Draft or from Issued.
+
+      # `cancel` runs from two states, so this branch answers in the two that are left — the design's
+      # own worked example, `CancelInvoice` on a `Paid` invoice, which must not reach `Cancelled`.
+      - name: wrong-state
+        wrong_state: true
+        error: billing.invoice.InvoiceStateConflict
+        summary: The invoice is already Paid or already Cancelled, so nothing was cancelled.
+
+events:
+  - name: billing.invoice.InvoiceCreated
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+      - name: account_id
+        type: billing.invoice.AccountId
+      - name: customer_email
+        type: billing.invoice.Email
+      - name: amount
+        type: billing.invoice.Money
+
+  - name: billing.invoice.InvoiceIssued
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+
+  - name: billing.invoice.InvoicePaid
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+      - name: amount
+        type: billing.invoice.Money
+
+  - name: billing.invoice.InvoiceCancelled
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+
+views:
+  - name: billing.invoice.InvoiceById
+    source: billing.invoice.Invoice
+    # A projection. A generated scenario must therefore assert it with `eventually`, not immediately.
+    consistency: eventual
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+      - name: total
+        type: billing.invoice.Money
+      # Projected so the entity's `reminder_count >= 0` has rows it can be decided against. An
+      # invariant reading a field no view publishes is refused rather than asserted against nothing.
+      - name: reminder_count
+        type: Integer
+
+  # Read-your-writes, so a generated scenario asserts this one immediately: a caller that has just
+  # issued an invoice and cannot see it in its own list has been told a lie about what it did.
+  - name: billing.invoice.OutstandingInvoices
+    source: billing.invoice.Invoice
+    consistency: read_your_writes
+    # The filter is checked against the lifecycle's states, so a misspelt `Issed` is refused rather
+    # than silently matching nothing.
+    filter: state == Issued
+    # A list a person works down is a list with an order, and without this line the order is
+    # whatever the store happened to return. Most recently issued first, because that is the one an
+    # accounts clerk is asked about; `ess conform synthesize` arranges two invoices in this view so
+    # the claim has a pair to compare, and refuses the assertion rather than emitting one that
+    # cannot fail.
+    order_by:
+      - issued_at desc
+    fields:
+      - name: invoice_id
+        type: billing.invoice.InvoiceId
+      - name: total
+        type: billing.invoice.Money
+      # Projected because the view is ranked by it. An order nobody can read is an order nothing can
+      # check, and `ess validate` refuses a ranking key the view does not publish.
+      - name: issued_at
+        type: Optional<Timestamp>
+    naming:
+      wire: outstanding
+      display: Outstanding invoices

@@ -11,6 +11,9 @@ publish.workspace = true
 
 [dependencies]
 eventlog-core.workspace = true
+entity-core.workspace = true
+entity-store.workspace = true
+entity-eventlog = { workspace = true, features = ["sqlite", "postgres"] }
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

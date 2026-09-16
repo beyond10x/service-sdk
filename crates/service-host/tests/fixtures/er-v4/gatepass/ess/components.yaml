@@ -1,0 +1,30 @@
+# One component, and the one sentence this whole example exists for.
+components:
+  - component: pass-service
+    summary: Holds every expected, present and departed visit for one site.
+    owns:
+      domains:
+        - gatepass.visit
+    accepts:
+      commands:
+        - gatepass.visit.RegisterVisit
+        - gatepass.visit.AdmitVisitor
+        - gatepass.visit.SignOutVisitor
+    publishes:
+      events:
+        - gatepass.visit.VisitRegistered
+        - gatepass.visit.VisitorAdmitted
+        - gatepass.visit.VisitorDeparted
+
+    # The declaration, and the reason for it. The callers of these three commands are the lobby
+    # kiosk a visitor types into, the badge printer at the desk and the door reader at the turnstile.
+    # None of them is deployed with this service — they are bought, they are replaced, and two of
+    # them are on a different network segment — so the surface below cannot be a function call. That
+    # is a fact about this system's design, not a deployment preference, which is why it is written
+    # here and not in a manifest.
+    #
+    # `network` names no protocol on purpose. Which wire follows is derived: this repository
+    # projects exactly one contract for a component's command surface, the OpenAPI document under
+    # `generated/`, and an OpenAPI document is an HTTP contract. A synthesised server that spoke
+    # anything else would contradict the document committed beside it.
+    reached_by: network

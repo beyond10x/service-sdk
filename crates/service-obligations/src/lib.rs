@@ -190,6 +190,24 @@ const CATALOG: &[CatalogEntry] = &[
         ],
     },
     CatalogEntry {
+        provider: "sdk.derive.tagged-value/v1",
+        required_bindings: &["tag", "source"],
+        optional_bindings: &[],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
+        provider: "sdk.derive.trusted-clock/v1",
+        required_bindings: &[],
+        optional_bindings: &[],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
+        provider: "sdk.effect.email/v1",
+        required_bindings: &["reaction"],
+        optional_bindings: &[],
+        surfaces: &[ObligationSurface::Intent],
+    },
+    CatalogEntry {
         provider: "sdk.content.external-erasable/v1",
         required_bindings: &["content"],
         optional_bindings: &[],
