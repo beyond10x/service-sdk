@@ -7,7 +7,7 @@
   },
   "realm": "optional",
   "ess_source_digest": "6e8c2aa44b4c1cecbd05e6c66fefb0a44d64ece7d9c87bfbc727e9a80d42fe46",
-  "obligation_catalog_digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+  "obligation_catalog_digest": "35609732d1c93db9d13d95fa31c749c7d675b139a28e9b588bcd7edc72428801",
   "content": {
     "body": {
       "media_types": [

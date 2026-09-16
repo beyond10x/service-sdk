@@ -11,7 +11,7 @@
     "capabilities": 20
   },
   "obligation_catalog": {
-    "digest": "5adc69ef103e574429595146d76de0908b3152cadec028212c82a25794dda9aa",
+    "digest": "35609732d1c93db9d13d95fa31c749c7d675b139a28e9b588bcd7edc72428801",
     "providers": [
       "sdk.aggregate.event-sourced/v1",
       "sdk.auth.owner-and-conjunctive-scopes/v1",
