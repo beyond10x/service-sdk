@@ -1233,7 +1233,9 @@ impl<'a> EngineV4<'a> {
                     }
                     let logical = identity_value(logical_identity, &arguments)?;
                     let id = address(self.plan, binding, &logical)?;
-                    enforce_intent_obligations(resources, context, intent, &input, None)?;
+                    enforce_intent_obligations(
+                        self.plan, resources, context, intent, &input, None,
+                    )?;
                     match runtime.decide_create(
                         &binding.entity,
                         binding.version,
@@ -1253,7 +1255,9 @@ impl<'a> EngineV4<'a> {
                             found: None,
                         });
                     }
-                    enforce_intent_obligations(resources, context, intent, &input, None)?;
+                    enforce_intent_obligations(
+                        self.plan, resources, context, intent, &input, None,
+                    )?;
                     match runtime.decide_create_derived(
                         &binding.entity,
                         binding.version,
@@ -1319,7 +1323,14 @@ impl<'a> EngineV4<'a> {
                             found: Some(loaded.revision),
                         });
                     }
-                    enforce_intent_obligations(resources, context, intent, &input, Some(&loaded))?;
+                    enforce_intent_obligations(
+                        self.plan,
+                        resources,
+                        context,
+                        intent,
+                        &input,
+                        Some(&loaded),
+                    )?;
                     let evaluation = match prepared.select_with(&loaded)? {
                         LoadedDecision::Complete(evaluation) => evaluation,
                         LoadedDecision::NeedsFulfillment(selected) => {
@@ -1649,6 +1660,7 @@ fn claim_key(partition: &AuthenticatedPartition, intent: &OriginalIntentV4) -> S
 }
 
 fn enforce_intent_obligations(
+    plan: &ServicePlanV4,
     resources: &mut dyn ResourcesV4,
     context: &VerifiedAuthContext,
     intent: &IntentPlanV4,
@@ -1668,7 +1680,9 @@ fn enforce_intent_obligations(
         instances.push(current.clone());
     }
     for obligation in &intent.obligations {
-        enforce_intent_obligation_v4(resources, context, &instances, obligation, input)?;
+        enforce_intent_obligation_v4(
+            plan, resources, context, &instances, current, obligation, input,
+        )?;
     }
     Ok(())
 }
@@ -1689,9 +1703,11 @@ fn obligation_needs_instances_v4(obligation: &ObligationUse) -> bool {
 }
 
 fn enforce_intent_obligation_v4(
+    plan: &ServicePlanV4,
     resources: &mut dyn ResourcesV4,
     context: &VerifiedAuthContext,
     instances: &[entity_core::EntityInstance],
+    current: Option<&entity_core::EntityInstance>,
     obligation: &ObligationUse,
     input: &Map<String, Value>,
 ) -> Result<(), ExecutionErrorV4> {
@@ -1700,21 +1716,21 @@ fn enforce_intent_obligation_v4(
         | "sdk.auth.requested-scopes/v1"
         | "sdk.auth.same-partition-owner-transfer/v1"
         | "sdk.auth.trusted-scheduler/v1" => {
-            enforce_authority_obligation_v4(resources, context, instances, obligation, input)
+            enforce_authority_obligation_v4(resources, context, current, obligation, input)
         }
         "sdk.lifecycle.require-state/v1"
         | "sdk.lifecycle.bounded-future/v1"
         | "sdk.lifecycle.expiry-due/v1"
         | "sdk.lifecycle.expiring-parent-child/v1" => {
-            enforce_lifecycle_obligation_v4(resources, instances, obligation, input)
+            enforce_lifecycle_obligation_v4(plan, resources, instances, current, obligation, input)
         }
         "sdk.aggregate.nested-entity/v1" | "sdk.aggregate.owned-revision/v1" => {
-            enforce_aggregate_obligation_v4(instances, obligation, input)
+            enforce_aggregate_obligation_v4(plan, instances, obligation, input)
         }
         "sdk.graph.connect-dag/v1"
         | "sdk.graph.node-unreferenced/v1"
         | "sdk.graph.publish-snapshot/v1" => {
-            validate_graph_obligation_v4(instances, obligation, input)
+            validate_graph_obligation_v4(plan, instances, obligation, input)
         }
         "sdk.aggregate.event-sourced/v1"
         | "sdk.content.external-erasable/v1"
@@ -1735,16 +1751,15 @@ fn enforce_intent_obligation_v4(
 fn enforce_authority_obligation_v4(
     resources: &mut dyn ResourcesV4,
     context: &VerifiedAuthContext,
-    instances: &[entity_core::EntityInstance],
+    current: Option<&entity_core::EntityInstance>,
     obligation: &ObligationUse,
     input: &Map<String, Value>,
 ) -> Result<(), ExecutionErrorV4> {
     let check = match obligation.provider.as_str() {
         "sdk.auth.owner-and-conjunctive-scopes/v1" => {
-            let owner =
-                bound_instance_field(instances, obligation_binding_v4(obligation, "owner")?)?;
+            let owner = bound_instance_field(current, obligation_binding_v4(obligation, "owner")?)?;
             let scopes =
-                bound_instance_field(instances, obligation_binding_v4(obligation, "scopes")?)?;
+                bound_instance_field(current, obligation_binding_v4(obligation, "scopes")?)?;
             AuthorityCheck::OwnerAndScopes { owner, scopes }
         }
         "sdk.auth.requested-scopes/v1" => {
@@ -1773,14 +1788,18 @@ fn enforce_authority_obligation_v4(
 }
 
 fn enforce_lifecycle_obligation_v4(
+    plan: &ServicePlanV4,
     resources: &mut dyn ResourcesV4,
     instances: &[entity_core::EntityInstance],
+    current: Option<&entity_core::EntityInstance>,
     obligation: &ObligationUse,
     input: &Map<String, Value>,
 ) -> Result<(), ExecutionErrorV4> {
     match obligation.provider.as_str() {
         "sdk.lifecycle.require-state/v1" => {
-            let entity = bound_instance(instances, obligation, input, "entity", "identity")?;
+            let entity = bound_instance(
+                plan, instances, current, obligation, input, "entity", "identity",
+            )?;
             if !obligation_binding_v4(obligation, "allowed")?
                 .split(',')
                 .map(str::trim)
@@ -1809,7 +1828,9 @@ fn enforce_lifecycle_obligation_v4(
             }
         }
         "sdk.lifecycle.expiry-due/v1" => {
-            let entity = bound_instance(instances, obligation, input, "entity", "identity")?;
+            let entity = bound_instance(
+                plan, instances, current, obligation, input, "entity", "identity",
+            )?;
             let expiry = entity
                 .fields
                 .get(obligation_binding_v4(obligation, "lifetime")?)
@@ -1867,48 +1888,58 @@ fn enforce_parent_child_lifetime_v4(
 }
 
 fn enforce_aggregate_obligation_v4(
+    plan: &ServicePlanV4,
     instances: &[entity_core::EntityInstance],
     obligation: &ObligationUse,
     input: &Map<String, Value>,
 ) -> Result<(), ExecutionErrorV4> {
     match obligation.provider.as_str() {
         "sdk.aggregate.nested-entity/v1" => {
-            let parent_identity = input
-                .get(obligation_binding_v4(obligation, "parent_identity")?)
-                .and_then(Value::as_str)
-                .ok_or_else(|| ExecutionErrorV4::Input("parent_identity".into()))?;
-            if !instances.iter().any(|item| {
-                item.entity == obligation_binding_v4(obligation, "parent").unwrap_or_default()
-                    && item.id == parent_identity
-            }) {
+            let parent_entity = obligation_binding_v4(obligation, "parent")?;
+            let parent_identity = obligation_identity_address_v4(
+                plan,
+                obligation,
+                input,
+                "parent",
+                "parent_identity",
+            )?;
+            if !instances
+                .iter()
+                .any(|item| item.entity == parent_entity && item.id == parent_identity)
+            {
                 return Err(ExecutionErrorV4::ObligationRefused(
                     "parent_not_found".into(),
                 ));
             }
-            if let Some(field) = obligation.bindings.get("child_identity") {
-                let child = input
-                    .get(field)
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| ExecutionErrorV4::Input(field.clone()))?;
-                if !instances.iter().any(|item| {
-                    item.entity == obligation_binding_v4(obligation, "child").unwrap_or_default()
-                        && item.id == child
-                }) {
+            if obligation.bindings.contains_key("child_identity") {
+                let child_entity = obligation_binding_v4(obligation, "child")?;
+                let child_identity = obligation_identity_address_v4(
+                    plan,
+                    obligation,
+                    input,
+                    "child",
+                    "child_identity",
+                )?;
+                if !instances
+                    .iter()
+                    .any(|item| item.entity == child_entity && item.id == child_identity)
+                {
                     return Err(ExecutionErrorV4::ObligationRefused("not_found".into()));
                 }
             }
         }
         "sdk.aggregate.owned-revision/v1" => {
-            let identity = input
-                .get(obligation_binding_v4(obligation, "revision_identity")?)
-                .and_then(Value::as_str)
-                .ok_or_else(|| ExecutionErrorV4::Input("revision_identity".into()))?;
+            let revision_entity = obligation_binding_v4(obligation, "revision")?;
+            let identity = obligation_identity_address_v4(
+                plan,
+                obligation,
+                input,
+                "revision",
+                "revision_identity",
+            )?;
             let revision = instances
                 .iter()
-                .find(|item| {
-                    item.entity == obligation_binding_v4(obligation, "revision").unwrap_or_default()
-                        && item.id == identity
-                })
+                .find(|item| item.entity == revision_entity && item.id == identity)
                 .ok_or_else(|| ExecutionErrorV4::ObligationRefused("revision_not_found".into()))?;
             if let Some(allowed) = obligation.bindings.get("allowed")
                 && !allowed
@@ -1924,6 +1955,21 @@ fn enforce_aggregate_obligation_v4(
         _ => unreachable!("caller admits only aggregate obligations"),
     }
     Ok(())
+}
+
+fn obligation_identity_address_v4(
+    plan: &ServicePlanV4,
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+    entity_binding: &str,
+    identity_binding: &str,
+) -> Result<String, ExecutionErrorV4> {
+    let entity = obligation_binding_v4(obligation, entity_binding)?;
+    let field = obligation_binding_v4(obligation, identity_binding)?;
+    let logical = input
+        .get(field)
+        .ok_or_else(|| ExecutionErrorV4::Input(field.to_owned()))?;
+    address_for_entity(plan, entity, logical)
 }
 
 fn obligation_binding_v4<'a>(
@@ -1955,7 +2001,9 @@ fn require_obligation_authority(
 }
 
 fn bound_instance<'a>(
+    plan: &ServicePlanV4,
     instances: &'a [entity_core::EntityInstance],
+    current: Option<&'a entity_core::EntityInstance>,
     obligation: &ObligationUse,
     input: &Map<String, Value>,
     entity_binding: &str,
@@ -1968,30 +2016,34 @@ fn bound_instance<'a>(
         .bindings
         .get(identity_binding)
         .map(|field| {
-            input
+            let logical = input
                 .get(field)
-                .and_then(Value::as_str)
-                .ok_or_else(|| ExecutionErrorV4::Input(field.clone()))
+                .ok_or_else(|| ExecutionErrorV4::Input(field.clone()))?;
+            address_for_entity(plan, entity, logical)
         })
         .transpose()?;
-    instances
-        .iter()
-        .find(|item| {
-            item.entity == entity.as_str() && identity.is_none_or(|identity| item.id == identity)
-        })
+    identity
+        .as_ref()
+        .map_or_else(
+            || current.filter(|item| item.entity == *entity),
+            |identity| {
+                instances
+                    .iter()
+                    .find(|item| item.entity == *entity && item.id == *identity)
+            },
+        )
         .ok_or_else(|| ExecutionErrorV4::ObligationRefused("not_found".into()))
 }
 
 fn bound_instance_field(
-    instances: &[entity_core::EntityInstance],
+    current: Option<&entity_core::EntityInstance>,
     path: &str,
 ) -> Result<Value, ExecutionErrorV4> {
     let (entity, field) = path
         .rsplit_once('.')
         .ok_or_else(|| ExecutionErrorV4::Binding(path.to_owned()))?;
-    instances
-        .iter()
-        .find(|item| item.entity == entity)
+    current
+        .filter(|item| item.entity == entity)
         .and_then(|item| item.fields.get(field))
         .cloned()
         .ok_or_else(|| ExecutionErrorV4::ObligationRefused("not_found".into()))
@@ -2010,19 +2062,22 @@ fn parse_instant_v4(value: &str) -> Result<OffsetDateTime, ExecutionErrorV4> {
 }
 
 fn validate_graph_obligation_v4(
+    plan: &ServicePlanV4,
     instances: &[entity_core::EntityInstance],
     obligation: &ObligationUse,
     input: &Map<String, Value>,
 ) -> Result<(), ExecutionErrorV4> {
-    let mut graph = graph_state_v4(instances, obligation, input)?;
+    let mut graph = graph_state_v4(plan, instances, obligation, input)?;
     match obligation.provider.as_str() {
         "sdk.graph.connect-dag/v1" => {
-            let source = obligation_input_string_v4(obligation, input, "source")?;
-            let target = obligation_input_string_v4(obligation, input, "target")?;
+            let source =
+                obligation_identity_address_v4(plan, obligation, input, "nodes", "source")?;
+            let target =
+                obligation_identity_address_v4(plan, obligation, input, "nodes", "target")?;
             insert_graph_pair_v4(&graph.nodes, &mut graph.pairs, &source, &target)?;
         }
         "sdk.graph.node-unreferenced/v1" => {
-            let node = obligation_input_string_v4(obligation, input, "node")?;
+            let node = obligation_identity_address_v4(plan, obligation, input, "nodes", "node")?;
             if !graph.nodes.contains(&node) {
                 return Err(ExecutionErrorV4::ObligationRefused("node_not_found".into()));
             }
@@ -2056,6 +2111,7 @@ struct GraphStateV4 {
 }
 
 fn graph_state_v4(
+    plan: &ServicePlanV4,
     instances: &[entity_core::EntityInstance],
     obligation: &ObligationUse,
     input: &Map<String, Value>,
@@ -2069,6 +2125,7 @@ fn graph_state_v4(
     let edge_partition = obligation_binding_v4(obligation, "edge_partition")?;
     let edge_source = obligation_binding_v4(obligation, "edge_source")?;
     let edge_target = obligation_binding_v4(obligation, "edge_target")?;
+    let node_identity = obligation_binding_v4(obligation, "node_identity")?;
     let nodes_entity = obligation_binding_v4(obligation, "nodes")?;
     let edges_entity = obligation_binding_v4(obligation, "edges")?;
     let nodes = instances
@@ -2079,8 +2136,20 @@ fn graph_state_v4(
                 && item.fields.get(node_partition).and_then(Value::as_str)
                     == Some(partition.as_str())
         })
-        .map(|item| item.id.clone())
-        .collect::<BTreeSet<_>>();
+        .map(|item| {
+            let logical = item
+                .fields
+                .get(node_identity)
+                .ok_or_else(|| ExecutionErrorV4::Binding(node_identity.to_owned()))?;
+            let address = address_for_entity(plan, nodes_entity, logical)?;
+            if address != item.id {
+                return Err(ExecutionErrorV4::Binding(format!(
+                    "node identity {node_identity:?} does not match its ER address"
+                )));
+            }
+            Ok(address)
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
     if nodes.is_empty() {
         return Err(ExecutionErrorV4::ObligationRefused("empty_graph".into()));
     }
@@ -2098,14 +2167,14 @@ fn graph_state_v4(
         let source = edge
             .fields
             .get(edge_source)
-            .and_then(Value::as_str)
             .ok_or_else(|| ExecutionErrorV4::Binding(edge_source.to_owned()))?;
         let target = edge
             .fields
             .get(edge_target)
-            .and_then(Value::as_str)
             .ok_or_else(|| ExecutionErrorV4::Binding(edge_target.to_owned()))?;
-        insert_graph_pair_v4(&nodes, &mut pairs, source, target)?;
+        let source = address_for_entity(plan, nodes_entity, source)?;
+        let target = address_for_entity(plan, nodes_entity, target)?;
+        insert_graph_pair_v4(&nodes, &mut pairs, &source, &target)?;
     }
     Ok(GraphStateV4 { nodes, pairs })
 }
@@ -2342,12 +2411,23 @@ fn address(
     binding: &CommandBindingDocument,
     logical: &Value,
 ) -> Result<String, ExecutionErrorV4> {
-    let definition = plan.er.definitions.get(&binding.entity).ok_or_else(|| {
-        ExecutionErrorV4::Binding(format!("missing definition {}", binding.entity))
-    })?;
-    let identity = definition.identity.as_ref().ok_or_else(|| {
-        ExecutionErrorV4::Binding(format!("definition {} has no identity", binding.entity))
-    })?;
+    address_for_entity(plan, &binding.entity, logical)
+}
+
+fn address_for_entity(
+    plan: &ServicePlanV4,
+    entity: &str,
+    logical: &Value,
+) -> Result<String, ExecutionErrorV4> {
+    let definition = plan
+        .er
+        .definitions
+        .get(entity)
+        .ok_or_else(|| ExecutionErrorV4::Binding(format!("missing definition {entity}")))?;
+    let identity = definition
+        .identity
+        .as_ref()
+        .ok_or_else(|| ExecutionErrorV4::Binding(format!("definition {entity} has no identity")))?;
     let field = definition
         .schema
         .fields
@@ -2510,6 +2590,334 @@ fn digest_json(value: &impl Serialize) -> String {
 mod tests {
     use super::*;
     use crate::{ContentPolicyPlan, InputSource};
+
+    fn identity_plan() -> ServicePlanV4 {
+        let definition = |entity: &str, identity: &str| {
+            serde_json::from_value(serde_json::json!({
+                "entity": entity,
+                "schema": {"fields": {identity: {"type": "string"}}},
+                "lifecycle": {"initial": "Active", "states": ["Active", "Draft", "Issued"]},
+                "semantics": "service/1",
+                "identity": {"field": identity}
+            }))
+            .unwrap()
+        };
+        let definitions = BTreeMap::from([
+            (
+                "demo.Parent".to_owned(),
+                definition("demo.Parent", "parent_id"),
+            ),
+            (
+                "demo.Child".to_owned(),
+                definition("demo.Child", "child_id"),
+            ),
+            (
+                "demo.Revision".to_owned(),
+                definition("demo.Revision", "revision_id"),
+            ),
+            ("demo.Node".to_owned(), definition("demo.Node", "node_id")),
+            ("demo.Edge".to_owned(), definition("demo.Edge", "edge_id")),
+        ]);
+        ServicePlanV4 {
+            format: REALIZATION_PLAN_FORMAT_V4.to_owned(),
+            service: "demo".to_owned(),
+            delivery: PlanDelivery::ComposedConnector,
+            realm: crate::PlanRealmPolicy::Optional,
+            ess_source_digest: String::new(),
+            plan_digest: String::new(),
+            er: EntityRuntimeBinding {
+                component: String::new(),
+                source_digest: String::new(),
+                synthesis_digest: String::new(),
+                target_revision: String::new(),
+                definitions,
+                bindings: service_runtime_ir::v4::BindingPlanDocument {
+                    commands: BTreeMap::new(),
+                    requirements: Vec::new(),
+                    source_capabilities: Vec::new(),
+                },
+            },
+            slots: BTreeMap::new(),
+            operation_fields: BTreeMap::new(),
+            intents: BTreeMap::new(),
+            queries: BTreeMap::new(),
+            content: BTreeMap::new(),
+            views: BTreeMap::new(),
+        }
+    }
+
+    fn identity_obligation(provider: &str, bindings: &[(&str, &str)]) -> ObligationUse {
+        ObligationUse {
+            provider: provider.to_owned(),
+            bindings: bindings
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+                .collect(),
+        }
+    }
+
+    fn identity_instance(
+        entity: &str,
+        id: &str,
+        state: &str,
+        fields: Value,
+    ) -> entity_core::EntityInstance {
+        let Value::Object(fields) = fields else {
+            panic!("test instance fields must be an object");
+        };
+        entity_core::EntityInstance {
+            entity: entity.to_owned(),
+            version: 1,
+            id: id.to_owned(),
+            lifecycle_state: state.to_owned(),
+            revision: 1,
+            fields,
+        }
+    }
+
+    fn nested_obligation(with_child: bool) -> ObligationUse {
+        let mut obligation = identity_obligation(
+            "sdk.aggregate.nested-entity/v1",
+            &[
+                ("parent", "demo.Parent"),
+                ("child", "demo.Child"),
+                ("parent_identity", "parent_id"),
+            ],
+        );
+        if with_child {
+            obligation
+                .bindings
+                .insert("child_identity".to_owned(), "child_id".to_owned());
+        }
+        obligation
+    }
+
+    fn nested_instances() -> Vec<entity_core::EntityInstance> {
+        vec![
+            identity_instance(
+                "demo.Parent",
+                "s:parent-uuid",
+                "Active",
+                serde_json::json!({"parent_id": "parent-uuid"}),
+            ),
+            identity_instance(
+                "demo.Child",
+                "s:child-uuid",
+                "Active",
+                serde_json::json!({"child_id": "child-uuid"}),
+            ),
+        ]
+    }
+
+    fn graph_obligation_v4(provider: &str) -> ObligationUse {
+        identity_obligation(
+            provider,
+            &[
+                ("nodes", "demo.Node"),
+                ("edges", "demo.Edge"),
+                ("partition", "draft_id"),
+                ("node_partition", "draft_id"),
+                ("edge_partition", "draft_id"),
+                ("node_identity", "node_id"),
+                ("edge_identity", "edge_id"),
+                ("edge_source", "source_node_id"),
+                ("edge_target", "target_node_id"),
+                ("source", "source_node_id"),
+                ("target", "target_node_id"),
+                ("node", "node_id"),
+            ],
+        )
+    }
+
+    fn graph_instances(with_edge: bool) -> Vec<entity_core::EntityInstance> {
+        let mut instances = vec![
+            identity_instance(
+                "demo.Node",
+                "s:node-a",
+                "Active",
+                serde_json::json!({"node_id": "node-a", "draft_id": "draft-a"}),
+            ),
+            identity_instance(
+                "demo.Node",
+                "s:node-b",
+                "Active",
+                serde_json::json!({"node_id": "node-b", "draft_id": "draft-a"}),
+            ),
+        ];
+        if with_edge {
+            instances.push(identity_instance(
+                "demo.Edge",
+                "s:edge-ab",
+                "Active",
+                serde_json::json!({
+                    "edge_id": "edge-ab", "draft_id": "draft-a",
+                    "source_node_id": "node-a", "target_node_id": "node-b"
+                }),
+            ));
+        }
+        instances
+    }
+
+    #[test]
+    fn nested_parent_identity_resolves_its_er_address() {
+        let plan = identity_plan();
+        let obligation = nested_obligation(false);
+        let input = serde_json::json!({"parent_id": "parent-uuid"});
+        assert!(
+            enforce_aggregate_obligation_v4(
+                &plan,
+                &nested_instances(),
+                &obligation,
+                input.as_object().unwrap()
+            )
+            .is_ok(),
+            "a present parent with a logical UUID identity must be found"
+        );
+        let missing = serde_json::json!({"parent_id": "another-parent"});
+        assert!(matches!(
+            enforce_aggregate_obligation_v4(
+                &plan,
+                &nested_instances(),
+                &obligation,
+                missing.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "parent_not_found"
+        ));
+    }
+
+    #[test]
+    fn nested_child_identity_resolves_its_er_address() {
+        let plan = identity_plan();
+        let obligation = nested_obligation(true);
+        let input = serde_json::json!({"parent_id": "parent-uuid", "child_id": "child-uuid"});
+        assert!(
+            enforce_aggregate_obligation_v4(
+                &plan,
+                &nested_instances(),
+                &obligation,
+                input.as_object().unwrap()
+            )
+            .is_ok(),
+            "both present logical identities must resolve to their own ER addresses"
+        );
+        let wrong_child = serde_json::json!({
+            "parent_id": "parent-uuid", "child_id": "another-child"
+        });
+        assert!(matches!(
+            enforce_aggregate_obligation_v4(
+                &plan,
+                &nested_instances(),
+                &obligation,
+                wrong_child.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "not_found"
+        ));
+    }
+
+    #[test]
+    fn graph_connect_resolves_public_logical_node_ids() {
+        let plan = identity_plan();
+        let obligation = graph_obligation_v4("sdk.graph.connect-dag/v1");
+        let input = serde_json::json!({
+            "draft_id": "draft-a", "source_node_id": "node-a", "target_node_id": "node-b"
+        });
+        assert!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(false),
+                &obligation,
+                input.as_object().unwrap()
+            )
+            .is_ok(),
+            "valid logical node IDs must connect existing ER nodes"
+        );
+        let missing = serde_json::json!({
+            "draft_id": "draft-a", "source_node_id": "node-a", "target_node_id": "missing"
+        });
+        assert!(matches!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(false),
+                &obligation,
+                missing.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "dangling_edge"
+        ));
+    }
+
+    #[test]
+    fn graph_node_unreferenced_resolves_public_logical_node_id() {
+        let plan = identity_plan();
+        let obligation = graph_obligation_v4("sdk.graph.node-unreferenced/v1");
+        let input = serde_json::json!({"draft_id": "draft-a", "node_id": "node-a"});
+        assert!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(false),
+                &obligation,
+                input.as_object().unwrap()
+            )
+            .is_ok(),
+            "an unreferenced logical node ID must find its ER node"
+        );
+        assert!(matches!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(true),
+                &obligation,
+                input.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "node_referenced"
+        ));
+        let missing = serde_json::json!({"draft_id": "draft-a", "node_id": "missing"});
+        assert!(matches!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(false),
+                &obligation,
+                missing.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "node_not_found"
+        ));
+    }
+
+    #[test]
+    fn graph_publish_resolves_logical_edge_references() {
+        let plan = identity_plan();
+        let obligation = graph_obligation_v4("sdk.graph.publish-snapshot/v1");
+        let input = serde_json::json!({"draft_id": "draft-a"});
+        assert!(
+            validate_graph_obligation_v4(
+                &plan,
+                &graph_instances(true),
+                &obligation,
+                input.as_object().unwrap()
+            )
+            .is_ok(),
+            "valid logical edge references must resolve to existing ER nodes"
+        );
+        let mut invalid = graph_instances(true);
+        invalid[2]
+            .fields
+            .insert("target_node_id".to_owned(), serde_json::json!("missing"));
+        assert!(matches!(
+            validate_graph_obligation_v4(&plan, &invalid, &obligation, input.as_object().unwrap()),
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "dangling_edge"
+        ));
+        let mut mismatched = graph_instances(false);
+        mismatched[0]
+            .fields
+            .insert("node_id".to_owned(), serde_json::json!("another-node"));
+        assert!(matches!(
+            validate_graph_obligation_v4(
+                &plan,
+                &mismatched,
+                &obligation,
+                input.as_object().unwrap()
+            ),
+            Err(ExecutionErrorV4::Binding(_))
+        ));
+    }
 
     fn content_intent(optional: bool) -> IntentPlanV4 {
         IntentPlanV4 {

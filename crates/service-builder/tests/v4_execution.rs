@@ -18,7 +18,7 @@ use service_engine::v4::{
     AuthenticatedPartition, EngineV4, ExecutionErrorV4, IntentPlanV4, MutationResultV4,
     ResourcesV4, StagedContentV4, project_query_v4,
 };
-use service_engine::{ContentPolicyPlan, InputSource};
+use service_engine::{AuthorityCheck, ContentPolicyPlan, InputSource};
 use service_runtime::{
     AuthorityId, RealmId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity,
 };
@@ -53,6 +53,7 @@ struct Resources {
     fail_projection: bool,
     fail_accept_content: bool,
     recorded_content: Vec<(String, String, String)>,
+    obligation_snapshot: Vec<EntityInstance>,
 }
 
 impl Resources {
@@ -65,6 +66,7 @@ impl Resources {
             fail_projection: false,
             fail_accept_content: false,
             recorded_content: Vec::new(),
+            obligation_snapshot: Vec::new(),
         }
     }
 }
@@ -114,6 +116,23 @@ impl ResourcesV4 for Resources {
                 entity_store::asynchronous::RecordedEntry::Observation(_) => None,
             })
             .collect())
+    }
+
+    fn obligation_instances(&mut self) -> Result<Vec<EntityInstance>, String> {
+        Ok(self.obligation_snapshot.clone())
+    }
+
+    fn obligation_authority(
+        &mut self,
+        context: &VerifiedAuthContext,
+        check: AuthorityCheck,
+    ) -> Result<bool, String> {
+        Ok(matches!(
+            check,
+            AuthorityCheck::OwnerAndScopes { owner, scopes }
+                if owner.as_str() == Some(context.authority().as_str())
+                    && scopes.as_object().is_some_and(serde_json::Map::is_empty)
+        ))
     }
 
     fn append(&mut self, request: AppendRequest) -> Result<AppendOutcome, String> {
@@ -234,13 +253,370 @@ impl ResourcesV4 for Resources {
 }
 
 fn context(realm: Option<&str>) -> VerifiedAuthContext {
+    context_for_authority("account-a", realm)
+}
+
+fn context_for_authority(authority: &str, realm: Option<&str>) -> VerifiedAuthContext {
     VerifiedAuthContext::from_verified(VerifiedIdentity::after_verification(
         TenantId::new("tenant-a").unwrap(),
-        AuthorityId::new("account-a").unwrap(),
+        AuthorityId::new(authority).unwrap(),
         UserId::new("user-a").unwrap(),
         None,
         realm.map(|value| RealmId::new(value).unwrap()),
     ))
+}
+
+#[test]
+fn owner_obligation_checks_the_loaded_subject_not_an_unrelated_partition_instance() {
+    const OWNER: &str = "018f7f4c-9b68-7abc-8def-111111111111";
+    const OTHER: &str = "018f7f4c-9b68-7abc-8def-222222222222";
+    let root = support::fixture("billing");
+    let mut definition = ServiceDefinitionV4::from_yaml(
+        &std::fs::read_to_string(root.join("runtime.yaml")).unwrap(),
+    )
+    .unwrap();
+    let obligation = DefinitionId::new("invoice_owner").unwrap();
+    definition.obligations.push(ObligationDefinition {
+        name: obligation.clone(),
+        provider: ObligationProviderId::new("sdk.auth.owner-and-conjunctive-scopes/v1").unwrap(),
+        bindings: [
+            (
+                DefinitionId::new("owner").unwrap(),
+                "billing.invoice.Invoice.account_id".to_owned(),
+            ),
+            (
+                DefinitionId::new("scopes").unwrap(),
+                "billing.invoice.Invoice.metadata".to_owned(),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        description: "Only the invoice owner may pay it.".to_owned(),
+    });
+    definition
+        .intents
+        .iter_mut()
+        .find(|intent| intent.name.as_str() == "pay_invoice")
+        .unwrap()
+        .obligations
+        .push(obligation);
+    let build = billing_with_definition(&definition);
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let owner = context_for_authority(OWNER, None);
+    let other = context_for_authority(OTHER, None);
+    let mut resources = Resources::new("billing", &owner);
+
+    let (created, _) = committed(
+        engine
+            .execute_json(
+                &owner,
+                "create_invoice",
+                &serde_json::to_vec(&json!({
+                    "account_id": OWNER,
+                    "customer_email": "owner@example.test",
+                    "amount": {"amount": 12.5, "currency": "EUR"}
+                }))
+                .unwrap(),
+                0,
+                "owner-create",
+                recording("owner-create"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let invoice_id = created.instance.fields["invoice_id"].clone();
+    let (issued, _) = committed(
+        engine
+            .execute_json(
+                &owner,
+                "issue_invoice",
+                &serde_json::to_vec(&json!({"invoice_id": invoice_id})).unwrap(),
+                1,
+                "owner-issue",
+                recording("owner-issue"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    resources.obligation_snapshot = vec![invoice_owned_by(&issued, OTHER)];
+    let appends_before = resources.calls.append;
+
+    let result = engine.execute_public_json(
+        &other,
+        "pay_invoice",
+        &serde_json::to_vec(&json!({
+            "invoice_id": issued.instance.fields["invoice_id"],
+            "amount": {"amount": 12.5, "currency": "EUR"},
+            "expected_version": 2,
+            "idempotency_key": "unauthorized-pay"
+        }))
+        .unwrap(),
+        recording("unauthorized-pay"),
+        &mut resources,
+    );
+    let outcome = match &result {
+        Ok(MutationResultV4::Committed { .. }) => "committed",
+        Ok(MutationResultV4::Refused(_)) => "domain_refused",
+        Err(ExecutionErrorV4::ObligationRefused(_)) => "obligation_refused",
+        Err(_) => "other_error",
+    };
+    assert!(
+        matches!(result, Err(ExecutionErrorV4::ObligationRefused(_))),
+        "the owner check must use the selected invoice, not an unrelated invoice in the same partition; observed {outcome}"
+    );
+    assert_eq!(
+        resources.calls.append, appends_before,
+        "a refused payment cannot append"
+    );
+
+    assert_selected_owner_can_pay(&engine, &issued, &owner, &mut resources);
+}
+
+fn assert_selected_owner_can_pay(
+    engine: &EngineV4<'_>,
+    issued: &Decision,
+    owner: &VerifiedAuthContext,
+    resources: &mut Resources,
+) {
+    let authorized = engine.execute_public_json(
+        owner,
+        "pay_invoice",
+        &serde_json::to_vec(&json!({
+            "invoice_id": issued.instance.fields["invoice_id"],
+            "amount": {"amount": 12.5, "currency": "EUR"},
+            "expected_version": 2,
+            "idempotency_key": "authorized-pay"
+        }))
+        .unwrap(),
+        recording("authorized-pay"),
+        resources,
+    );
+    assert!(
+        matches!(authorized, Ok(MutationResultV4::Committed { .. })),
+        "the selected invoice owner must remain authorized: {authorized:?}"
+    );
+}
+
+fn invoice_owned_by(issued: &Decision, owner: &str) -> EntityInstance {
+    let mut invoice = issued.instance.clone();
+    invoice.id = format!("s:{owner}");
+    invoice.fields.insert("invoice_id".to_owned(), json!(owner));
+    invoice.fields.insert("account_id".to_owned(), json!(owner));
+    invoice
+}
+
+#[test]
+fn lifecycle_obligation_accepts_the_selected_logical_identity_in_an_allowed_state() {
+    let root = support::fixture("billing");
+    let mut definition = ServiceDefinitionV4::from_yaml(
+        &std::fs::read_to_string(root.join("runtime.yaml")).unwrap(),
+    )
+    .unwrap();
+    let obligation = DefinitionId::new("must_be_issued").unwrap();
+    definition.obligations.push(ObligationDefinition {
+        name: obligation.clone(),
+        provider: ObligationProviderId::new("sdk.lifecycle.require-state/v1").unwrap(),
+        bindings: [
+            (
+                DefinitionId::new("entity").unwrap(),
+                "billing.invoice.Invoice".to_owned(),
+            ),
+            (DefinitionId::new("allowed").unwrap(), "Issued".to_owned()),
+            (
+                DefinitionId::new("identity").unwrap(),
+                "invoice_id".to_owned(),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        description: "An issued invoice may be paid.".to_owned(),
+    });
+    definition
+        .intents
+        .iter_mut()
+        .find(|intent| intent.name.as_str() == "pay_invoice")
+        .unwrap()
+        .obligations
+        .push(obligation);
+    let build = billing_with_definition(&definition);
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let context = context(None);
+    let mut resources = Resources::new("billing", &context);
+    let (created, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "create_invoice",
+                &serde_json::to_vec(&json!({
+                    "account_id": "018f7f4c-9b68-7abc-8def-111111111111",
+                    "customer_email": "person@example.test",
+                    "amount": {"amount": 12.5, "currency": "EUR"}
+                }))
+                .unwrap(),
+                0,
+                "allowed-create",
+                recording("allowed-create"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let invoice_id = created.instance.fields["invoice_id"].clone();
+    let (issued, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "issue_invoice",
+                &serde_json::to_vec(&json!({"invoice_id": invoice_id})).unwrap(),
+                1,
+                "allowed-issue",
+                recording("allowed-issue"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    assert_eq!(issued.instance.lifecycle_state, "Issued");
+    assert_eq!(
+        issued.instance.id,
+        format!(
+            "s:{}",
+            issued.instance.fields["invoice_id"].as_str().unwrap()
+        )
+    );
+
+    let result = engine.execute_public_json(
+        &context,
+        "pay_invoice",
+        &serde_json::to_vec(&json!({
+            "invoice_id": issued.instance.fields["invoice_id"],
+            "amount": {"amount": 12.5, "currency": "EUR"},
+            "expected_version": 2,
+            "idempotency_key": "allowed-pay"
+        }))
+        .unwrap(),
+        recording("allowed-pay"),
+        &mut resources,
+    );
+    assert!(
+        matches!(result, Ok(MutationResultV4::Committed { .. })),
+        "the lifecycle obligation must resolve the selected logical identity to its storage address: {result:?}"
+    );
+}
+
+#[test]
+fn owned_revision_resolves_public_logical_identity_and_state() {
+    let build = billing_with_owned_revision();
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let context = context(None);
+    let mut resources = Resources::new("billing", &context);
+    let (created, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "create_invoice",
+                &serde_json::to_vec(&json!({
+                    "account_id": "018f7f4c-9b68-7abc-8def-111111111111",
+                    "customer_email": "revision@example.test",
+                    "amount": {"amount": 12.5, "currency": "EUR"}
+                }))
+                .unwrap(),
+                0,
+                "revision-create",
+                recording("revision-create"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let invoice_id = created.instance.fields["invoice_id"].clone();
+    let draft_pay = serde_json::to_vec(&json!({
+        "invoice_id": invoice_id,
+        "amount": {"amount": 12.5, "currency": "EUR"},
+        "expected_version": 1,
+        "idempotency_key": "revision-draft-pay"
+    }))
+    .unwrap();
+    let appends_before = resources.calls.append;
+    let draft_result = engine.execute_public_json(
+        &context,
+        "pay_invoice",
+        &draft_pay,
+        recording("revision-draft-pay"),
+        &mut resources,
+    );
+    assert!(
+        matches!(
+            draft_result,
+            Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "revision_not_publishable"
+        ),
+        "a present Draft revision must be refused by its state, observed {draft_result:?}"
+    );
+    assert_eq!(resources.calls.append, appends_before);
+
+    let (issued, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "issue_invoice",
+                &serde_json::to_vec(&json!({"invoice_id": invoice_id})).unwrap(),
+                1,
+                "revision-issue",
+                recording("revision-issue"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let issued_pay = serde_json::to_vec(&json!({
+        "invoice_id": issued.instance.fields["invoice_id"],
+        "amount": {"amount": 12.5, "currency": "EUR"},
+        "expected_version": 2,
+        "idempotency_key": "revision-issued-pay"
+    }))
+    .unwrap();
+    let result = engine.execute_public_json(
+        &context,
+        "pay_invoice",
+        &issued_pay,
+        recording("revision-issued-pay"),
+        &mut resources,
+    );
+    assert!(
+        matches!(result, Ok(MutationResultV4::Committed { .. })),
+        "the issued logical revision must resolve to its ER address: {result:?}"
+    );
+}
+
+fn billing_with_owned_revision() -> service_builder::ServiceBuildV4 {
+    let root = support::fixture("billing");
+    let mut definition = ServiceDefinitionV4::from_yaml(
+        &std::fs::read_to_string(root.join("runtime.yaml")).unwrap(),
+    )
+    .unwrap();
+    let obligation = DefinitionId::new("issued_revision").unwrap();
+    definition.obligations.push(ObligationDefinition {
+        name: obligation.clone(),
+        provider: ObligationProviderId::new("sdk.aggregate.owned-revision/v1").unwrap(),
+        bindings: [
+            (
+                DefinitionId::new("revision").unwrap(),
+                "billing.invoice.Invoice".to_owned(),
+            ),
+            (
+                DefinitionId::new("revision_identity").unwrap(),
+                "invoice_id".to_owned(),
+            ),
+            (DefinitionId::new("allowed").unwrap(), "Issued".to_owned()),
+        ]
+        .into_iter()
+        .collect(),
+        description: "Only an issued invoice revision may be paid.".to_owned(),
+    });
+    definition
+        .intents
+        .iter_mut()
+        .find(|intent| intent.name.as_str() == "pay_invoice")
+        .unwrap()
+        .obligations
+        .push(obligation);
+    billing_with_definition(&definition)
 }
 
 fn recording(label: &str) -> Recording {
@@ -796,19 +1172,22 @@ fn v4_executes_selected_sdk_intent_obligations() {
     }))
     .unwrap();
 
+    let refused = engine.execute_json(
+        &context,
+        "pay_invoice",
+        &pay,
+        2,
+        "obligation-pay",
+        recording("obligation-pay"),
+        &mut resources,
+    );
     assert!(
-        engine
-            .execute_json(
-                &context,
-                "pay_invoice",
-                &pay,
-                2,
-                "obligation-pay",
-                recording("obligation-pay"),
-                &mut resources,
-            )
-            .is_err(),
+        refused.is_err(),
         "sdk.lifecycle.require-state/v1 must refuse paying the issued invoice because only Draft was allowed"
+    );
+    assert!(
+        matches!(refused, Err(ExecutionErrorV4::ObligationRefused(ref reason)) if reason == "wrong_state"),
+        "the disallowed selected invoice must fail its state check"
     );
 }
 
