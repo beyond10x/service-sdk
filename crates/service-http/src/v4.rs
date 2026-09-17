@@ -163,7 +163,7 @@ impl<H: HostResourcesV4 + Send> ServiceBackendV4 for RecordedServiceBackendV4<H>
     fn intent(
         &self,
         context: &VerifiedAuthContext,
-        _: AuthorityFacts,
+        facts: AuthorityFacts,
         operation: &str,
         body: &[u8],
         recording: Recording,
@@ -189,12 +189,13 @@ impl<H: HostResourcesV4 + Send> ServiceBackendV4 for RecordedServiceBackendV4<H>
             causation_depth: 0,
             occurred_at,
         };
-        let mut resources = EventlogResourcesV4::new(
+        let mut resources = EventlogResourcesV4::new_with_authority_facts(
             &self.bridge,
             &self.authority,
             eventlog_operation,
             self.wait,
             &mut *host,
+            facts,
         );
         EngineV4::new(&self.plan)
             .map_err(|error| ExecutionErrorV4::Binding(error.to_string()))?

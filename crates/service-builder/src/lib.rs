@@ -166,9 +166,14 @@ pub fn build_service(
         .context("deriving inert Connector contribution")?;
     let realization_plan = realization::compile(&ess.ir, &runtime_ir, &client_plan)
         .context("compiling executable service realization plan")?;
-    let service_catalog =
-        build_service_catalog(&ess, &client_plan, &realization_plan, &connector_descriptor)
-            .context("deriving service catalog")?;
+    let service_catalog = build_service_catalog(
+        &ess,
+        &client_plan,
+        &realization_plan,
+        &connector_descriptor,
+        CatalogContract::V3,
+    )
+    .context("deriving service catalog")?;
 
     let mut artifacts = ArtifactTree::new();
     artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
@@ -220,9 +225,14 @@ pub fn build_service_v4(
         .context("compiling retained host realization metadata")?;
     let realization_plan = service_engine::v4::ServicePlanV4::from_runtime(&runtime_ir, &host_plan)
         .context("compiling executable service realization plan /4")?;
-    let service_catalog =
-        build_service_catalog(&ess, &client_plan, &host_plan, &connector_descriptor)
-            .context("deriving service catalog")?;
+    let service_catalog = build_service_catalog(
+        &ess,
+        &client_plan,
+        &host_plan,
+        &connector_descriptor,
+        CatalogContract::V4,
+    )
+    .context("deriving service catalog")?;
 
     let mut artifacts = ArtifactTree::new();
     artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
@@ -240,7 +250,7 @@ pub fn build_service_v4(
         connector_descriptor.to_canonical_json(),
     )?;
     artifacts.insert(SERVICE_CATALOG_PATH, service_catalog.to_canonical_json())?;
-    if let Some(openapi) = http::openapi(&client_plan) {
+    if let Some(openapi) = http::openapi_v4(&client_plan) {
         artifacts.insert(HTTP_OPENAPI_PATH, openapi)?;
     }
 
@@ -321,6 +331,7 @@ fn build_service_catalog(
     client: &ClientPlan,
     plan: &service_engine::ServicePlan,
     descriptor: &ConnectorServiceFactoryDescriptor,
+    contract: CatalogContract,
 ) -> Result<ServiceCatalog> {
     let ess_catalog = ess_synth::web::browser_catalog(&ess.ir, &ess.plan);
     let semantic_catalog = serde_json::from_str(ess_catalog.as_json())
@@ -343,8 +354,18 @@ fn build_service_catalog(
                 .iter()
                 .find(|candidate| candidate.operation == operation.operation)
                 .ok_or_else(|| anyhow::anyhow!("catalog operation lost Connector binding"))?;
-            let (input_schema, output_schema) =
+            let (input_schema, mut output_schema) =
                 service_connectors::operation_schemas(plan, contribution);
+            if contract == CatalogContract::V4
+                && operation.kind == client::ClientOperationKind::Intent
+            {
+                output_schema = serde_json::json!({
+                    "oneOf": [
+                        http::mutation_receipt_schema(),
+                        http::committed_aftercare_schema()
+                    ]
+                });
+            }
             Ok(CatalogOperation {
                 name: operation.operation.clone(),
                 operation_ref: format!("{}.{}", client.service, operation.operation),
@@ -373,6 +394,12 @@ fn build_service_catalog(
         operations,
     })
     .context("service catalog is valid")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CatalogContract {
+    V3,
+    V4,
 }
 
 #[cfg(test)]

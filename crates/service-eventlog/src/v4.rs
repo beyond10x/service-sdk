@@ -100,11 +100,12 @@ pub struct EventlogResourcesV4<'a, H> {
     operation: EventlogOperationContext,
     wait: CallWait,
     host: &'a mut H,
+    facts: crate::AuthorityFacts,
 }
 
 impl<'a, H> EventlogResourcesV4<'a, H> {
     /// Binds one operation without provisioning or changing provider administration.
-    pub const fn new(
+    pub fn new(
         bridge: &'a RecordedEventlogBridge,
         authority: &'a Authority,
         operation: EventlogOperationContext,
@@ -117,6 +118,26 @@ impl<'a, H> EventlogResourcesV4<'a, H> {
             operation,
             wait,
             host,
+            facts: crate::AuthorityFacts::default(),
+        }
+    }
+
+    /// Binds one operation with receiver-verified facts for SDK intent obligations.
+    pub const fn new_with_authority_facts(
+        bridge: &'a RecordedEventlogBridge,
+        authority: &'a Authority,
+        operation: EventlogOperationContext,
+        wait: CallWait,
+        host: &'a mut H,
+        facts: crate::AuthorityFacts,
+    ) -> Self {
+        Self {
+            bridge,
+            authority,
+            operation,
+            wait,
+            host,
+            facts,
         }
     }
 }
@@ -163,6 +184,64 @@ impl<H: HostResourcesV4> ResourcesV4 for EventlogResourcesV4<'_, H> {
                 RecordedEntry::Observation(_) => None,
             })
             .collect())
+    }
+
+    fn obligation_instances(&mut self) -> Result<Vec<EntityInstance>, String> {
+        self.bridge
+            .complete_snapshot(&self.authority.logical_scope, self.wait)
+            .map(|snapshot| {
+                snapshot
+                    .histories
+                    .into_iter()
+                    .map(|history| history.terminal)
+                    .collect()
+            })
+            .map_err(|error| format!("{error:?}"))
+    }
+
+    fn obligation_authority(
+        &mut self,
+        context: &VerifiedAuthContext,
+        check: service_engine::AuthorityCheck,
+    ) -> Result<bool, String> {
+        let scopes_allowed = |scopes: &Value| {
+            scopes.as_object().is_some_and(|scopes| {
+                scopes.iter().all(|(axis, value)| match axis.as_str() {
+                    "principal" | "team" | "project" | "extension" if value.is_null() => true,
+                    "principal" => value
+                        .as_str()
+                        .is_some_and(|value| self.facts.principals.contains(value)),
+                    "team" => value
+                        .as_str()
+                        .is_some_and(|value| self.facts.teams.contains(value)),
+                    "project" => value
+                        .as_str()
+                        .is_some_and(|value| self.facts.projects.contains(value)),
+                    "extension" => value.as_object().is_some_and(|extension| {
+                        extension
+                            .get("kind")
+                            .and_then(Value::as_str)
+                            .zip(extension.get("value").and_then(Value::as_str))
+                            .is_some_and(|(kind, value)| {
+                                self.facts.extensions.contains(&format!("{kind}:{value}"))
+                            })
+                    }),
+                    _ => false,
+                })
+            })
+        };
+        Ok(match check {
+            service_engine::AuthorityCheck::OwnerAndScopes { owner, scopes } => {
+                owner.as_str() == Some(context.authority().as_str()) && scopes_allowed(&scopes)
+            }
+            service_engine::AuthorityCheck::RequestedScopes { scopes } => scopes_allowed(&scopes),
+            service_engine::AuthorityCheck::OwnerTransfer { new_owner } => new_owner
+                .as_str()
+                .is_some_and(|owner| self.facts.principals.contains(owner)),
+            service_engine::AuthorityCheck::Capability { capability } => {
+                self.facts.capabilities.contains(&capability)
+            }
+        })
     }
 
     fn append(&mut self, request: AppendRequest) -> Result<AppendOutcome, String> {

@@ -4,10 +4,11 @@ use service_builder::ess::EssSources;
 use service_builder::package::ServicePackageV4;
 use service_definition::{
     ServiceDefinition,
-    v4::{SERVICE_DEFINITION_FORMAT_V4, ServiceDefinitionV4},
+    v4::{OperationFieldPolicy, SERVICE_DEFINITION_FORMAT_V4, ServiceDefinitionV4},
 };
 use service_engine::v4::{REALIZATION_PLAN_FORMAT_V4, ServicePlanV4};
 use service_runtime_ir::v4::{RUNTIME_IR_FORMAT_V4, ServiceRuntimeIrV4};
+use sha2::{Digest as _, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
@@ -146,6 +147,43 @@ fn strict_reloads_refuse_changed_definition_binding_and_target_revision() {
 }
 
 #[test]
+fn operation_field_command_sources_must_match_the_lowerer_field_type() {
+    let mut definition = definition("billing");
+    let issued_at = definition
+        .operation_fields
+        .iter_mut()
+        .find(|binding| {
+            binding.coordinate.command.to_string() == "billing.invoice.IssueInvoice"
+                && binding.coordinate.outcome.as_str() == "issued"
+                && binding.coordinate.field == "issued_at"
+        })
+        .expect("billing binds IssueInvoice.issued.issued_at");
+    issued_at.policy = OperationFieldPolicy::CommandField {
+        field: "invoice_id".to_owned(),
+    };
+
+    assert!(
+        service_builder::build_service_v4(&sources("billing"), &definition).is_err(),
+        "a UUID command field cannot fulfill the lowerer's Timestamp operation field"
+    );
+}
+
+#[test]
+fn realization_reader_refuses_a_self_consistent_incompatible_er_target() {
+    let mut plan = service_builder::build_service_v4(&sources("billing"), &definition("billing"))
+        .expect("billing compiles")
+        .realization_plan;
+    plan.er.target_revision = "0000000000000000000000000000000000000000".to_owned();
+    plan.plan_digest.clear();
+    plan.plan_digest = hex::encode(Sha256::digest(serde_json::to_vec(&plan).unwrap()));
+
+    assert!(
+        ServicePlanV4::from_json(&plan.to_canonical_json()).is_err(),
+        "the executable reader cannot admit a plan for another ER semantic target"
+    );
+}
+
+#[test]
 fn billing_and_gatepass_packages_emit_strict_generated_http_services() {
     for name in ["billing", "gatepass"] {
         let package = ServicePackageV4::read(&fixture(name).join("package.yaml"))
@@ -161,4 +199,26 @@ fn billing_and_gatepass_packages_emit_strict_generated_http_services() {
         assert!(source.contains("intent_v4"));
         assert!(source.contains("pub async fn get_") || source.contains("pub async fn list_"));
     }
+}
+
+#[test]
+fn generated_v4_openapi_describes_the_v4_mutation_contract() {
+    let package = ServicePackageV4::read(&fixture("billing").join("package.yaml"))
+        .expect("strict v4 package reads");
+    let build = service_builder::build_package_v4(&package).expect("strict v4 package generates");
+    let artifacts = build.artifacts.iter().collect::<BTreeMap<_, _>>();
+    let openapi: serde_json::Value =
+        serde_json::from_str(artifacts["http/openapi.json"]).expect("generated OpenAPI is JSON");
+    let receipt = &openapi["components"]["schemas"]["MutationReceipt"];
+    let properties = receipt["properties"]
+        .as_object()
+        .expect("mutation receipt properties");
+    assert!(properties.contains_key("response"));
+    assert!(properties.contains_key("commit"));
+    assert!(
+        openapi["paths"]["/v1/intents/issue_invoice"]["post"]["responses"]
+            .get("202")
+            .is_some(),
+        "committed aftercare is a declared HTTP result"
+    );
 }

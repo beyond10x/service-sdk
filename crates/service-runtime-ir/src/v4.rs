@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use entity_core::EntityDefinition;
-use ess_compiler::ir::{EssIr, ResolvedField};
+use ess_compiler::ir::{EssIr, ResolvedField, ResolvedTypeRef};
 use ess_domain::name::Naming;
 use ess_entity_runtime as lowerer;
 use ess_service_contract::extract;
@@ -1021,6 +1021,51 @@ fn resolve_policies(
                     ),
                     "Remove is admitted only for an optional entity field",
                 ));
+            }
+            if let OperationFieldPolicy::CommandField { field } = policy {
+                let command_definition = ess
+                    .commands()
+                    .values()
+                    .find(|candidate| &candidate.name == command);
+                let source = command_definition.and_then(|candidate| {
+                    candidate
+                        .input
+                        .iter()
+                        .find(|candidate| candidate.name == *field)
+                });
+                // Set supplies a present value even when the entity field may be absent.
+                // Presence is controlled separately by Preserve and Remove.
+                let set_value_type = match &fulfillment.type_ref {
+                    ResolvedTypeRef::Optional { of } if optional => of.as_ref(),
+                    other => other,
+                };
+                match source {
+                    None => diagnostics.push(RuntimeDiagnostic::new(
+                        RuntimeCode::InvalidSemanticReference,
+                        format!(
+                            "definition.operation_fields.{}.{}.{}",
+                            command, coordinate.outcome, coordinate.field
+                        ),
+                        format!("command has no input field {field:?}"),
+                    )),
+                    Some(source)
+                        if source.type_ref != fulfillment.type_ref
+                            && &source.type_ref != set_value_type =>
+                    {
+                        diagnostics.push(RuntimeDiagnostic::new(
+                            RuntimeCode::InvalidSemanticReference,
+                            format!(
+                                "definition.operation_fields.{}.{}.{}",
+                                command, coordinate.outcome, coordinate.field
+                            ),
+                            format!(
+                                "command field type {} is incompatible with operation field type {}",
+                                source.type_ref, fulfillment.type_ref
+                            ),
+                        ));
+                    }
+                    Some(_) => {}
+                }
             }
             fields.insert(
                 document,

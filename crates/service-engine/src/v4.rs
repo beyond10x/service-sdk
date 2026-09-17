@@ -19,16 +19,19 @@ use service_definition::v4::{OperationFieldPolicy, SlotValueSource};
 use service_definition::{ContextValue, QuerySort};
 use service_runtime::{RealmPolicy, VerifiedAuthContext};
 use service_runtime_ir::v4::{
-    CommandBindingDocument, EntityRuntimeBinding, IdentityValueDocument, InstanceBindingDocument,
+    ACCEPTED_ENTITY_RUNTIME_REVISION, ADAPTER_ENTITY_RUNTIME_REVISION, CommandBindingDocument,
+    EntityRuntimeBinding, IdentityValueDocument, InstanceBindingDocument,
     OperationFieldCoordinateDocument, PresenceDocument, ResolvedOperationFieldPolicy,
     ResolvedSlotPolicy, SlotCoordinateDocument,
 };
 use sha2::{Digest as _, Sha256};
 use thiserror::Error;
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 
 use crate::{
-    ContentPolicyPlan, ExpectedVersionPlan, IdempotencyPlan, InputPlan, ObligationUse,
-    PlanDelivery, ServicePlan, StreamPlan,
+    AuthorityCheck, ContentPolicyPlan, ExpectedVersionPlan, IdempotencyPlan, InputPlan,
+    ObligationUse, PlanDelivery, ServicePlan, StreamPlan,
 };
 
 /// The only realization-plan discriminator which delegates domain semantics to Entity Runtime.
@@ -501,6 +504,13 @@ impl ServicePlanV4 {
         if self.service.trim().is_empty() || self.plan_digest != self.semantic_digest() {
             return Err(PlanV4Error::InvalidDigest);
         }
+        if self.er.target_revision != ACCEPTED_ENTITY_RUNTIME_REVISION
+            || self.er.target_revision != ADAPTER_ENTITY_RUNTIME_REVISION
+        {
+            return Err(PlanV4Error::IncompatibleEntityRuntimeTarget(
+                self.er.target_revision.clone(),
+            ));
+        }
         let mut registry = Registry::new();
         for definition in self.er.definitions.values() {
             registry
@@ -579,6 +589,9 @@ pub enum PlanV4Error {
     /// The complete semantic digest is malformed or stale.
     #[error("realization plan digest is invalid")]
     InvalidDigest,
+    /// The document names an ER semantic target other than this SDK's exact admitted target.
+    #[error("incompatible Entity Runtime target revision {0:?}")]
+    IncompatibleEntityRuntimeTarget(String),
     /// The retained host plan does not describe the same service.
     #[error("retained host plan mismatch: {0}")]
     HostMismatch(String),
@@ -667,6 +680,13 @@ pub struct OriginalIntentV4 {
     pub executor: Option<String>,
     /// Caller-stable idempotency identity.
     pub idempotency_key: String,
+    /// Exact public optimistic-concurrency precondition for this attempt.
+    ///
+    /// Candidate-era observations omitted this field. Their original comparison semantics did
+    /// not bind the precondition, so recovery preserves that meaning while every new observation
+    /// records and compares it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_version: Option<u64>,
     /// Existing compiled aggregate category.
     pub category: String,
     /// Exact existing stream-selector namespace.
@@ -732,6 +752,21 @@ pub trait ResourcesV4 {
     fn load(&mut self, subject: &Subject) -> Result<Option<entity_core::EntityInstance>, String>;
     /// Returns complete decision history for replay verification.
     fn history(&mut self, subject: &Subject) -> Result<Vec<entity_core::DecisionRecord>, String>;
+    /// Returns the complete authenticated-partition terminal state needed by cross-entity SDK
+    /// obligation providers. Implementations without such a provider retain an empty state; any
+    /// selected provider that needs it then refuses explicitly.
+    fn obligation_instances(&mut self) -> Result<Vec<entity_core::EntityInstance>, String> {
+        Ok(Vec::new())
+    }
+    /// Evaluates one closed SDK authority question against receiver-verified facts.
+    /// Implementations without verified facts deny the question rather than admitting it.
+    fn obligation_authority(
+        &mut self,
+        _context: &VerifiedAuthContext,
+        _check: AuthorityCheck,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
     /// Atomically appends the complete ER decision and SDK observation.
     fn append(&mut self, request: AppendRequest) -> Result<AppendOutcome, String>;
     /// Supplies the trusted clock value for one slot.
@@ -816,6 +851,9 @@ pub enum ExecutionErrorV4 {
     /// A host slot or selected fulfillment could not be supplied.
     #[error("host fulfillment failed: {0}")]
     Fulfillment(String),
+    /// A selected SDK intent obligation refused the admitted command.
+    #[error("service obligation refused the operation: {0}")]
+    ObligationRefused(String),
     /// Entity Runtime refused malformed or invalid semantics.
     #[error("Entity Runtime failed: {0}")]
     Runtime(#[from] entity_core::CoreError),
@@ -1142,6 +1180,7 @@ impl<'a> EngineV4<'a> {
             user: context.user().as_str().to_owned(),
             executor: context.executor().map(|value| value.as_str().to_owned()),
             idempotency_key: idempotency_key.to_owned(),
+            expected_version: Some(expected_version),
             category: binding.entity.clone(),
             selector,
         };
@@ -1194,6 +1233,7 @@ impl<'a> EngineV4<'a> {
                     }
                     let logical = identity_value(logical_identity, &arguments)?;
                     let id = address(self.plan, binding, &logical)?;
+                    enforce_intent_obligations(resources, context, intent, &input, None)?;
                     match runtime.decide_create(
                         &binding.entity,
                         binding.version,
@@ -1213,6 +1253,7 @@ impl<'a> EngineV4<'a> {
                             found: None,
                         });
                     }
+                    enforce_intent_obligations(resources, context, intent, &input, None)?;
                     match runtime.decide_create_derived(
                         &binding.entity,
                         binding.version,
@@ -1278,6 +1319,7 @@ impl<'a> EngineV4<'a> {
                             found: Some(loaded.revision),
                         });
                     }
+                    enforce_intent_obligations(resources, context, intent, &input, Some(&loaded))?;
                     let evaluation = match prepared.select_with(&loaded)? {
                         LoadedDecision::Complete(evaluation) => evaluation,
                         LoadedDecision::NeedsFulfillment(selected) => {
@@ -1606,6 +1648,558 @@ fn claim_key(partition: &AuthenticatedPartition, intent: &OriginalIntentV4) -> S
     hex::encode(Sha256::digest(bytes))
 }
 
+fn enforce_intent_obligations(
+    resources: &mut dyn ResourcesV4,
+    context: &VerifiedAuthContext,
+    intent: &IntentPlanV4,
+    input: &Map<String, Value>,
+    current: Option<&entity_core::EntityInstance>,
+) -> Result<(), ExecutionErrorV4> {
+    let needs_state = intent.obligations.iter().any(obligation_needs_instances_v4);
+    let mut instances = if needs_state {
+        resources
+            .obligation_instances()
+            .map_err(ExecutionErrorV4::Fulfillment)?
+    } else {
+        Vec::new()
+    };
+    if let Some(current) = current {
+        instances.retain(|item| item.entity != current.entity || item.id != current.id);
+        instances.push(current.clone());
+    }
+    for obligation in &intent.obligations {
+        enforce_intent_obligation_v4(resources, context, &instances, obligation, input)?;
+    }
+    Ok(())
+}
+
+fn obligation_needs_instances_v4(obligation: &ObligationUse) -> bool {
+    matches!(
+        obligation.provider.as_str(),
+        "sdk.lifecycle.require-state/v1"
+            | "sdk.auth.owner-and-conjunctive-scopes/v1"
+            | "sdk.lifecycle.expiry-due/v1"
+            | "sdk.lifecycle.expiring-parent-child/v1"
+            | "sdk.aggregate.nested-entity/v1"
+            | "sdk.aggregate.owned-revision/v1"
+            | "sdk.graph.connect-dag/v1"
+            | "sdk.graph.node-unreferenced/v1"
+            | "sdk.graph.publish-snapshot/v1"
+    )
+}
+
+fn enforce_intent_obligation_v4(
+    resources: &mut dyn ResourcesV4,
+    context: &VerifiedAuthContext,
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    match obligation.provider.as_str() {
+        "sdk.auth.owner-and-conjunctive-scopes/v1"
+        | "sdk.auth.requested-scopes/v1"
+        | "sdk.auth.same-partition-owner-transfer/v1"
+        | "sdk.auth.trusted-scheduler/v1" => {
+            enforce_authority_obligation_v4(resources, context, instances, obligation, input)
+        }
+        "sdk.lifecycle.require-state/v1"
+        | "sdk.lifecycle.bounded-future/v1"
+        | "sdk.lifecycle.expiry-due/v1"
+        | "sdk.lifecycle.expiring-parent-child/v1" => {
+            enforce_lifecycle_obligation_v4(resources, instances, obligation, input)
+        }
+        "sdk.aggregate.nested-entity/v1" | "sdk.aggregate.owned-revision/v1" => {
+            enforce_aggregate_obligation_v4(instances, obligation, input)
+        }
+        "sdk.graph.connect-dag/v1"
+        | "sdk.graph.node-unreferenced/v1"
+        | "sdk.graph.publish-snapshot/v1" => {
+            validate_graph_obligation_v4(instances, obligation, input)
+        }
+        "sdk.aggregate.event-sourced/v1"
+        | "sdk.content.external-erasable/v1"
+        | "sdk.derive.tagged-value/v1"
+        | "sdk.derive.trusted-clock/v1"
+        | "sdk.effect.email/v1"
+        | "sdk.derive.inherit-parent-authority/v1"
+        | "sdk.derive.inherit-parent-authority/v2"
+        | "sdk.projection.auth-partitioned-visibility/v1"
+        | "sdk.projection.conjunctive-scopes-visibility/v1"
+        | "sdk.projection.hide-terminal-parent/v1" => Ok(()),
+        other => Err(ExecutionErrorV4::Binding(format!(
+            "SDK obligation provider {other:?} is not executable"
+        ))),
+    }
+}
+
+fn enforce_authority_obligation_v4(
+    resources: &mut dyn ResourcesV4,
+    context: &VerifiedAuthContext,
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    let check = match obligation.provider.as_str() {
+        "sdk.auth.owner-and-conjunctive-scopes/v1" => {
+            let owner =
+                bound_instance_field(instances, obligation_binding_v4(obligation, "owner")?)?;
+            let scopes =
+                bound_instance_field(instances, obligation_binding_v4(obligation, "scopes")?)?;
+            AuthorityCheck::OwnerAndScopes { owner, scopes }
+        }
+        "sdk.auth.requested-scopes/v1" => {
+            let field = obligation_binding_v4(obligation, "scopes")?;
+            let scopes = input.get(field).cloned().ok_or_else(|| {
+                ExecutionErrorV4::Input(format!("missing obligation input {field:?}"))
+            })?;
+            AuthorityCheck::RequestedScopes { scopes }
+        }
+        "sdk.auth.same-partition-owner-transfer/v1" => {
+            let field = obligation
+                .bindings
+                .get("new_owner")
+                .map_or("new_owner", String::as_str);
+            let new_owner = input.get(field).cloned().ok_or_else(|| {
+                ExecutionErrorV4::Input(format!("missing obligation input {field:?}"))
+            })?;
+            AuthorityCheck::OwnerTransfer { new_owner }
+        }
+        "sdk.auth.trusted-scheduler/v1" => AuthorityCheck::Capability {
+            capability: obligation_binding_v4(obligation, "capability")?.to_owned(),
+        },
+        _ => unreachable!("caller admits only authority obligations"),
+    };
+    require_obligation_authority(resources, context, check)
+}
+
+fn enforce_lifecycle_obligation_v4(
+    resources: &mut dyn ResourcesV4,
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    match obligation.provider.as_str() {
+        "sdk.lifecycle.require-state/v1" => {
+            let entity = bound_instance(instances, obligation, input, "entity", "identity")?;
+            if !obligation_binding_v4(obligation, "allowed")?
+                .split(',')
+                .map(str::trim)
+                .any(|allowed| allowed == entity.lifecycle_state)
+            {
+                return Err(ExecutionErrorV4::ObligationRefused("wrong_state".into()));
+            }
+        }
+        "sdk.lifecycle.bounded-future/v1" => {
+            let field = obligation_binding_v4(obligation, "lifetime")?;
+            let candidate = input
+                .get(field)
+                .and_then(lifetime_instant_v4)
+                .ok_or_else(|| ExecutionErrorV4::Input(field.to_owned()))?;
+            let candidate = parse_instant_v4(candidate)?;
+            let now = resources
+                .trusted_clock()
+                .map_err(ExecutionErrorV4::Fulfillment)?;
+            let now = now.as_str().ok_or_else(|| {
+                ExecutionErrorV4::Fulfillment("trusted clock did not return a string".into())
+            })?;
+            if candidate <= parse_instant_v4(now)? {
+                return Err(ExecutionErrorV4::ObligationRefused(
+                    "invalid_lifetime".into(),
+                ));
+            }
+        }
+        "sdk.lifecycle.expiry-due/v1" => {
+            let entity = bound_instance(instances, obligation, input, "entity", "identity")?;
+            let expiry = entity
+                .fields
+                .get(obligation_binding_v4(obligation, "lifetime")?)
+                .and_then(lifetime_instant_v4)
+                .ok_or_else(|| ExecutionErrorV4::Binding("entity lifetime".into()))?;
+            let now = resources
+                .trusted_clock()
+                .map_err(ExecutionErrorV4::Fulfillment)?;
+            let now = now.as_str().ok_or_else(|| {
+                ExecutionErrorV4::Fulfillment("trusted clock did not return a string".into())
+            })?;
+            if parse_instant_v4(expiry)? > parse_instant_v4(now)? {
+                return Err(ExecutionErrorV4::ObligationRefused("expiry_not_due".into()));
+            }
+        }
+        "sdk.lifecycle.expiring-parent-child/v1" => {
+            enforce_parent_child_lifetime_v4(resources, instances, obligation, input)?;
+        }
+        _ => unreachable!("caller admits only lifecycle obligations"),
+    }
+    Ok(())
+}
+
+fn enforce_parent_child_lifetime_v4(
+    resources: &mut dyn ResourcesV4,
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    let child_field = obligation_binding_v4(obligation, "child_lifetime")?;
+    let candidate = input
+        .get(child_field)
+        .and_then(lifetime_instant_v4)
+        .ok_or_else(|| ExecutionErrorV4::ObligationRefused("invalid_lifetime".into()))?;
+    let parent = instances
+        .iter()
+        .find(|item| item.entity == obligation_binding_v4(obligation, "parent").unwrap_or_default())
+        .ok_or_else(|| ExecutionErrorV4::ObligationRefused("parent_not_found".into()))?;
+    let parent_expiry = parent
+        .fields
+        .get(obligation_binding_v4(obligation, "parent_lifetime")?)
+        .and_then(lifetime_instant_v4)
+        .ok_or_else(|| ExecutionErrorV4::ObligationRefused("parent_not_found".into()))?;
+    let now = resources
+        .trusted_clock()
+        .map_err(ExecutionErrorV4::Fulfillment)?;
+    if parse_instant_v4(candidate)? <= parse_instant_v4(now.as_str().unwrap_or(""))?
+        || parse_instant_v4(candidate)? > parse_instant_v4(parent_expiry)?
+    {
+        return Err(ExecutionErrorV4::ObligationRefused(
+            "invalid_lifetime".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn enforce_aggregate_obligation_v4(
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    match obligation.provider.as_str() {
+        "sdk.aggregate.nested-entity/v1" => {
+            let parent_identity = input
+                .get(obligation_binding_v4(obligation, "parent_identity")?)
+                .and_then(Value::as_str)
+                .ok_or_else(|| ExecutionErrorV4::Input("parent_identity".into()))?;
+            if !instances.iter().any(|item| {
+                item.entity == obligation_binding_v4(obligation, "parent").unwrap_or_default()
+                    && item.id == parent_identity
+            }) {
+                return Err(ExecutionErrorV4::ObligationRefused(
+                    "parent_not_found".into(),
+                ));
+            }
+            if let Some(field) = obligation.bindings.get("child_identity") {
+                let child = input
+                    .get(field)
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| ExecutionErrorV4::Input(field.clone()))?;
+                if !instances.iter().any(|item| {
+                    item.entity == obligation_binding_v4(obligation, "child").unwrap_or_default()
+                        && item.id == child
+                }) {
+                    return Err(ExecutionErrorV4::ObligationRefused("not_found".into()));
+                }
+            }
+        }
+        "sdk.aggregate.owned-revision/v1" => {
+            let identity = input
+                .get(obligation_binding_v4(obligation, "revision_identity")?)
+                .and_then(Value::as_str)
+                .ok_or_else(|| ExecutionErrorV4::Input("revision_identity".into()))?;
+            let revision = instances
+                .iter()
+                .find(|item| {
+                    item.entity == obligation_binding_v4(obligation, "revision").unwrap_or_default()
+                        && item.id == identity
+                })
+                .ok_or_else(|| ExecutionErrorV4::ObligationRefused("revision_not_found".into()))?;
+            if let Some(allowed) = obligation.bindings.get("allowed")
+                && !allowed
+                    .split(',')
+                    .map(str::trim)
+                    .any(|state| state == revision.lifecycle_state)
+            {
+                return Err(ExecutionErrorV4::ObligationRefused(
+                    "revision_not_publishable".into(),
+                ));
+            }
+        }
+        _ => unreachable!("caller admits only aggregate obligations"),
+    }
+    Ok(())
+}
+
+fn obligation_binding_v4<'a>(
+    obligation: &'a ObligationUse,
+    name: &str,
+) -> Result<&'a str, ExecutionErrorV4> {
+    obligation
+        .bindings
+        .get(name)
+        .map(String::as_str)
+        .ok_or_else(|| {
+            ExecutionErrorV4::Binding(format!("{}.bindings.{name}", obligation.provider))
+        })
+}
+
+fn require_obligation_authority(
+    resources: &mut dyn ResourcesV4,
+    context: &VerifiedAuthContext,
+    check: AuthorityCheck,
+) -> Result<(), ExecutionErrorV4> {
+    if resources
+        .obligation_authority(context, check)
+        .map_err(ExecutionErrorV4::Fulfillment)?
+    {
+        Ok(())
+    } else {
+        Err(ExecutionErrorV4::ObligationRefused("forbidden".into()))
+    }
+}
+
+fn bound_instance<'a>(
+    instances: &'a [entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+    entity_binding: &str,
+    identity_binding: &str,
+) -> Result<&'a entity_core::EntityInstance, ExecutionErrorV4> {
+    let entity = obligation.bindings.get(entity_binding).ok_or_else(|| {
+        ExecutionErrorV4::Binding(format!("{}.bindings.{entity_binding}", obligation.provider))
+    })?;
+    let identity = obligation
+        .bindings
+        .get(identity_binding)
+        .map(|field| {
+            input
+                .get(field)
+                .and_then(Value::as_str)
+                .ok_or_else(|| ExecutionErrorV4::Input(field.clone()))
+        })
+        .transpose()?;
+    instances
+        .iter()
+        .find(|item| {
+            item.entity == entity.as_str() && identity.is_none_or(|identity| item.id == identity)
+        })
+        .ok_or_else(|| ExecutionErrorV4::ObligationRefused("not_found".into()))
+}
+
+fn bound_instance_field(
+    instances: &[entity_core::EntityInstance],
+    path: &str,
+) -> Result<Value, ExecutionErrorV4> {
+    let (entity, field) = path
+        .rsplit_once('.')
+        .ok_or_else(|| ExecutionErrorV4::Binding(path.to_owned()))?;
+    instances
+        .iter()
+        .find(|item| item.entity == entity)
+        .and_then(|item| item.fields.get(field))
+        .cloned()
+        .ok_or_else(|| ExecutionErrorV4::ObligationRefused("not_found".into()))
+}
+
+fn lifetime_instant_v4(value: &Value) -> Option<&str> {
+    value
+        .as_object()
+        .and_then(|object| object.get("expires_at"))
+        .and_then(Value::as_str)
+}
+
+fn parse_instant_v4(value: &str) -> Result<OffsetDateTime, ExecutionErrorV4> {
+    OffsetDateTime::parse(value, &Rfc3339)
+        .map_err(|_| ExecutionErrorV4::ObligationRefused("invalid_lifetime".into()))
+}
+
+fn validate_graph_obligation_v4(
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<(), ExecutionErrorV4> {
+    let mut graph = graph_state_v4(instances, obligation, input)?;
+    match obligation.provider.as_str() {
+        "sdk.graph.connect-dag/v1" => {
+            let source = obligation_input_string_v4(obligation, input, "source")?;
+            let target = obligation_input_string_v4(obligation, input, "target")?;
+            insert_graph_pair_v4(&graph.nodes, &mut graph.pairs, &source, &target)?;
+        }
+        "sdk.graph.node-unreferenced/v1" => {
+            let node = obligation_input_string_v4(obligation, input, "node")?;
+            if !graph.nodes.contains(&node) {
+                return Err(ExecutionErrorV4::ObligationRefused("node_not_found".into()));
+            }
+            if graph
+                .pairs
+                .iter()
+                .any(|(source, target)| source == &node || target == &node)
+            {
+                return Err(ExecutionErrorV4::ObligationRefused(
+                    "node_referenced".into(),
+                ));
+            }
+        }
+        "sdk.graph.publish-snapshot/v1" => {}
+        _ => unreachable!("caller admits only graph providers"),
+    }
+    if graph.pairs.len() > graph_limit_v4(obligation, "max_edges", 2_000)? {
+        return Err(ExecutionErrorV4::ObligationRefused(
+            "graph_too_large".into(),
+        ));
+    }
+    if graph_has_cycle_v4(&graph.nodes, &graph.pairs) {
+        return Err(ExecutionErrorV4::ObligationRefused("graph_cycle".into()));
+    }
+    Ok(())
+}
+
+struct GraphStateV4 {
+    nodes: BTreeSet<String>,
+    pairs: BTreeSet<(String, String)>,
+}
+
+fn graph_state_v4(
+    instances: &[entity_core::EntityInstance],
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+) -> Result<GraphStateV4, ExecutionErrorV4> {
+    let partition = obligation_input_string_v4(obligation, input, "partition")?;
+    let active = obligation
+        .bindings
+        .get("active_state")
+        .map_or("Active", String::as_str);
+    let node_partition = obligation_binding_v4(obligation, "node_partition")?;
+    let edge_partition = obligation_binding_v4(obligation, "edge_partition")?;
+    let edge_source = obligation_binding_v4(obligation, "edge_source")?;
+    let edge_target = obligation_binding_v4(obligation, "edge_target")?;
+    let nodes_entity = obligation_binding_v4(obligation, "nodes")?;
+    let edges_entity = obligation_binding_v4(obligation, "edges")?;
+    let nodes = instances
+        .iter()
+        .filter(|item| {
+            item.entity == nodes_entity
+                && item.lifecycle_state == active
+                && item.fields.get(node_partition).and_then(Value::as_str)
+                    == Some(partition.as_str())
+        })
+        .map(|item| item.id.clone())
+        .collect::<BTreeSet<_>>();
+    if nodes.is_empty() {
+        return Err(ExecutionErrorV4::ObligationRefused("empty_graph".into()));
+    }
+    if nodes.len() > graph_limit_v4(obligation, "max_nodes", 500)? {
+        return Err(ExecutionErrorV4::ObligationRefused(
+            "graph_too_large".into(),
+        ));
+    }
+    let mut pairs = BTreeSet::new();
+    for edge in instances.iter().filter(|item| {
+        item.entity == edges_entity
+            && item.lifecycle_state == active
+            && item.fields.get(edge_partition).and_then(Value::as_str) == Some(partition.as_str())
+    }) {
+        let source = edge
+            .fields
+            .get(edge_source)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ExecutionErrorV4::Binding(edge_source.to_owned()))?;
+        let target = edge
+            .fields
+            .get(edge_target)
+            .and_then(Value::as_str)
+            .ok_or_else(|| ExecutionErrorV4::Binding(edge_target.to_owned()))?;
+        insert_graph_pair_v4(&nodes, &mut pairs, source, target)?;
+    }
+    Ok(GraphStateV4 { nodes, pairs })
+}
+
+fn obligation_input_string_v4(
+    obligation: &ObligationUse,
+    input: &Map<String, Value>,
+    name: &str,
+) -> Result<String, ExecutionErrorV4> {
+    let field = obligation_binding_v4(obligation, name)?;
+    input
+        .get(field)
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| ExecutionErrorV4::Input(field.to_owned()))
+}
+
+fn graph_limit_v4(
+    obligation: &ObligationUse,
+    name: &str,
+    default: usize,
+) -> Result<usize, ExecutionErrorV4> {
+    obligation.bindings.get(name).map_or(Ok(default), |value| {
+        value
+            .parse::<usize>()
+            .ok()
+            .filter(|value| *value > 0)
+            .ok_or_else(|| {
+                ExecutionErrorV4::Binding(format!("{}.bindings.{name}", obligation.provider))
+            })
+    })
+}
+
+fn insert_graph_pair_v4(
+    nodes: &BTreeSet<String>,
+    pairs: &mut BTreeSet<(String, String)>,
+    source: &str,
+    target: &str,
+) -> Result<(), ExecutionErrorV4> {
+    if source == target {
+        return Err(ExecutionErrorV4::ObligationRefused("self_edge".into()));
+    }
+    if !nodes.contains(source) || !nodes.contains(target) {
+        return Err(ExecutionErrorV4::ObligationRefused("dangling_edge".into()));
+    }
+    if !pairs.insert((source.to_owned(), target.to_owned())) {
+        return Err(ExecutionErrorV4::ObligationRefused("duplicate_edge".into()));
+    }
+    Ok(())
+}
+
+fn graph_has_cycle_v4(nodes: &BTreeSet<String>, pairs: &BTreeSet<(String, String)>) -> bool {
+    fn visit(
+        node: &str,
+        adjacency: &BTreeMap<String, BTreeSet<String>>,
+        visiting: &mut BTreeSet<String>,
+        visited: &mut BTreeSet<String>,
+    ) -> bool {
+        if !visiting.insert(node.to_owned()) {
+            return true;
+        }
+        if visited.contains(node) {
+            visiting.remove(node);
+            return false;
+        }
+        if adjacency
+            .get(node)
+            .into_iter()
+            .flatten()
+            .any(|target| visit(target, adjacency, visiting, visited))
+        {
+            return true;
+        }
+        visiting.remove(node);
+        visited.insert(node.to_owned());
+        false
+    }
+    let mut adjacency = nodes
+        .iter()
+        .map(|node| (node.clone(), BTreeSet::new()))
+        .collect::<BTreeMap<_, _>>();
+    for (source, target) in pairs {
+        adjacency
+            .get_mut(source)
+            .expect("validated graph source exists")
+            .insert(target.clone());
+    }
+    let mut visiting = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    nodes
+        .iter()
+        .any(|node| visit(node, &adjacency, &mut visiting, &mut visited))
+}
+
 fn resolve_slots(
     plan: &ServicePlanV4,
     command: &str,
@@ -1805,7 +2399,7 @@ fn recover(
             "intent observation digest or format is invalid".to_owned(),
         ));
     }
-    if &observation.intent != original {
+    if !original_intents_match(&observation.intent, original) {
         return Err(ExecutionErrorV4::IdempotencyConflict);
     }
     if observation.selected_outcome != commit.envelope.record.outcome
@@ -1848,6 +2442,15 @@ fn recover(
         receipt: batch.receipt.clone(),
         replayed: true,
     })
+}
+
+fn original_intents_match(recorded: &OriginalIntentV4, attempted: &OriginalIntentV4) -> bool {
+    if recorded.expected_version.is_some() {
+        return recorded == attempted;
+    }
+    let mut compatible_attempt = attempted.clone();
+    compatible_attempt.expected_version = None;
+    recorded == &compatible_attempt
 }
 
 fn deliver_after_commit(
@@ -1997,6 +2600,7 @@ mod tests {
             user: "user-a".to_owned(),
             executor: None,
             idempotency_key: "create-1".to_owned(),
+            expected_version: Some(0),
             category: "demo.Document".to_owned(),
             selector: ClaimSelectorV4::GeneratedUuidV7,
         };
@@ -2022,6 +2626,41 @@ mod tests {
             recorded_content_acceptances(&content_intent(false), &decision, &original),
             Err(ExecutionErrorV4::Integrity(_))
         ));
+    }
+
+    #[test]
+    fn expected_version_is_part_of_new_intent_identity_without_rewriting_old_meaning() {
+        let original = OriginalIntentV4 {
+            plan_digest: "plan".to_owned(),
+            operation: "revise".to_owned(),
+            input: serde_json::json!({"document_id": "document-a"}),
+            service: "demo".to_owned(),
+            tenant: "tenant-a".to_owned(),
+            realm: None,
+            authority: "account-a".to_owned(),
+            user: "user-a".to_owned(),
+            executor: None,
+            idempotency_key: "revise-1".to_owned(),
+            expected_version: Some(1),
+            category: "demo.Document".to_owned(),
+            selector: ClaimSelectorV4::CommandField {
+                value: "document-a".to_owned(),
+            },
+        };
+        assert!(original_intents_match(&original, &original));
+        let mut changed = original.clone();
+        changed.expected_version = Some(2);
+        assert!(!original_intents_match(&original, &changed));
+
+        let mut candidate_era = original.clone();
+        candidate_era.expected_version = None;
+        assert!(
+            !serde_json::to_string(&candidate_era)
+                .unwrap()
+                .contains("expected_version")
+        );
+        assert!(original_intents_match(&candidate_era, &original));
+        assert!(original_intents_match(&candidate_era, &changed));
     }
 
     #[test]

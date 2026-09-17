@@ -33,6 +33,10 @@ values stay absent; they are not converted to JSON null. One resolved slot is ev
 its value or absence is reused by every target carrying that slot. Independent slots are evaluated
 independently.
 
+An operation-field `CommandField` binding may supply a present `T` to an optional `T` entity
+field through `Set`. Optional target presence does not change the value's type: mismatched
+value types still refuse, and `Preserve` and `Remove` remain separate explicit actions.
+
 `service-runtime-ir/4` contains the exact existing ESS and synthesis bindings plus:
 
 - selected component;
@@ -258,6 +262,14 @@ Concurrent commands with the same predecessor and different idempotency keys rac
 expectation; one can commit and the other receives an exact revision conflict. The same claim key
 and same intent replays the winner. The same claim key and different intent is an idempotency
 conflict regardless of current subject revision.
+
+The recorded original intent includes the exact public `expected_version`. New writes compare that
+precondition along with normalized input and verified identity, so changing it under an existing
+idempotency key is a conflict. Candidate-era `/4` observations written before this field existed
+remain readable with their original comparison meaning: absence is preserved in their canonical
+digest and continues to compare without a version precondition. The `/4` format has not been
+published; this additive optional reader path avoids reinterpreting already-recorded candidate
+evidence while making every new observation complete.
 
 ## Projection, queries, effects, and restart
 

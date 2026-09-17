@@ -633,6 +633,11 @@ fn execution_problem_v4(error: &service_engine::v4::ExecutionErrorV4) -> Respons
                 "the operation conflicts with durable authority",
             )
         }
+        ExecutionErrorV4::ObligationRefused(_) => problem(
+            StatusCode::CONFLICT,
+            "service_invariant",
+            "a declared service obligation refused the operation",
+        ),
         ExecutionErrorV4::Fulfillment(_)
         | ExecutionErrorV4::Persistence(_)
         | ExecutionErrorV4::Projection(_) => problem(

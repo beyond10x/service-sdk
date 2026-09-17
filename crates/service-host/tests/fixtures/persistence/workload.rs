@@ -913,25 +913,21 @@ fn freeze_inputs(fixture: &Fixture) -> Result<()> {
         .map(str::to_owned)
         .collect::<Vec<_>>();
     paths.extend(["Cargo.toml", "Cargo.lock"].into_iter().map(str::to_owned));
-    paths.push(
-        std::env::current_exe()?
-            .strip_prefix(&root)?
+    // Preserve relative source-local names, and bind relocated binaries by their
+    // exact absolute paths instead of requiring the target directory below root.
+    let input_path = |path: PathBuf| {
+        path.strip_prefix(&root)
+            .unwrap_or(&path)
             .display()
-            .to_string(),
-    );
-    paths.push(
-        binary()
-            .canonicalize()
-            .with_context(|| {
-                format!(
-                    "canonicalizing standalone fixture binary {}",
-                    binary().display()
-                )
-            })?
-            .strip_prefix(&root)?
-            .display()
-            .to_string(),
-    );
+            .to_string()
+    };
+    paths.push(input_path(std::env::current_exe()?));
+    paths.push(input_path(binary().canonicalize().with_context(|| {
+        format!(
+            "canonicalizing standalone fixture binary {}",
+            binary().display()
+        )
+    })?));
     paths.sort();
     let output = Command::new("sha256sum")
         .args(&paths)

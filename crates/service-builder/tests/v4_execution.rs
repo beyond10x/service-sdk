@@ -11,7 +11,9 @@ use entity_store::{
 };
 use futures::executor::block_on;
 use serde_json::{Map, Value, json};
-use service_definition::v4::ServiceDefinitionV4;
+use service_definition::{
+    DefinitionId, ObligationDefinition, ObligationProviderId, v4::ServiceDefinitionV4,
+};
 use service_engine::v4::{
     AuthenticatedPartition, EngineV4, ExecutionErrorV4, IntentPlanV4, MutationResultV4,
     ResourcesV4, StagedContentV4, project_query_v4,
@@ -258,6 +260,10 @@ fn billing() -> service_builder::ServiceBuildV4 {
     )
     .unwrap();
     service_builder::build_service_v4(&support::sources("billing"), &definition).unwrap()
+}
+
+fn billing_with_definition(definition: &ServiceDefinitionV4) -> service_builder::ServiceBuildV4 {
+    service_builder::build_service_v4(&support::sources("billing"), definition).unwrap()
 }
 
 fn gatepass() -> service_builder::ServiceBuildV4 {
@@ -642,6 +648,167 @@ fn billing_delegates_refusal_fulfillment_atomic_retry_uncertainty_and_replay() {
         ),
         calls,
         "historical retries return original evidence without rerunning fulfillment, append, or effects"
+    );
+}
+
+#[test]
+fn same_idempotency_key_with_a_changed_expected_version_is_not_an_exact_retry() {
+    let build = billing();
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let context = context(None);
+    let mut resources = Resources::new("billing", &context);
+    let create = serde_json::to_vec(&json!({
+        "account_id": "018f7f4c-9b68-7abc-8def-111111111111",
+        "customer_email": "person@example.test",
+        "amount": {"amount": 12.5, "currency": "EUR"},
+        "idempotency_key": "create-expected-version"
+    }))
+    .unwrap();
+    let (created, _) = committed(
+        engine
+            .execute_public_json(
+                &context,
+                "create_invoice",
+                &create,
+                recording("create-expected-version"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let issue = serde_json::to_vec(&json!({
+        "invoice_id": created.instance.fields["invoice_id"],
+        "expected_version": 1,
+        "idempotency_key": "issue-expected-version"
+    }))
+    .unwrap();
+    let _ = committed(
+        engine
+            .execute_public_json(
+                &context,
+                "issue_invoice",
+                &issue,
+                recording("issue-expected-version"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let changed_precondition = serde_json::to_vec(&json!({
+        "invoice_id": created.instance.fields["invoice_id"],
+        "expected_version": 2,
+        "idempotency_key": "issue-expected-version"
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        engine.execute_public_json(
+            &context,
+            "issue_invoice",
+            &changed_precondition,
+            recording("issue-changed-expected-version"),
+            &mut resources,
+        ),
+        Err(ExecutionErrorV4::IdempotencyConflict)
+    ));
+}
+
+#[test]
+fn v4_executes_selected_sdk_intent_obligations() {
+    let root = support::fixture("billing");
+    let mut definition = ServiceDefinitionV4::from_yaml(
+        &std::fs::read_to_string(root.join("runtime.yaml")).unwrap(),
+    )
+    .unwrap();
+    let obligation = DefinitionId::new("must_be_draft").unwrap();
+    definition.obligations.push(ObligationDefinition {
+        name: obligation.clone(),
+        provider: ObligationProviderId::new("sdk.lifecycle.require-state/v1").unwrap(),
+        bindings: [
+            (
+                DefinitionId::new("entity").unwrap(),
+                "billing.invoice.Invoice".to_owned(),
+            ),
+            (DefinitionId::new("allowed").unwrap(), "Draft".to_owned()),
+            (
+                DefinitionId::new("identity").unwrap(),
+                "invoice_id".to_owned(),
+            ),
+        ]
+        .into_iter()
+        .collect(),
+        description: "Only a draft invoice may be paid.".to_owned(),
+    });
+    definition
+        .intents
+        .iter_mut()
+        .find(|intent| intent.name.as_str() == "pay_invoice")
+        .unwrap()
+        .obligations
+        .push(obligation);
+    let build = billing_with_definition(&definition);
+    let pay = &build.realization_plan.intents["pay_invoice"];
+    assert!(
+        pay.obligations
+            .iter()
+            .any(|item| item.provider == "sdk.lifecycle.require-state/v1"),
+        "the compiler retained the selected SDK lifecycle implementation"
+    );
+
+    let engine = EngineV4::new(&build.realization_plan).unwrap();
+    let context = context(None);
+    let mut resources = Resources::new("billing", &context);
+    let create = serde_json::to_vec(&json!({
+        "account_id": "018f7f4c-9b68-7abc-8def-111111111111",
+        "customer_email": "person@example.test",
+        "amount": {"amount": 12.5, "currency": "EUR"}
+    }))
+    .unwrap();
+    let (created, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "create_invoice",
+                &create,
+                0,
+                "obligation-create",
+                recording("obligation-create"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let invoice_id = created.instance.fields["invoice_id"].clone();
+    let issue = serde_json::to_vec(&json!({"invoice_id": invoice_id})).unwrap();
+    let (issued, _) = committed(
+        engine
+            .execute_json(
+                &context,
+                "issue_invoice",
+                &issue,
+                1,
+                "obligation-issue",
+                recording("obligation-issue"),
+                &mut resources,
+            )
+            .unwrap(),
+    );
+    let pay = serde_json::to_vec(&json!({
+        "invoice_id": issued.instance.fields["invoice_id"],
+        "amount": {"amount": 12.5, "currency": "EUR"}
+    }))
+    .unwrap();
+
+    assert!(
+        engine
+            .execute_json(
+                &context,
+                "pay_invoice",
+                &pay,
+                2,
+                "obligation-pay",
+                recording("obligation-pay"),
+                &mut resources,
+            )
+            .is_err(),
+        "sdk.lifecycle.require-state/v1 must refuse paying the issued invoice because only Draft was allowed"
     );
 }
 
