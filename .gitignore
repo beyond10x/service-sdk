@@ -2,3 +2,5 @@
 /node_modules/
 **/*.rs.bk
 .DS_Store
+.engineering/.aep-planning-writer*.lock
+.engineering/migrations/

@@ -46,7 +46,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
           corepack enable
           corepack prepare pnpm@10.15.0 --activate
-          aep_version=0.52.0
+          aep_version=0.57.0
           aep_asset="aep-${aep_version}-x86_64-unknown-linux-gnu.tar.gz"
           curl --fail --silent --show-error --location --remote-name \
             "https://github.com/beyond10x/aep/releases/download/${aep_version}/${aep_asset}"
