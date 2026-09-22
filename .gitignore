@@ -3,5 +3,4 @@
 **/*.rs.bk
 .DS_Store
 .engineering/.aep-planning-writer*.lock
-.engineering/migrations/*/recovery/
-.engineering/migrations/*/stage/
+.engineering/migrations/
