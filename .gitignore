@@ -2,3 +2,7 @@
 /node_modules/
 **/*.rs.bk
 .DS_Store
+.engineering/.aep-planning-writer*.lock
+.engineering/state/writer.lock
+.engineering/migrations/*/recovery/
+.engineering/migrations/*/stage/
