@@ -53,6 +53,34 @@ fn sources(name: &str) -> EssSources {
     .expect("explicit source inventory")
 }
 
+/// Released Entity Runtime `0.19.0` (tag commit), the target of the ESS 0.29 lowerer.
+const ENTITY_RUNTIME_0_19_0: &str = "13f88d982f8ac90651e4023bdf6286332d042b33";
+
+/// The fixture sources with exact textual edits applied; every edit must match once.
+fn edited_sources(name: &str, edits: &[(&str, &str, &str)]) -> EssSources {
+    let mut files = sources(name)
+        .iter()
+        .map(|(label, text)| (label.to_owned(), text.to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    for (label, from, to) in edits {
+        let text = files.get_mut(*label).expect("edited fixture source exists");
+        assert_eq!(text.matches(from).count(), 1, "edit {from:?} matches once");
+        *text = text.replacen(from, to, 1);
+    }
+    EssSources::new(files).expect("explicit edited source inventory")
+}
+
+/// Gatepass declared at `ess/6`, where preservation and subject facts exist.
+const GATEPASS_ESS_6_FORMAT: (&str, &str, &str) =
+    ("system.yaml", "format: ess/1\n", "format: ess/6\n");
+
+/// `ess/6` requires the implementation-assigned identity to be declared as generated.
+const GATEPASS_ESS_6_CREATED_IDENTITY: (&str, &str, &str) = (
+    "domains/visit.yaml",
+    "            visitor: input.visitor\n            building: input.building\n",
+    "            visit_id: {generated: true}\n            visitor: input.visitor\n            building: input.building\n",
+);
+
 fn definition(name: &str) -> ServiceDefinitionV4 {
     ServiceDefinitionV4::from_yaml(
         &fs::read_to_string(fixture(name).join("runtime.yaml")).expect("runtime fixture"),
@@ -127,10 +155,14 @@ fn strict_reloads_refuse_changed_definition_binding_and_target_revision() {
     let build = service_builder::build_service_v4(&sources("billing"), &definition("billing"))
         .expect("billing compiles");
     let runtime = build.runtime_ir.to_canonical_json();
+    assert!(
+        runtime.contains(ENTITY_RUNTIME_0_19_0),
+        "the persisted /4 document names the released Entity Runtime 0.19.0 target"
+    );
     for changed in [
         runtime.replacen("\"service\": \"billing\"", "\"service\": \"other\"", 1),
         runtime.replacen(
-            "7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11",
+            ENTITY_RUNTIME_0_19_0,
             "0000000000000000000000000000000000000000",
             1,
         ),
@@ -165,6 +197,57 @@ fn operation_field_command_sources_must_match_the_lowerer_field_type() {
     assert!(
         service_builder::build_service_v4(&sources("billing"), &definition).is_err(),
         "a UUID command field cannot fulfill the lowerer's Timestamp operation field"
+    );
+}
+
+fn v4_refusal(sources: &EssSources, definition: &ServiceDefinitionV4) -> String {
+    match service_builder::build_service_v4(sources, definition) {
+        Ok(_) => panic!("the ESS 0.29 construct has no Entity Runtime definition form"),
+        Err(error) => format!("{error:#}"),
+    }
+}
+
+#[test]
+fn a_source_determined_clear_on_an_existing_subject_is_refused_by_its_lowerer_code() {
+    let sources = edited_sources(
+        "gatepass",
+        &[
+            GATEPASS_ESS_6_FORMAT,
+            GATEPASS_ESS_6_CREATED_IDENTITY,
+            (
+                "domains/visit.yaml",
+                "        moves: gatepass.visit.Visit.depart\n        instance: visit_id\n",
+                "        moves: gatepass.visit.Visit.depart\n        instance: visit_id\n        sets: {badge: {cleared: true}}\n",
+            ),
+        ],
+    );
+    let refusal = v4_refusal(&sources, &definition("gatepass"));
+    assert!(
+        refusal.contains("ClearedValueUnsupported")
+            && refusal.contains("gatepass.visit.SignOutVisitor"),
+        "a cleared Optional field is refused by name, never dropped: {refusal}"
+    );
+}
+
+#[test]
+fn a_silent_preserving_branch_is_refused_by_its_lowerer_code() {
+    let sources = edited_sources(
+        "gatepass",
+        &[
+            GATEPASS_ESS_6_FORMAT,
+            GATEPASS_ESS_6_CREATED_IDENTITY,
+            (
+                "domains/visit.yaml",
+                "      - name: admitted\n        moves: gatepass.visit.Visit.arrive\n",
+                "      - name: already-north\n        when_subject: {field: building, equals: North}\n        preserves: gatepass.visit.Visit\n        instance: visit_id\n        summary: A North visit keeps its state and fields.\n\n      - name: admitted\n        moves: gatepass.visit.Visit.arrive\n",
+            ),
+        ],
+    );
+    let refusal = v4_refusal(&sources, &definition("gatepass"));
+    assert!(
+        refusal.contains("SilentPreserveUnsupported")
+            && refusal.contains("gatepass.visit.AdmitVisitor"),
+        "an accepting branch with no effect, write, event or response is refused by name: {refusal}"
     );
 }
 

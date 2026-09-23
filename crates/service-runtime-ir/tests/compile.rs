@@ -359,3 +359,48 @@ fn auth_coordinates_in_ess_command_inputs_are_refused() {
         );
     }
 }
+
+/// Every Entity Runtime crate the workspace resolves, and the revision the `/4` documents name,
+/// are the one commit the pinned ESS lowerer targets.
+#[test]
+fn accepted_entity_runtime_revision_is_the_resolved_lock_and_the_lowerer_target() {
+    use service_runtime_ir::v4::{
+        ACCEPTED_ENTITY_RUNTIME_REVISION, ADAPTER_ENTITY_RUNTIME_REVISION,
+    };
+
+    assert_eq!(
+        ACCEPTED_ENTITY_RUNTIME_REVISION,
+        ess_entity_runtime::ENTITY_RUNTIME_REVISION
+    );
+    assert_eq!(
+        ADAPTER_ENTITY_RUNTIME_REVISION,
+        ess_entity_runtime::ENTITY_RUNTIME_REVISION
+    );
+    let lock = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.lock"))
+        .expect("workspace lock");
+    let mut sources = std::collections::BTreeMap::new();
+    for package in lock.split("[[package]]") {
+        let field = |key: &str| {
+            package.lines().find_map(|line| {
+                line.strip_prefix(key)
+                    .map(|value| value.trim().trim_matches('"').to_owned())
+            })
+        };
+        if let (Some(name), Some(source)) = (field("name = "), field("source = "))
+            && source.starts_with("git+https://github.com/beyond10x/entity-runtime")
+        {
+            sources.insert(name, source);
+        }
+    }
+    for crate_name in ["entity-core", "entity-store", "entity-eventlog"] {
+        let source = sources
+            .get(crate_name)
+            .unwrap_or_else(|| panic!("{crate_name} resolves from the Entity Runtime repository"));
+        assert!(
+            source.ends_with(&format!("#{ACCEPTED_ENTITY_RUNTIME_REVISION}")),
+            "{crate_name} resolves {source}, not {ACCEPTED_ENTITY_RUNTIME_REVISION}"
+        );
+    }
+    let distinct = sources.values().collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(distinct.len(), 1, "one Entity Runtime source: {distinct:?}");
+}

@@ -46,26 +46,26 @@ uuid = { version = "1", features = ["v7"] }
 identity-client = { git = "https://github.com/beyond10x/identity.git", rev = "7f22a5359fc5786fd26ab0f0bd728b8544b11950" }
 
 # The organization persistence kit is the only generated-service event/projection/blob backend.
-eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "43ceaa09ceec610e25891815e33e03e8df92ee28" }
-eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog", rev = "43ceaa09ceec610e25891815e33e03e8df92ee28" }
-eventlog-postgres = { git = "https://github.com/beyond10x/eventlog", rev = "43ceaa09ceec610e25891815e33e03e8df92ee28" }
+eventlog-core = { git = "https://github.com/beyond10x/eventlog", rev = "ac6b1731654329d32f1e3c9cf164fefad6a5b46a" }
+eventlog-sqlite = { git = "https://github.com/beyond10x/eventlog", rev = "ac6b1731654329d32f1e3c9cf164fefad6a5b46a" }
+eventlog-postgres = { git = "https://github.com/beyond10x/eventlog", rev = "ac6b1731654329d32f1e3c9cf164fefad6a5b46a" }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-pemfile = "2"
 
 # Exact compiler/synthesis ownership boundary used by service-runtime-ir/3.
-ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-entity-runtime = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-primitives = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-service-contract = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
-ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "b5e980fe0aff382bca91a08ebd3827ee8ff4b73e" }
+ess-compiler = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-deployment = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-domain = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-entity-runtime = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-gen = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-primitives = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-realization = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-service-contract = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
+ess-synth = { git = "https://github.com/beyond10x/ess.git", rev = "308a6d10273e074621f2bd797be0853fe9b94580" }
 # The lowerer and recorded adapter share this exact Entity Runtime crate identity.
-entity-core = { git = "https://github.com/beyond10x/entity-runtime", rev = "7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11" }
-entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11" }
-entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", rev = "7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11", features = ["sync-bridge"] }
+entity-core = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.19.0" }
+entity-store = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.19.0" }
+entity-eventlog = { git = "https://github.com/beyond10x/entity-runtime", tag = "0.19.0", features = ["sync-bridge"] }
 
 [workspace.lints.rust]
 missing_docs = "warn"

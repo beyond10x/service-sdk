@@ -362,6 +362,7 @@ pub fn compile(
             .values()
             .find(|item| item.name.to_string() == resolved.command)
             .ok_or_else(|| anyhow!("resolved command {} is absent", resolved.command))?;
+        refuse_entity_runtime_only_outcomes(command)?;
         let success = command
             .outcomes
             .iter()
@@ -401,6 +402,10 @@ pub fn compile(
                             | ResolvedPayloadValue::Generated => bail!(
                                 "service-realization-plan/3 cannot realize ESS response/generated \
                                  payload values; use explicit Entity Runtime delegation"
+                            ),
+                            ResolvedPayloadValue::Cleared => bail!(
+                                "service-realization-plan/3 cannot realize an ESS cleared payload \
+                                 value; use explicit Entity Runtime delegation"
                             ),
                         })
                     })
@@ -454,6 +459,12 @@ pub fn compile(
                     from: transition.from.iter().map(ToString::to_string).collect(),
                     to: transition.to.to_string(),
                 },
+                ResolvedEffect::Preserves => bail!(
+                    "service-realization-plan/3 cannot realize the preserving outcome {} of \
+                     command {}; use explicit Entity Runtime delegation",
+                    success.name,
+                    command.name
+                ),
             };
             let reducer = ReducerPlan {
                 entity: entity.name.to_string(),
@@ -758,6 +769,43 @@ pub fn compile_host_v4(
         reducers: BTreeMap::new(),
         views,
     })
+}
+
+/// Refuses, by name, every ESS outcome construct whose semantics only Entity Runtime delegation
+/// executes. The `/3` plan realizes one static success and would otherwise drop them silently.
+fn refuse_entity_runtime_only_outcomes(command: &ess_compiler::ir::ResolvedCommand) -> Result<()> {
+    for outcome in &command.outcomes {
+        let construct = match &outcome.condition {
+            ResolvedCondition::SubjectField { .. } => Some("a subject-field condition"),
+            ResolvedCondition::ExternalWhen { .. } => Some("an input-guarded external condition"),
+            _ => None,
+        }
+        .or_else(|| {
+            outcome
+                .subject
+                .as_ref()
+                .is_some_and(|subject| subject.effect == ResolvedEffect::Preserves)
+                .then_some("a preserving effect")
+        })
+        .or_else(|| outcome.replays.is_some().then_some("a retained replay"))
+        .or_else(|| {
+            outcome
+                .sets
+                .iter()
+                .chain(outcome.payload.iter().flat_map(|payload| &payload.fields))
+                .any(|field| matches!(field.value, ResolvedPayloadValue::Cleared))
+                .then_some("a cleared value")
+        });
+        if let Some(construct) = construct {
+            bail!(
+                "service-realization-plan/3 cannot realize {construct} on outcome {} of command \
+                 {}; use explicit Entity Runtime delegation",
+                outcome.name,
+                command.name
+            );
+        }
+    }
+    Ok(())
 }
 
 fn input_plans(

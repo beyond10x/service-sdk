@@ -328,6 +328,35 @@ fn realization_plan_only_marks_outer_optional_projection_fields_as_absentable() 
     );
 }
 
+#[test]
+fn realization_plan_3_refuses_a_preserving_outcome_by_name() {
+    // `ess/6` requires every emitted payload member to have a declared source; `owner` is the
+    // SDK-bound authority, so it is declared as implementation-owned.
+    let ess = ESS
+        .replace("format: ess/1\n", "format: ess/6\n")
+        .replace(
+            "    outcomes:\n      - name: added\n",
+            "    outcomes:\n      - name: kept\n        when: content_ref == \"keep\"\n        preserves: demo.todo.Item\n        instance: item_id\n      - name: added\n",
+        )
+        .replace(
+            "            content_ref: input.content_ref\n",
+            "            content_ref: input.content_ref\n            owner: {generated: true}\n",
+        );
+    assert!(ess.contains("preserves: demo.todo.Item"));
+    let sources = EssSources::new(BTreeMap::from([("system.yaml".to_owned(), ess)]))
+        .expect("fixture sources are valid");
+    let definition = ServiceDefinition::from_yaml(DEFINITION).expect("fixture definition is valid");
+
+    let refusal = match build_service(&sources, &definition) {
+        Ok(_) => panic!("a preserving outcome has no service-realization-plan/3 form"),
+        Err(error) => format!("{error:#}"),
+    };
+    assert!(
+        refusal.contains("service-realization-plan/3") && refusal.contains("preserv"),
+        "the /3 realizer refuses a preserving outcome by name: {refusal}"
+    );
+}
+
 fn assert_expected_artifacts(build: &service_builder::ServiceBuild) {
     let paths = build
         .artifacts

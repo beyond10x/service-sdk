@@ -247,10 +247,10 @@ pub fn project_query_v4(
                 }
             }
         }
-        if selectors
-            .iter()
-            .any(|(field, expected)| row.get(*field) != Some(*expected))
-        {
+        if selectors.iter().any(|(field, expected)| {
+            !row.get(*field)
+                .is_some_and(|value| crate::json_equal(value, expected))
+        }) {
             continue;
         }
         rows.push((instance, Value::Object(row)));
@@ -321,7 +321,11 @@ fn flatten_fact(facts: &mut FactStore, path: &str, value: &Value) {
         Value::Null => {}
         Value::Bool(value) => set_fact(facts, path, FactValue::bool(*value)),
         Value::Number(value) => {
-            set_fact(facts, path, FactValue::parse_literal(&value.to_string()));
+            set_fact(
+                facts,
+                path,
+                FactValue::parse_literal(&crate::json_number::feature_independent_number(value)),
+            );
         }
         Value::String(value) => set_fact(facts, path, FactValue::text(value.clone())),
         Value::Array(values) => {
@@ -2525,12 +2529,14 @@ fn recover(
 }
 
 fn original_intents_match(recorded: &OriginalIntentV4, attempted: &OriginalIntentV4) -> bool {
-    if recorded.expected_version.is_some() {
-        return recorded == attempted;
-    }
     let mut compatible_attempt = attempted.clone();
-    compatible_attempt.expected_version = None;
-    recorded == &compatible_attempt
+    if recorded.expected_version.is_none() {
+        compatible_attempt.expected_version = None;
+    }
+    // Input numbers compare as the build without `arbitrary_precision` holds them.
+    let inputs_match = crate::json_equal(&recorded.input, &compatible_attempt.input);
+    compatible_attempt.input.clone_from(&recorded.input);
+    inputs_match && recorded == &compatible_attempt
 }
 
 fn deliver_after_commit(
@@ -2581,8 +2587,12 @@ pub fn repair_operation(token: &str) -> Option<String> {
     repair_coordinates(token).map(|(operation, _)| operation)
 }
 
+/// SHA-256 over the canonical bytes, with numbers written as the build without
+/// `arbitrary_precision` writes them.
 fn digest_json(value: &impl Serialize) -> String {
-    let bytes = serde_json::to_vec(value).expect("closed SDK observation data serializes");
+    let value = serde_json::to_value(value).expect("closed SDK observation data serializes");
+    let bytes = serde_json::to_vec(&crate::json_number::feature_independent_value(&value))
+        .expect("closed SDK observation data serializes");
     hex::encode(Sha256::digest(bytes))
 }
 
@@ -3088,5 +3098,69 @@ mod tests {
             prepare_content(&policy, &content_intent(true), &Map::new()).unwrap();
         assert!(claim.is_empty());
         assert!(pending.is_empty());
+    }
+
+    /// The fact literal is what a `serde_json` build without `arbitrary_precision` prints, so the
+    /// feature that Entity Runtime unifies on cannot change what a view filter compares.
+    #[test]
+    fn number_facts_are_the_same_literal_in_both_serde_json_builds() {
+        let value: Value = serde_json::from_str(
+            r#"{"exponent": 1e2, "trailing": 12.50, "integer": 7, "negative": -3, "big": 18446744073709551615, "beyond_u64": 123456789012345678901, "long": 0.1000000000000000055511151231257827}"#,
+        )
+        .unwrap();
+        let mut facts = FactStore::new();
+        flatten_fact(&mut facts, "row", &value);
+
+        let mut expected = FactStore::new();
+        for (field, printed_without_the_feature) in [
+            ("exponent", "100.0"),
+            ("trailing", "12.5"),
+            ("integer", "7"),
+            ("negative", "-3"),
+            ("big", "18446744073709551615"),
+            ("beyond_u64", "1.2345678901234568e20"),
+            ("long", "0.1"),
+        ] {
+            expected.set_path(
+                &format!("row.{field}"),
+                FactValue::parse_literal(printed_without_the_feature),
+            );
+        }
+        assert_eq!(facts, expected);
+    }
+
+    fn intent_with_input(input: &str) -> OriginalIntentV4 {
+        OriginalIntentV4 {
+            plan_digest: "plan".to_owned(),
+            operation: "pay_invoice".to_owned(),
+            input: serde_json::from_str(input).unwrap(),
+            service: "billing".to_owned(),
+            tenant: "tenant".to_owned(),
+            realm: None,
+            authority: "authority".to_owned(),
+            user: "user".to_owned(),
+            executor: None,
+            idempotency_key: "key".to_owned(),
+            expected_version: Some(1),
+            category: "billing.invoice.Invoice".to_owned(),
+            selector: ClaimSelectorV4::GeneratedUuidV7,
+        }
+    }
+
+    /// A number hashes and matches as the `serde_json` build without `arbitrary_precision` writes
+    /// it, so the same intent is not a changed intent because Entity Runtime unified the feature.
+    #[test]
+    fn intent_digest_and_retry_match_are_the_same_in_both_serde_json_builds() {
+        let authored = intent_with_input(r#"{"amount": {"value": 12.50}, "count": 1e2}"#);
+        let normalized = intent_with_input(r#"{"amount": {"value": 12.5}, "count": 100.0}"#);
+        assert_eq!(digest_json(&authored), digest_json(&normalized));
+        assert!(original_intents_match(&authored, &normalized));
+
+        let changed = intent_with_input(r#"{"amount": {"value": 12.51}, "count": 100.0}"#);
+        assert_ne!(digest_json(&authored), digest_json(&changed));
+        assert!(!original_intents_match(&authored, &changed));
+        let integer = intent_with_input(r#"{"amount": {"value": 12.5}, "count": 100}"#);
+        assert_ne!(digest_json(&normalized), digest_json(&integer));
+        assert!(!original_intents_match(&normalized, &integer));
     }
 }

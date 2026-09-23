@@ -61,12 +61,18 @@ plans. It has no SDK outcome selector and no `ReducerEffect`. Generated applicat
 only this definition data and use the shared SDK `/4` engine.
 
 The accepted revisions are exact Cargo Git revisions. The plan also records them as data so a
-document produced against one semantic target cannot be opened by another. This candidate uses ESS
-lowerer `b5e980fe0aff382bca91a08ebd3827ee8ff4b73e`, Entity Runtime and its `entity-eventlog`
-adapter at `7fd93ef43d4a91c460c7305f9e3be90d7b0a4c11`, and Eventlog
-`43ceaa09ceec610e25891815e33e03e8df92ee28`. Every SDK dependency on one of those repositories
-uses that repository's exact Git URL and revision, so values crossing an API boundary have one Rust
-crate identity. There is no path override or equivalent-looking cross-revision conversion.
+document produced against one semantic target cannot be opened by another. The SDK uses the ESS
+0.29.0 lowerer at `308a6d10273e074621f2bd797be0853fe9b94580`, Entity Runtime and its
+`entity-eventlog` adapter at tag `0.19.0` (`13f88d982f8ac90651e4023bdf6286332d042b33`), and
+Eventlog `0.3.0` (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Every SDK dependency on one of those
+repositories uses the same Git URL and reference spelling as its upstream consumers, so Cargo
+resolves one source per repository and values crossing an API boundary have one Rust crate
+identity. There is no path override or equivalent-looking cross-revision conversion.
+
+The ESS 0.29 constructs without an Entity Runtime definition form are refused by the lowerer's own
+codes (`ClearedValueUnsupported`, `SilentPreserveUnsupported`), which `/4` compilation reports by
+name. The `/3` realizer refuses subject-field and input-guarded external conditions, preserving
+effects, retained replays and cleared values by name instead of dropping them.
 
 The lowerer and adapter now share the same `entity-core` identity. Compilation registers and
 validates every lowerer-produced `EntityDefinition` directly. Persisted `/4` reload still selects
@@ -74,9 +80,9 @@ the same ESS component, reruns extraction and lowering, validates the complete r
 compares the freshly compiled closed document including all definitions and binding coordinates.
 Strict deserialization rejects unknown fields, and canonical reserialization must equal the
 persisted bytes before effects. Removing the obsolete dual-crate bridge does not relax source,
-synthesis, component, revision, definition, policy, or binding-plan drift checks. These explicit
-candidate pins support source preparation and acceptance testing only; durable acceptance remains
-blocked on the adapter's stated administration restriction and native qualification stages.
+synthesis, component, revision, definition, policy, or binding-plan drift checks. Entity Runtime and
+Eventlog are pinned to releases; the ESS pin is its 0.29.0 landing revision. Durable acceptance
+remains blocked on the adapter's stated administration restriction and native qualification stages.
 
 ## Addressing and authenticated partition
 
@@ -190,6 +196,11 @@ A successful mutation is one Entity Runtime named batch with two ordered members
 2. a `RecordedObservation` on the resulting subject revision, whose closed
    `service-intent-observation/4` value holds the canonical original intent, its digest, public
    operation, selected outcome, and the public result fields that are owned by SDK annotations.
+
+The intent digest and the retry comparison read numbers as a `serde_json` build without
+`arbitrary_precision` holds them (`i64`, `u64` or `f64`). Entity Runtime enables that feature
+through Cargo feature unification, and the same intent must not become a changed intent because of
+it: `12.5` and `12.50` are one intent, `100` and `100.0` are two.
 
 The observation has its own deterministic record id derived from the claim key. It is evidence at
 the newly produced revision and does not change state. Both members are stored with the adapter's
