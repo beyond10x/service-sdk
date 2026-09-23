@@ -26,7 +26,12 @@ tokio = { workspace = true, features = ["sync", "time"] }
 
 [dev-dependencies]
 async-trait.workspace = true
+entity-core.workspace = true
+entity-eventlog = { workspace = true, features = ["sqlite"] }
+entity-store.workspace = true
 serde.workspace = true
+service-builder = { path = "../service-builder" }
+service-definition = { path = "../service-definition" }
 service-runtime = { path = "../service-runtime" }
 persistence-http-generated-service = { path = "tests/fixtures/persistence/standalone/generated/rust", default-features = false }
 persistence-factory-generated-service = { path = "tests/fixtures/persistence/factory/generated/rust" }
@@ -35,6 +40,7 @@ connectors-service = { package = "service", git = "https://github.com/beyond10x/
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 uuid.workspace = true
 time.workspace = true
+tempfile = "3"
 
 [[test]]
 name = "persistence"

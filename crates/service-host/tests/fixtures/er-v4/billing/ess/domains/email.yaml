@@ -1,0 +1,68 @@
+domain: billing.email
+
+summary: Sending the notifications other contexts ask for.
+
+types:
+  - name: billing.email.EmailAddress
+    kind: newtype
+    of: String
+
+  - name: billing.email.MessageId
+    kind: newtype
+    of: Uuid
+
+  - name: billing.email.TemplateId
+    kind: newtype
+    of: String
+
+errors:
+  - name: billing.email.Undeliverable
+    summary: The address was rejected by the provider.
+
+commands:
+  - name: billing.email.SendEmail
+
+    input:
+      - name: recipient
+        type: billing.email.EmailAddress
+      - name: template
+        type: billing.email.TemplateId
+
+    # `failed` is not decided by the input: no predicate over a recipient and a template says
+    # whether a provider will accept the mail. `when: false` would have claimed the branch is
+    # unreachable, which is a different and false statement — so the condition is declared external
+    # and a generated test injects the fault instead of trying to construct an input for it.
+    outcomes:
+      - name: sent
+        emits:
+          - billing.email.EmailSent
+        # The mail went to the address the caller gave, and nothing else about the announcement is
+        # determined: `message_id` is minted by the implementation, so it has no line here.
+        payload:
+          billing.email.EmailSent:
+            recipient: input.recipient
+      - name: failed
+        external: the provider rejects the recipient address
+        error: billing.email.Undeliverable
+
+events:
+  - name: billing.email.EmailSent
+    fields:
+      - name: message_id
+        type: billing.email.MessageId
+      - name: recipient
+        type: billing.email.EmailAddress
+
+  # What an `on_failure: escalate` publishes. Escalation hands the failure to a person, which happens
+  # outside the system — so without an event, nothing inside the system records that it happened and
+  # no conformance target could be asked to prove it did. `escalate` is a required word precisely so
+  # that a binding cannot fail silently; an unobservable escalation is that silence wearing a name.
+  - name: billing.email.DeliveryEscalated
+    naming:
+      display: Delivery escalated
+      summary: Sending was given up on and handed to a person.
+    fields:
+      - name: recipient
+        type: billing.email.EmailAddress
+      - name: template
+        type: billing.email.TemplateId

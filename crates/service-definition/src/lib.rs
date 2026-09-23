@@ -11,6 +11,8 @@ use std::str::FromStr;
 
 use ess_compiler::refs::{CommandRef, DeclaredTypeRef, EventRef, ViewRef};
 
+pub mod v4;
+
 /// The only service-definition format understood by this crate.
 pub const SERVICE_DEFINITION_FORMAT: &str = "service-definition/3";
 

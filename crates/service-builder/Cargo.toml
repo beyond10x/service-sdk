@@ -33,3 +33,9 @@ service-runtime-ir = { path = "../service-runtime-ir" }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+entity-core.workspace = true
+entity-store.workspace = true
+futures = "0.3"
+service-runtime = { path = "../service-runtime" }

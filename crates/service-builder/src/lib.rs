@@ -23,11 +23,13 @@ use service_catalog::{
 };
 use service_connectors::ConnectorServiceFactoryDescriptor;
 use service_definition::ServiceDefinition;
+use service_definition::v4::ServiceDefinitionV4;
 use service_runtime_ir::ServiceRuntimeIr;
+use service_runtime_ir::v4::ServiceRuntimeIrV4;
 
 use crate::client::ClientPlan;
-use crate::package::ServicePackage;
-use crate::realization::RealizationArtifacts;
+use crate::package::{ServicePackage, ServicePackageV4};
+use crate::realization::{RealizationArtifacts, RealizationArtifactsV4};
 use crate::tree::ArtifactTree;
 
 /// Canonical generated runtime IR path.
@@ -79,6 +81,24 @@ pub struct ServiceBuild {
     pub service_catalog: ServiceCatalog,
     /// SDK-executable realization plan derived from ESS and the runtime IR.
     pub realization_plan: service_engine::ServicePlan,
+    /// Complete exclusively owned generated output tree.
+    pub artifacts: ArtifactTree,
+}
+
+/// Complete opt-in result for an Entity Runtime delegated standalone service.
+pub struct ServiceBuildV4 {
+    /// ESS compiler, plan, and official generator results.
+    pub ess: EssBuild,
+    /// Closed `/4` runtime IR, including complete ER definitions and bindings.
+    pub runtime_ir: ServiceRuntimeIrV4,
+    /// Realm-free transport-neutral client plan retained from the host annotations.
+    pub client_plan: ClientPlan,
+    /// Inert Connector descriptor for the existing public operation surface.
+    pub connector_descriptor: ConnectorServiceFactoryDescriptor,
+    /// Existing application catalog derived from the public operation schemas.
+    pub service_catalog: ServiceCatalog,
+    /// ER-delegated executable realization plan.
+    pub realization_plan: service_engine::v4::ServicePlanV4,
     /// Complete exclusively owned generated output tree.
     pub artifacts: ArtifactTree,
 }
@@ -146,9 +166,14 @@ pub fn build_service(
         .context("deriving inert Connector contribution")?;
     let realization_plan = realization::compile(&ess.ir, &runtime_ir, &client_plan)
         .context("compiling executable service realization plan")?;
-    let service_catalog =
-        build_service_catalog(&ess, &client_plan, &realization_plan, &connector_descriptor)
-            .context("deriving service catalog")?;
+    let service_catalog = build_service_catalog(
+        &ess,
+        &client_plan,
+        &realization_plan,
+        &connector_descriptor,
+        CatalogContract::V3,
+    )
+    .context("deriving service catalog")?;
 
     let mut artifacts = ArtifactTree::new();
     artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
@@ -171,6 +196,65 @@ pub fn build_service(
     }
 
     Ok(ServiceBuild {
+        ess,
+        runtime_ir,
+        client_plan,
+        connector_descriptor,
+        service_catalog,
+        realization_plan,
+        artifacts,
+    })
+}
+
+/// Compiles an explicit `/4` definition through the official ESS lowerer and SDK host boundary.
+pub fn build_service_v4(
+    sources: &ess::EssSources,
+    definition: &ServiceDefinitionV4,
+) -> Result<ServiceBuildV4> {
+    let ess = build_ess(sources)?;
+    let runtime_ir = service_runtime_ir::v4::compile_v4(&ess.ir, &ess.plan, definition)
+        .context("compiling service runtime IR /4")?;
+    let host_runtime = runtime_ir.retained_host_ir();
+    let client_plan = ClientPlan::from_runtime(&host_runtime).context("deriving client plan")?;
+    let connector_descriptor = client_plan
+        .connector_descriptor()
+        .context("deriving inert Connector contribution")?;
+    // The legacy plan is used only to retain SDK-owned authentication, query, content, effect,
+    // and projection annotations. ServicePlanV4 never persists its outcome selector or reducers.
+    let host_plan = realization::compile_host_v4(&ess.ir, &host_runtime, &client_plan)
+        .context("compiling retained host realization metadata")?;
+    let realization_plan = service_engine::v4::ServicePlanV4::from_runtime(&runtime_ir, &host_plan)
+        .context("compiling executable service realization plan /4")?;
+    let service_catalog = build_service_catalog(
+        &ess,
+        &client_plan,
+        &host_plan,
+        &connector_descriptor,
+        CatalogContract::V4,
+    )
+    .context("deriving service catalog")?;
+
+    let mut artifacts = ArtifactTree::new();
+    artifacts.insert(ESS_IR_PATH, ess.ir.to_canonical_json())?;
+    for path in ["PLAN.md", "plan.json"] {
+        if let Some(artifact) = ess.synthesis.get(path) {
+            artifacts.insert(format!("ess/synthesis/{path}"), artifact.contents.clone())?;
+        }
+    }
+    artifacts.extend_ess("ess/projections", &ess.projections)?;
+    artifacts.insert(RUNTIME_IR_PATH, runtime_ir.to_canonical_json())?;
+    artifacts.insert(CLIENT_PLAN_PATH, client_plan.to_canonical_json())?;
+    artifacts.insert(REALIZATION_PLAN_PATH, realization_plan.to_canonical_json())?;
+    artifacts.insert(
+        CONNECTOR_CONTRIBUTION_PATH,
+        connector_descriptor.to_canonical_json(),
+    )?;
+    artifacts.insert(SERVICE_CATALOG_PATH, service_catalog.to_canonical_json())?;
+    if let Some(openapi) = http::openapi_v4(&client_plan) {
+        artifacts.insert(HTTP_OPENAPI_PATH, openapi)?;
+    }
+
+    Ok(ServiceBuildV4 {
         ess,
         runtime_ir,
         client_plan,
@@ -216,11 +300,38 @@ pub fn build_package(package: &ServicePackage) -> Result<ServiceBuild> {
     Ok(build)
 }
 
+/// Compiles one strict `/4` unified package and emits its generated Rust service.
+pub fn build_package_v4(package: &ServicePackageV4) -> Result<ServiceBuildV4> {
+    let mut build = build_service_v4(&package.sources, &package.definition)?;
+    package.validate_scenarios(&build.client_plan)?;
+    if package.manifest.release.is_some() {
+        anyhow::bail!(
+            "service-realization-plan/4 release artifacts require qualified dependency pins"
+        );
+    }
+    let generated = RealizationArtifactsV4::generate(
+        &build.realization_plan,
+        &build.client_plan,
+        &package.manifest.sdk,
+    );
+    for (path, contents) in generated.files {
+        build.artifacts.insert(path, contents)?;
+    }
+    for scenario in &package.scenarios {
+        build.artifacts.insert(
+            format!("conformance/{}", scenario.path),
+            scenario.contents.clone(),
+        )?;
+    }
+    Ok(build)
+}
+
 fn build_service_catalog(
     ess: &EssBuild,
     client: &ClientPlan,
     plan: &service_engine::ServicePlan,
     descriptor: &ConnectorServiceFactoryDescriptor,
+    contract: CatalogContract,
 ) -> Result<ServiceCatalog> {
     let ess_catalog = ess_synth::web::browser_catalog(&ess.ir, &ess.plan);
     let semantic_catalog = serde_json::from_str(ess_catalog.as_json())
@@ -243,8 +354,18 @@ fn build_service_catalog(
                 .iter()
                 .find(|candidate| candidate.operation == operation.operation)
                 .ok_or_else(|| anyhow::anyhow!("catalog operation lost Connector binding"))?;
-            let (input_schema, output_schema) =
+            let (input_schema, mut output_schema) =
                 service_connectors::operation_schemas(plan, contribution);
+            if contract == CatalogContract::V4
+                && operation.kind == client::ClientOperationKind::Intent
+            {
+                output_schema = serde_json::json!({
+                    "oneOf": [
+                        http::mutation_receipt_schema(),
+                        http::committed_aftercare_schema()
+                    ]
+                });
+            }
             Ok(CatalogOperation {
                 name: operation.operation.clone(),
                 operation_ref: format!("{}.{}", client.service, operation.operation),
@@ -273,6 +394,12 @@ fn build_service_catalog(
         operations,
     })
     .context("service catalog is valid")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CatalogContract {
+    V3,
+    V4,
 }
 
 #[cfg(test)]

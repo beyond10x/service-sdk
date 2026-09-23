@@ -1,0 +1,93 @@
+format: service-definition/4
+service: gatepass
+component: pass-service
+entity_versions:
+  gatepass.visit.Visit: 1
+delivery: { kind: identity_http, audience: "urn:b10x:gatepass" }
+realm: optional
+obligations:
+  - name: aggregate
+    provider: sdk.aggregate.event-sourced/v1
+    bindings: { aggregate: gatepass.visit.Visit, identity: visit_id }
+    description: Execute visits through one recorded aggregate.
+  - name: visibility
+    provider: sdk.projection.auth-partitioned-visibility/v1
+    bindings: { owner: host, scopes: building }
+    description: Partition visit projections by authenticated authority.
+projections:
+  - { name: expected_visits, view: gatepass.visit.ExpectedVisits, delivery: inline_transactional, obligations: [visibility] }
+  - { name: visit_by_id, view: gatepass.visit.VisitById, delivery: catch_up, obligations: [visibility] }
+queries:
+  - name: list_expected
+    scope: visits.read
+    view: gatepass.visit.ExpectedVisits
+    projection: expected_visits
+    sort: [{ view_field: visit_id, direction: ascending }]
+    delivery: read_your_writes
+    obligations: [visibility]
+  - name: get_visit
+    scope: visits.read
+    view: gatepass.visit.VisitById
+    projection: visit_by_id
+    selectors: [{ parameter: visit_id, view_field: visit_id }]
+    sort: [{ view_field: visit_id, direction: ascending }]
+    delivery: eventual
+    obligations: [visibility]
+intents:
+  - name: register_visit
+    scope: visits.manage
+    command: gatepass.visit.RegisterVisit
+    stream_id: { kind: generated_uuid_v7 }
+    expected_version: { kind: no_stream }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [expected_visits, visit_by_id]
+    obligations: [aggregate]
+  - name: admit_visitor
+    scope: visits.manage
+    command: gatepass.visit.AdmitVisitor
+    stream_id: { kind: command_field, field: visit_id }
+    expected_version: { kind: operation_field, field: expected_version }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [expected_visits, visit_by_id]
+    obligations: [aggregate]
+  - name: sign_out_visitor
+    scope: visits.manage
+    command: gatepass.visit.SignOutVisitor
+    stream_id: { kind: command_field, field: visit_id }
+    expected_version: { kind: operation_field, field: expected_version }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [expected_visits, visit_by_id]
+    obligations: [aggregate]
+slots:
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 0 }, source: { kind: generated_uuid_v7 } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 1 }, source: { kind: absent } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 2 }, source: { kind: command_field, field: building } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 3 }, source: { kind: command_field, field: deposit } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 4 }, source: { kind: command_field, field: escorts } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 5 }, source: { kind: command_field, field: expected_minutes } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 6 }, source: { kind: command_field, field: expected_stay } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 7 }, source: { kind: command_field, field: host } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 8 }, source: { kind: command_field, field: notes } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 9 }, source: { kind: command_field, field: on_watchlist } }
+  - { coordinate: { command: gatepass.visit.RegisterVisit, slot: 10 }, source: { kind: command_field, field: visitor } }
+operation_fields:
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: badge }, policy: { kind: command_field, field: badge } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: building }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: deposit }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: escorts }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: expected_minutes }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: expected_stay }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: host }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: notes }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: on_watchlist }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.AdmitVisitor, outcome: admitted, field: visitor }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: badge }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: building }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: deposit }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: escorts }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: expected_minutes }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: expected_stay }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: host }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: notes }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: on_watchlist }, policy: { kind: preserve } }
+  - { coordinate: { command: gatepass.visit.SignOutVisitor, outcome: signed-out, field: visitor }, policy: { kind: preserve } }

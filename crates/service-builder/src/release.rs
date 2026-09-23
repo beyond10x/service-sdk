@@ -406,5 +406,11 @@ fn environment_name(service: &str, suffix: &str) -> String {
 }
 
 fn render_yaml(value: &Value) -> Result<String> {
-    serde_yaml::to_string(value).context("serializing generated ESS YAML")
+    // A workspace dependency may enable serde_json's `arbitrary_precision` feature. Serializing
+    // its private Number representation directly through serde_yaml would emit a tagged map
+    // instead of the authored scalar. JSON text is the stable typed boundary between the formats.
+    let json = serde_json::to_string(value).context("normalizing generated ESS JSON")?;
+    let yaml: serde_yaml::Value =
+        serde_yaml::from_str(&json).context("normalizing generated ESS YAML")?;
+    serde_yaml::to_string(&yaml).context("serializing generated ESS YAML")
 }

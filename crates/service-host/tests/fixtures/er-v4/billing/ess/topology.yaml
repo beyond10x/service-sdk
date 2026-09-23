@@ -1,0 +1,20 @@
+# Semantic runtime requirements, not a Kubernetes manifest. `min: 2` is a statement about the design:
+# the system is not correct with one instance, because a single instance means the binding above has
+# a window in which nothing is listening.
+
+topology:
+  workloads:
+    invoice-service:
+      replicas:
+        min: 2
+      stateless: true
+      requires:
+        - postgres: invoice-store
+        - publish: invoice-events
+
+    email-service:
+      replicas:
+        min: 2
+      stateless: true
+      requires:
+        - publish: email-events

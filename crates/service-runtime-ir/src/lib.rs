@@ -18,6 +18,8 @@ use service_definition::{
 use service_obligations::ResolvedObligation;
 use sha2::{Digest as _, Sha256};
 
+pub mod v4;
+
 /// The only persisted runtime-IR format understood by this crate.
 pub const RUNTIME_IR_FORMAT: &str = "service-runtime-ir/3";
 

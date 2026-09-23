@@ -5,6 +5,9 @@
 
 #![forbid(unsafe_code)]
 
+/// Entity Runtime `/4` recorded-store binding.
+pub mod v4;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 

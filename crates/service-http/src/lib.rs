@@ -26,6 +26,9 @@ use service_engine::{ExecutionError, PlanDelivery, RequestMetadata, ServiceEngin
 use service_eventlog::{AuthorityFacts, EventlogService, PageRequest};
 use service_runtime::{AuthorityId, TenantId, UserId, VerifiedAuthContext, VerifiedIdentity};
 
+/// Entity Runtime delegated `/4` HTTP delivery.
+pub mod v4;
+
 const PAGE_FIELD: &str = "$page";
 
 /// A stable RFC 9457-style problem response returned by generated services.
@@ -185,6 +188,24 @@ impl ServiceHttpClient {
         decode(response).await
     }
 
+    /// Executes one Entity Runtime delegated generated mutation.
+    pub async fn intent_v4<I: Serialize>(
+        &self,
+        credential: &AccessCredential,
+        operation: &str,
+        input: &I,
+    ) -> Result<v4::MutationReceiptV4, ClientError> {
+        let response = self
+            .http
+            .post(self.endpoint(&format!("v1/intents/{operation}"))?)
+            .bearer_auth(credential.expose_at_authorization_boundary())
+            .json(input)
+            .send()
+            .await
+            .map_err(ClientError::Transport)?;
+        decode(response).await
+    }
+
     /// Executes one generated query with typed input and rows.
     pub async fn query<I: Serialize, O: DeserializeOwned>(
         &self,
@@ -242,6 +263,9 @@ pub enum ServerError {
     /// The generated realization plan could not be parsed.
     #[error("generated service plan is invalid")]
     Plan(#[source] service_engine::PlanError),
+    /// The generated delegated realization plan could not be parsed.
+    #[error("generated delegated service plan is invalid")]
+    DelegatedPlan(#[source] service_engine::v4::PlanV4Error),
     /// The generated plan selected a different delivery mode.
     #[error("generated plan does not declare Identity HTTP delivery")]
     Delivery,
@@ -428,6 +452,15 @@ async fn authorize(
     headers: &HeaderMap,
     required_scope: &str,
 ) -> Result<(VerifiedAuthContext, AuthorityFacts), Box<Response>> {
+    authorize_identity(&state.identity, &state.audience, headers, required_scope).await
+}
+
+async fn authorize_identity(
+    identity: &IdentityClient,
+    audience: &str,
+    headers: &HeaderMap,
+    required_scope: &str,
+) -> Result<(VerifiedAuthContext, AuthorityFacts), Box<Response>> {
     let authorization = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -438,9 +471,8 @@ async fn authorize(
                 "a bearer credential is required",
             ))
         })?;
-    let authority = state
-        .identity
-        .resolve_access_token(authorization, &state.audience)
+    let authority = identity
+        .resolve_access_token(authorization, audience)
         .await
         .map_err(|error| Box::new(identity_problem(&error)))?;
     if !has_scope(&authority.scope, required_scope) {
@@ -569,6 +601,54 @@ fn execution_problem(error: ExecutionError) -> Response {
         | ExecutionError::InvalidProjection
         | ExecutionError::UnknownProvider(_)
         | ExecutionError::InvalidPlan(_) => problem(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "service_contract",
+            "generated service state violated its contract",
+        ),
+    }
+}
+
+fn execution_problem_v4(error: &service_engine::v4::ExecutionErrorV4) -> Response {
+    use service_engine::v4::ExecutionErrorV4;
+    match error {
+        ExecutionErrorV4::Admission(_) => problem(
+            StatusCode::FORBIDDEN,
+            "context_refused",
+            "verified authority does not satisfy the service policy",
+        ),
+        ExecutionErrorV4::Input(_) => problem(
+            StatusCode::BAD_REQUEST,
+            "invalid_input",
+            "operation input was refused",
+        ),
+        ExecutionErrorV4::UnknownSubject { .. } => problem(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "the requested entity was not found",
+        ),
+        ExecutionErrorV4::RevisionConflict { .. } | ExecutionErrorV4::IdempotencyConflict => {
+            problem(
+                StatusCode::CONFLICT,
+                "conflict",
+                "the operation conflicts with durable authority",
+            )
+        }
+        ExecutionErrorV4::ObligationRefused(_) => problem(
+            StatusCode::CONFLICT,
+            "service_invariant",
+            "a declared service obligation refused the operation",
+        ),
+        ExecutionErrorV4::Fulfillment(_)
+        | ExecutionErrorV4::Persistence(_)
+        | ExecutionErrorV4::Projection(_) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "service_unavailable",
+            "a service resource is unavailable",
+        ),
+        ExecutionErrorV4::Binding(_)
+        | ExecutionErrorV4::Runtime(_)
+        | ExecutionErrorV4::Integrity(_)
+        | ExecutionErrorV4::CommittedAftercare { .. } => problem(
             StatusCode::INTERNAL_SERVER_ERROR,
             "service_contract",
             "generated service state violated its contract",

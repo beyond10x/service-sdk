@@ -16,6 +16,8 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+pub mod v4;
+
 /// The realization-plan format executed by this engine.
 pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/3";
 
