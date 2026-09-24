@@ -34,7 +34,7 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           aep="$GITHUB_WORKSPACE/aep/target/release/aep"
-          if [ -n "$BASE_REF" ]; then
+          if [ -n "$BASE_REF" ] && git cat-file -e "origin/$BASE_REF:.engineering/state/store.json" 2>/dev/null; then
             "$aep" plan artifact validate --against "origin/$BASE_REF"
           else
             "$aep" plan artifact validate
