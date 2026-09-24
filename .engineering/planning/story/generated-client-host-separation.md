@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:generated-client-host-separation
 kind: story
 status: implemented

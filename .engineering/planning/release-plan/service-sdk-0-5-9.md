@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: release-plan:service-sdk-0-5-9
 kind: release-plan
 status: active

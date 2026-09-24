@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: task:align-connectors-0-6-2
 kind: task
 status: implemented
