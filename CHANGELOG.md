@@ -1,7 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 - 2026-09-25
 
+This release supersedes 0.5.9, 0.5.10 and 0.5.11. Tags exist only up to 0.5.9 and GitHub
+Releases only up to 0.5.8, so the changes in those three sections below are first published here.
+
+- Build on ESS 0.31.0, Entity Runtime 0.23.0 and Eventlog 0.4.0, each pinned to its release so
+  one `entity-core` and one `eventlog-core` resolve across the SDK and the ESS lowerer. Persisted
+  `service-runtime-ir/4` documents name Entity Runtime 0.23.0 as their accepted target.
+- Treat numerically equal JSON values alike in `/4` intent digests, retries and query or
+  projection selectors, so `12.5` and `12.50` are one intent under serde_json's arbitrary
+  precision.
 - Add strict opt-in `service-definition/4`, runtime IR, realization plan, and generated service
   support that delegates domain decisions and replay to Entity Runtime while retaining SDK
   authentication, queries, durable Eventlog recovery, projections, and declared effects. Historical
@@ -9,7 +18,7 @@
   route redelivers failed post-commit projections and durable effects from recorded authority.
 - Stop service generation when ESS returns a checked target failure, refusal, weakening, or
   unexpected target, preserving the original diagnostic before any generated output is written.
-  Keep valid output and current ESS dependency pins unchanged.
+  Valid output is unchanged.
 
 ## 0.5.11 - 2026-09-05
 

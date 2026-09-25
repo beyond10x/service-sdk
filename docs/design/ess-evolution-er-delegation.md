@@ -62,9 +62,9 @@ only this definition data and use the shared SDK `/4` engine.
 
 The accepted revisions are exact Cargo Git revisions. The plan also records them as data so a
 document produced against one semantic target cannot be opened by another. The SDK uses the ESS
-0.29.0 lowerer at `308a6d10273e074621f2bd797be0853fe9b94580`, Entity Runtime and its
-`entity-eventlog` adapter at tag `0.19.0` (`13f88d982f8ac90651e4023bdf6286332d042b33`), and
-Eventlog `0.3.0` (`ac6b1731654329d32f1e3c9cf164fefad6a5b46a`). Every SDK dependency on one of those
+0.31.0 lowerer at tag `0.31.0` (`f7de9f82af1e2b47a5a8789cbe7ce03ab649a329`), Entity Runtime and its
+`entity-eventlog` adapter at tag `0.23.0` (`77aac6eac95d0392a00e8dee8d04038ef70e47de`), and
+Eventlog `0.4.0` (`70096af8c231fedf6d2206c97ce2940b99aecdb8`). Every SDK dependency on one of those
 repositories uses the same Git URL and reference spelling as its upstream consumers, so Cargo
 resolves one source per repository and values crossing an API boundary have one Rust crate
 identity. There is no path override or equivalent-looking cross-revision conversion.
@@ -80,8 +80,8 @@ the same ESS component, reruns extraction and lowering, validates the complete r
 compares the freshly compiled closed document including all definitions and binding coordinates.
 Strict deserialization rejects unknown fields, and canonical reserialization must equal the
 persisted bytes before effects. Removing the obsolete dual-crate bridge does not relax source,
-synthesis, component, revision, definition, policy, or binding-plan drift checks. Entity Runtime and
-Eventlog are pinned to releases; the ESS pin is its 0.29.0 landing revision. Durable acceptance
+synthesis, component, revision, definition, policy, or binding-plan drift checks. Entity Runtime,
+Eventlog and ESS are pinned to releases. Durable acceptance
 remains blocked on the adapter's stated administration restriction and native qualification stages.
 
 ## Addressing and authenticated partition
