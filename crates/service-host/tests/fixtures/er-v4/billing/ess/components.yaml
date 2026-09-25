@@ -1,0 +1,68 @@
+# Software decomposition, and the interaction between the two contexts. Not a deployment decision:
+# `topology.yaml` says how these run, and changing that answer changes nothing here.
+
+# `customer_email: billing.invoice.Email` into `recipient: billing.email.EmailAddress` crosses two
+# distinct newtypes. Both are a String underneath, and the whole value of naming them apart is that
+# the model refuses to treat one as the other — so the crossing is written down, with the reason, in
+# one place a reader can find.
+conversions:
+  - from: billing.invoice.Email
+    to: billing.email.EmailAddress
+    because: >-
+      An invoice's customer email is a deliverable address; the email context validates it again on
+      the way out, so the invoice context does not have to know how.
+
+components:
+  - component: invoice-service
+    summary: Issues invoices and tracks payment.
+    owns:
+      domains:
+        - billing.invoice
+    accepts:
+      commands:
+        - billing.invoice.CreateInvoice
+        - billing.invoice.IssueInvoice
+        - billing.invoice.PayInvoice
+        - billing.invoice.CancelInvoice
+    publishes:
+      events:
+        - billing.invoice.InvoiceCreated
+        - billing.invoice.InvoiceIssued
+        - billing.invoice.InvoicePaid
+        - billing.invoice.InvoiceCancelled
+
+  - component: email-service
+    summary: Sends what other contexts ask it to send.
+    owns:
+      domains:
+        - billing.email
+    accepts:
+      commands:
+        - billing.email.SendEmail
+    publishes:
+      events:
+        - billing.email.EmailSent
+        - billing.email.DeliveryEscalated
+
+bindings:
+  # `delivery` and `on_failure` are required words. A binding that can fail silently is the
+  # difference between specifying a system and specifying a demo, and the way that difference
+  # disappears is a default nobody read.
+  - id: notify-on-invoice-created
+    summary: Tell the customer an invoice exists.
+    when:
+      event: billing.invoice.InvoiceCreated
+    invoke:
+      command: billing.email.SendEmail
+    # `customer_email: Email` into `recipient: EmailAddress` is the one place two independently
+    # written contexts have to agree about a type, so it is the one place a rename breaks silently.
+    mapping:
+      recipient: event.customer_email
+      template: invoice-created
+    delivery: at_least_once
+    # `escalate` names a consequence outside the system — a person is told. The event is how the
+    # system says that happened, so a scenario can force `SendEmail` to fail and then assert
+    # `billing.email.DeliveryEscalated` rather than assert nothing at all.
+    on_failure:
+      escalate:
+        emits: billing.email.DeliveryEscalated

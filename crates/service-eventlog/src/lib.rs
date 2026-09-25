@@ -5,6 +5,9 @@
 
 #![forbid(unsafe_code)]
 
+/// Entity Runtime `/4` recorded-store binding.
+pub mod v4;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -1086,7 +1089,9 @@ impl ProjectionStore for EventlogProjections {
                         match row {
                             Ok(row)
                                 if read.selectors.iter().all(|(name, expected)| {
-                                    row.value.get(name) == Some(expected)
+                                    row.value.get(name).is_some_and(|value| {
+                                        service_engine::json_equal(value, expected)
+                                    })
                                 }) =>
                             {
                                 Some(Ok(row))
@@ -1117,11 +1122,11 @@ impl ProjectionStore for EventlogProjections {
                     }
                     let row: ProjectionRow =
                         serde_json::from_value(body).map_err(|_| ResourceError)?;
-                    if read
-                        .selectors
-                        .iter()
-                        .all(|(name, expected)| row.value.get(name) == Some(expected))
-                    {
+                    if read.selectors.iter().all(|(name, expected)| {
+                        row.value
+                            .get(name)
+                            .is_some_and(|value| service_engine::json_equal(value, expected))
+                    }) {
                         rows.push(row);
                         if rows.len() > MAX_QUERY_ROWS {
                             return Err(ResourceError);

@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result, bail};
 use clap::{Parser, Subcommand};
 use service_builder::ess::EssSources;
-use service_builder::package::ServicePackage;
+use service_builder::package::{ServicePackage, ServicePackageV4};
 use service_builder::tree::Drift;
-use service_builder::{build_package, build_service};
+use service_builder::{build_package, build_package_v4, build_service, build_service_v4};
 use service_definition::ServiceDefinition;
+use service_definition::v4::ServiceDefinitionV4;
 
 #[derive(Debug, Parser)]
 #[command(about = "Generate an ESS-backed standalone service artifact tree")]
@@ -37,6 +38,9 @@ struct Inputs {
     /// Strict `service-definition/3` YAML or JSON document.
     #[arg(long, requires = "ess")]
     definition: Option<PathBuf>,
+    /// Opt in to strict Entity Runtime delegated `/4` readers and generated output.
+    #[arg(long)]
+    entity_runtime: bool,
     /// Exclusively builder-owned generated output root.
     #[arg(long)]
     output: PathBuf,
@@ -47,12 +51,12 @@ fn main() -> Result<()> {
     match cli.command {
         Command::Generate(inputs) => {
             let build = compile(&inputs)?;
-            build.artifacts.write(&inputs.output)?;
+            build.write(&inputs.output)?;
             println!("generated {}", inputs.output.display());
         }
         Command::Check(inputs) => {
             let build = compile(&inputs)?;
-            let drift = build.artifacts.check(&inputs.output)?;
+            let drift = build.check(&inputs.output)?;
             if !drift.is_empty() {
                 let details = drift
                     .iter()
@@ -70,10 +74,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn compile(inputs: &Inputs) -> Result<service_builder::ServiceBuild> {
+fn compile(inputs: &Inputs) -> Result<service_builder::tree::ArtifactTree> {
     if let Some(package) = &inputs.package {
+        if inputs.entity_runtime {
+            let package = ServicePackageV4::read(package)?;
+            return build_package_v4(&package).map(|build| build.artifacts);
+        }
         let package = ServicePackage::read(package)?;
-        return build_package(&package);
+        return build_package(&package).map(|build| build.artifacts);
     }
     let ess = inputs.ess.as_deref().ok_or_else(|| {
         anyhow::anyhow!("either --package or both --ess and --definition are required")
@@ -82,8 +90,27 @@ fn compile(inputs: &Inputs) -> Result<service_builder::ServiceBuild> {
         anyhow::anyhow!("either --package or both --ess and --definition are required")
     })?;
     let sources = EssSources::read(ess)?;
+    if inputs.entity_runtime {
+        let definition = read_definition_v4(definition)?;
+        return build_service_v4(&sources, &definition).map(|build| build.artifacts);
+    }
     let definition = read_definition(definition)?;
-    build_service(&sources, &definition)
+    build_service(&sources, &definition).map(|build| build.artifacts)
+}
+
+fn read_definition_v4(path: &Path) -> Result<ServiceDefinitionV4> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("reading service definition {}", path.display()))?;
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("yaml" | "yml") => ServiceDefinitionV4::from_yaml(&text),
+        Some("json") => ServiceDefinitionV4::from_json(&text),
+        extension => bail!(
+            "service definition {} must have a .yaml, .yml, or .json extension, found {:?}",
+            path.display(),
+            extension
+        ),
+    }
+    .with_context(|| format!("validating service definition {}", path.display()))
 }
 
 fn read_definition(path: &Path) -> Result<ServiceDefinition> {

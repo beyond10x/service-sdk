@@ -16,6 +16,11 @@ use thiserror::Error;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
+mod json_number;
+pub mod v4;
+
+pub use json_number::json_equal;
+
 /// The realization-plan format executed by this engine.
 pub const REALIZATION_PLAN_FORMAT: &str = "service-realization-plan/3";
 
@@ -2117,9 +2122,11 @@ fn validate_projection_row(
             .optional_fields
             .iter()
             .all(|field| !matches!(row.value.get(field), Some(Value::Null)));
-    let exact_selection = selectors
-        .iter()
-        .all(|(field, expected)| row.value.get(field) == Some(expected));
+    let exact_selection = selectors.iter().all(|(field, expected)| {
+        row.value
+            .get(field)
+            .is_some_and(|value| json_equal(value, expected))
+    });
     if exact_partition && exact_shape && exact_selection {
         Ok(())
     } else {

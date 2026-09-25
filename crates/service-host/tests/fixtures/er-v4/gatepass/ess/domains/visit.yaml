@@ -1,0 +1,310 @@
+domain: gatepass.visit
+
+summary: Expecting a visitor, letting them in, and letting them out again.
+
+naming:
+  wire: visits
+  display: Visits
+
+types:
+  - name: gatepass.visit.VisitId
+    kind: newtype
+    of: Uuid
+
+  - name: gatepass.visit.VisitorName
+    kind: newtype
+    of: String
+
+  # A closed set: a building nobody named cannot be spelt into a pass.
+  - name: gatepass.visit.Building
+    kind: enum
+    variants: [North, South, Annex]
+    naming:
+      display: Building
+
+  # Somebody inside is answerable for every visitor, and there are two kinds of somebody. Tagged,
+  # because an untagged union cannot round-trip through JSON without a decoder guessing.
+  - name: gatepass.visit.Host
+    kind: union
+    tag: kind
+    variants:
+      employee: gatepass.visit.EmployeeId
+      contractor: gatepass.visit.VendorRef
+
+  - name: gatepass.visit.EmployeeId
+    kind: newtype
+    of: String
+
+  - name: gatepass.visit.VendorRef
+    kind: newtype
+    of: String
+
+  # What the printer produced and the visitor signed for. `signature` is the captured squiggle, so
+  # it is bytes and not text — the distinction survives into every wire contract as base64.
+  - name: gatepass.visit.Badge
+    kind: struct
+    fields:
+      - name: serial
+        type: String
+      - name: printed_at
+        type: Optional<Timestamp>
+      - name: signature
+        type: Bytes
+
+  # Some sites hold a deposit against the badge. Decimal, never a float: a deposit that is returned
+  # short by a rounding error is a complaint at the desk.
+  - name: gatepass.visit.Deposit
+    kind: struct
+    fields:
+      - name: amount
+        type: Decimal
+      - name: currency
+        type: String
+    invariants:
+      - amount >= 0
+
+entities:
+  - name: gatepass.visit.Visit
+
+    identity:
+      name: visit_id
+      type: gatepass.visit.VisitId
+
+    fields:
+      - name: visitor
+        type: gatepass.visit.VisitorName
+      - name: building
+        type: gatepass.visit.Building
+      - name: host
+        type: gatepass.visit.Host
+      - name: expected_minutes
+        type: Integer
+      - name: expected_stay
+        type: Duration
+      - name: deposit
+        type: gatepass.visit.Deposit
+      - name: escorts
+        type: List<gatepass.visit.VisitorName>
+      - name: notes
+        type: Map<String, String>
+      - name: badge
+        type: Optional<gatepass.visit.Badge>
+      - name: on_watchlist
+        type: Boolean
+
+    invariants:
+      - deposit.amount >= 0
+      - expected_minutes > 0
+
+    # Two moves, and no third: a visit that never arrives is still expected tomorrow, so there is no
+    # cancellation here. A transition nothing takes would be refused as `missing_causation`, and a
+    # state nothing leaves is a state a reader has to ask about.
+    lifecycle:
+      initial: Expected
+      states: [Expected, OnSite, Departed]
+      terminal: [Departed]
+      transitions:
+        - name: arrive
+          from: [Expected]
+          to: OnSite
+        - name: depart
+          from: [OnSite]
+          to: Departed
+
+actors:
+  - name: gatepass.visit.Receptionist
+    may:
+      - gatepass.visit.RegisterVisit
+      - gatepass.visit.AdmitVisitor
+      - gatepass.visit.SignOutVisitor
+    naming:
+      display: Receptionist
+
+  # Present in the picture and permitted nothing. Who is watching is part of what the specification
+  # describes, and leaving them out would make the model say nobody is.
+  - name: gatepass.visit.SecurityAuditor
+    naming:
+      display: Security auditor
+
+errors:
+  - name: gatepass.visit.InvalidVisitLength
+    summary: The expected length of the visit is not a positive number of minutes.
+    fields:
+      - name: submitted
+        type: Integer
+
+  # What both lifecycle commands report when they are asked to act from a state they do not act
+  # from. It carries the state the visit is actually in, because "no" without "they already left"
+  # sends the desk back to guess.
+  - name: gatepass.visit.VisitStateConflict
+    summary: The visit is not in a state this command acts from, so nothing moved.
+    fields:
+      - name: state
+        type: gatepass.visit.Visit.State
+
+commands:
+  - name: gatepass.visit.RegisterVisit
+
+    naming:
+      wire: register-visit
+      display: Register a visit
+
+    input:
+      - name: visitor
+        type: gatepass.visit.VisitorName
+      - name: building
+        type: gatepass.visit.Building
+      - name: host
+        type: gatepass.visit.Host
+      - name: expected_minutes
+        type: Integer
+      - name: expected_stay
+        type: Duration
+      - name: deposit
+        type: gatepass.visit.Deposit
+      - name: escorts
+        type: List<gatepass.visit.VisitorName>
+      - name: notes
+        type: Map<String, String>
+      - name: on_watchlist
+        type: Boolean
+
+    outcomes:
+      - name: registered
+        when: expected_minutes > 0
+        creates: gatepass.visit.Visit
+        # The new visit's identity is the implementation's to assign, so `instance:` names the field
+        # of the *emitted* event it is published in rather than a field of the input.
+        instance: visit_id
+        emits:
+          - gatepass.visit.VisitRegistered
+        payload:
+          gatepass.visit.VisitRegistered:
+            visitor: input.visitor
+            building: input.building
+        summary: The visit is recorded, and the visitor is Expected.
+
+      - name: refused
+        error: gatepass.visit.InvalidVisitLength
+        summary: The expected length was not positive, and nothing was recorded.
+
+  - name: gatepass.visit.AdmitVisitor
+
+    naming:
+      wire: admit-visitor
+      display: Admit the visitor
+
+    input:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+      - name: badge
+        type: gatepass.visit.Badge
+
+    outcomes:
+      - name: admitted
+        moves: gatepass.visit.Visit.arrive
+        instance: visit_id
+        emits:
+          - gatepass.visit.VisitorAdmitted
+        payload:
+          gatepass.visit.VisitorAdmitted:
+            visit_id: input.visit_id
+            badge: input.badge
+        summary: The visitor is on site, holding the badge that was printed.
+
+      # `arrive` runs `from: [Expected]`, so this branch answers in every other declared state, and
+      # a transition that later gains a `from` moves this branch with it. Writing the states here
+      # would be a second place for the same truth to live.
+      - name: wrong-state
+        wrong_state: true
+        error: gatepass.visit.VisitStateConflict
+        summary: The visit is not Expected, so nobody was admitted.
+
+  - name: gatepass.visit.SignOutVisitor
+
+    naming:
+      wire: sign-out-visitor
+      display: Sign the visitor out
+
+    input:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+
+    outcomes:
+      - name: signed-out
+        moves: gatepass.visit.Visit.depart
+        instance: visit_id
+        emits:
+          - gatepass.visit.VisitorDeparted
+        payload:
+          gatepass.visit.VisitorDeparted:
+            visit_id: input.visit_id
+        summary: The visitor has left the building.
+
+      - name: wrong-state
+        wrong_state: true
+        error: gatepass.visit.VisitStateConflict
+        summary: The visit is not OnSite, so nobody was signed out.
+
+events:
+  - name: gatepass.visit.VisitRegistered
+    fields:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+      - name: visitor
+        type: gatepass.visit.VisitorName
+      - name: building
+        type: gatepass.visit.Building
+
+  - name: gatepass.visit.VisitorAdmitted
+    fields:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+      - name: badge
+        type: gatepass.visit.Badge
+
+  - name: gatepass.visit.VisitorDeparted
+    fields:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+
+views:
+  # Read-your-writes: the receptionist who has just registered a visitor and cannot see them on the
+  # expected list has been told a lie about what they did.
+  - name: gatepass.visit.ExpectedVisits
+    source: gatepass.visit.Visit
+    consistency: read_your_writes
+    filter: state == Expected
+    fields:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+      - name: visitor
+        type: gatepass.visit.VisitorName
+      - name: building
+        type: gatepass.visit.Building
+      - name: deposit
+        type: gatepass.visit.Deposit
+    naming:
+      wire: expected
+      display: Expected visits
+
+  # A projection, so a generated scenario asserts it with `eventually` rather than immediately.
+  - name: gatepass.visit.VisitById
+    source: gatepass.visit.Visit
+    consistency: eventual
+    fields:
+      - name: visit_id
+        type: gatepass.visit.VisitId
+      - name: visitor
+        type: gatepass.visit.VisitorName
+      - name: host
+        type: gatepass.visit.Host
+      - name: escorts
+        type: List<gatepass.visit.VisitorName>
+      - name: notes
+        type: Map<String, String>
+      - name: badge
+        type: Optional<gatepass.visit.Badge>
+    naming:
+      wire: by-id
+      display: Visit by id

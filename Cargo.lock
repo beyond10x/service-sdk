@@ -600,6 +600,66 @@ dependencies = [
 ]
 
 [[package]]
+name = "entity-core"
+version = "0.23.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "entity-eventlog"
+version = "0.23.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+dependencies = [
+ "entity-core",
+ "entity-executor",
+ "entity-query",
+ "entity-store",
+ "eventlog-core",
+ "eventlog-postgres",
+ "eventlog-sqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "time",
+ "tokio",
+]
+
+[[package]]
+name = "entity-executor"
+version = "0.23.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+dependencies = [
+ "entity-core",
+ "entity-store",
+ "serde_json",
+]
+
+[[package]]
+name = "entity-query"
+version = "0.23.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+dependencies = [
+ "entity-core",
+ "entity-store",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "entity-store"
+version = "0.23.0"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+dependencies = [
+ "entity-core",
+ "fs2",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -612,13 +672,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "ess-compiler"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -629,8 +689,8 @@ dependencies = [
 
 [[package]]
 name = "ess-deployment"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-compiler",
  "ess-realization",
@@ -644,8 +704,8 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -656,9 +716,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-entity-runtime"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+dependencies = [
+ "entity-core",
+ "ess-compiler",
+ "ess-domain",
+ "ess-primitives",
+ "ess-service-contract",
+ "ess-synth",
+ "serde_json",
+ "sha2 0.11.0",
+]
+
+[[package]]
 name = "ess-gen"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -672,19 +747,20 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "schemars 0.8.22",
  "serde",
  "serde_json",
+ "serde_yaml",
  "thiserror",
 ]
 
 [[package]]
 name = "ess-realization"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -695,21 +771,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "ess-service-contract"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+dependencies = [
+ "ess-compiler",
+ "ess-domain",
+ "ess-synth",
+]
+
+[[package]]
 name = "ess-synth"
-version = "0.20.0"
-source = "git+https://github.com/beyond10x/ess.git?rev=95ef5be70dbce966056d0484b66db7ed836fa406#95ef5be70dbce966056d0484b66db7ed836fa406"
+version = "0.31.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
 dependencies = [
  "ess-compiler",
  "ess-domain",
  "ess-gen",
+ "ess-primitives",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "eventlog-core"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
 dependencies = [
  "serde",
  "serde_json",
@@ -721,8 +808,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-postgres"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
 dependencies = [
  "eventlog-core",
  "rustls",
@@ -738,10 +825,11 @@ dependencies = [
 
 [[package]]
 name = "eventlog-sqlite"
-version = "0.1.0-dev.1"
-source = "git+https://github.com/beyond10x/eventlog.git?rev=081815cdfcbf1c751e7ee91abd81af2ff7d460cb#081815cdfcbf1c751e7ee91abd81af2ff7d460cb"
+version = "0.4.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
 dependencies = [
  "eventlog-core",
+ "nix",
  "rusqlite",
  "serde_json",
  "time",
@@ -778,6 +866,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+
+[[package]]
 name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -805,12 +899,6 @@ dependencies = [
  "ref-cast",
  "serde",
 ]
-
-[[package]]
-name = "foldhash"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "foldhash"
@@ -988,11 +1076,11 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.5"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
+checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
- "foldhash 0.1.5",
+ "foldhash",
 ]
 
 [[package]]
@@ -1003,16 +1091,16 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash 0.2.0",
+ "foldhash",
 ]
 
 [[package]]
 name = "hashlink"
-version = "0.10.0"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7382cf6263419f2d8df38c55d7da83da5c18aef87fc7a7fc1fb1e344edfe14c1"
+checksum = "a596f1b20ed2cc5ecac41a164aaebc7258057060f06c0cf7a2ba3991ee7990fb"
 dependencies = [
- "hashbrown 0.15.5",
+ "hashbrown 0.17.1",
 ]
 
 [[package]]
@@ -1380,9 +1468,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.35.0"
+version = "0.38.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133c182a6a2c87864fe97778797e46c7e999672690dc9fa3ee8e241aa4a9c13f"
+checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
 dependencies = [
  "cc",
  "pkg-config",
@@ -1465,6 +1553,18 @@ dependencies = [
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]
@@ -1825,7 +1925,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2012,10 +2112,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusqlite"
-version = "0.37.0"
+name = "rsqlite-vfs"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "165ca6e57b20e1351573e3729b958bc62f0e48025386970b6e4d29e7a7e71f3f"
+checksum = "c51c9ae4df8a7fba42103df5c621fa3c37eccf3a3c650879e90fc48b11cc192c"
+dependencies = [
+ "hashbrown 0.16.1",
+ "thiserror",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.40.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23f2a97da3e3873c73cb2a2e71b35c40ff95e0b1eefa8d72d8499a6928c3b5b3"
 dependencies = [
  "bitflags",
  "fallible-iterator 0.3.0",
@@ -2023,6 +2133,7 @@ dependencies = [
  "hashlink",
  "libsqlite3-sys",
  "smallvec",
+ "sqlite-wasm-rs",
 ]
 
 [[package]]
@@ -2050,7 +2161,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2298,16 +2409,19 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
+ "entity-core",
+ "entity-store",
  "ess-compiler",
  "ess-deployment",
  "ess-domain",
  "ess-gen",
  "ess-realization",
  "ess-synth",
+ "futures",
  "hex",
  "semver",
  "serde",
@@ -2317,6 +2431,7 @@ dependencies = [
  "service-connectors",
  "service-definition",
  "service-engine",
+ "service-runtime",
  "service-runtime-ir",
  "sha2 0.11.0",
  "thiserror",
@@ -2324,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "hex",
@@ -2338,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -2357,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -2375,9 +2490,10 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "ess-compiler",
+ "ess-domain",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2385,13 +2501,18 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
+ "entity-core",
+ "entity-store",
+ "ess-primitives",
  "futures",
  "hex",
  "serde",
  "serde_json",
+ "service-definition",
  "service-runtime",
+ "service-runtime-ir",
  "sha2 0.11.0",
  "thiserror",
  "time",
@@ -2399,8 +2520,11 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-sqlite",
  "hex",
@@ -2417,11 +2541,14 @@ dependencies = [
 
 [[package]]
 name = "service-host"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-postgres",
  "eventlog-sqlite",
@@ -2434,11 +2561,14 @@ dependencies = [
  "serde",
  "serde_json",
  "service",
+ "service-builder",
  "service-connectors",
+ "service-definition",
  "service-engine",
  "service-eventlog",
  "service-http",
  "service-runtime",
+ "tempfile",
  "time",
  "tokio",
  "uuid",
@@ -2446,12 +2576,16 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "axum",
  "bytes",
+ "entity-core",
+ "entity-eventlog",
+ "entity-store",
  "eventlog-core",
  "eventlog-sqlite",
+ "hex",
  "identity-client",
  "reqwest",
  "serde",
@@ -2459,13 +2593,15 @@ dependencies = [
  "service-engine",
  "service-eventlog",
  "service-runtime",
+ "sha2 0.11.0",
  "thiserror",
+ "time",
  "tokio",
 ]
 
 [[package]]
 name = "service-obligations"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2476,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
  "futures",
  "serde",
@@ -2487,10 +2623,14 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.5.11"
+version = "0.6.0"
 dependencies = [
+ "entity-core",
  "ess-compiler",
  "ess-domain",
+ "ess-entity-runtime",
+ "ess-primitives",
+ "ess-service-contract",
  "ess-synth",
  "serde",
  "serde_json",
@@ -2585,6 +2725,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-wasm-rs"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc3efc0da82635d7e1ced0053bbbfa8c7ab9645d0bf36ceb4f7127bb85315d75"
+dependencies = [
+ "cc",
+ "js-sys",
+ "rsqlite-vfs",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2674,6 +2826,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

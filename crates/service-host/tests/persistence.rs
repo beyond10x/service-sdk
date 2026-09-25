@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::IntoFuture;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -864,8 +864,14 @@ impl Process {
     }
 }
 fn binary() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/debug/persistence-http-generated-service")
+    // Cargo places this test in the selected profile's deps directory, including
+    // when CARGO_TARGET_DIR points outside the checkout.
+    std::env::current_exe()
+        .expect("persistence test executable path")
+        .parent()
+        .and_then(Path::parent)
+        .expect("Cargo test executable is under profile/deps")
+        .join("persistence-http-generated-service")
 }
 fn spawn(fixture: &Fixture, postgres: bool, address: &str, identity: &str) -> Result<Process> {
     ensure!(

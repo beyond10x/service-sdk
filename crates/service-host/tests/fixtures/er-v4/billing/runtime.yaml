@@ -1,0 +1,129 @@
+format: service-definition/4
+service: billing
+component: invoice-service
+entity_versions:
+  billing.invoice.Account: 1
+  billing.invoice.Invoice: 1
+delivery: { kind: identity_http, audience: "urn:b10x:billing" }
+realm: optional
+obligations:
+  - name: aggregate
+    provider: sdk.aggregate.event-sourced/v1
+    bindings: { aggregate: billing.invoice.Invoice, identity: invoice_id }
+    description: Execute invoices through one recorded aggregate.
+  - name: payee_from_email
+    provider: sdk.derive.tagged-value/v1
+    bindings: { tag: person, source: customer_email }
+    description: Form the declared person payee from the customer email.
+  - name: issued_clock
+    provider: sdk.derive.trusted-clock/v1
+    description: Supply the trusted issue timestamp once.
+  - name: visibility
+    provider: sdk.projection.auth-partitioned-visibility/v1
+    bindings: { owner: account_id, scopes: account_id }
+    description: Partition invoice projections by authenticated authority.
+  - name: created_email
+    provider: sdk.effect.email/v1
+    bindings: { reaction: notify-on-invoice-created }
+    description: Deliver the declared invoice-created email after commit.
+projections:
+  - { name: invoice_by_id, view: billing.invoice.InvoiceById, delivery: catch_up, obligations: [visibility] }
+  - { name: outstanding, view: billing.invoice.OutstandingInvoices, delivery: inline_transactional, obligations: [visibility] }
+queries:
+  - name: get_invoice
+    scope: invoices.read
+    view: billing.invoice.InvoiceById
+    projection: invoice_by_id
+    selectors: [{ parameter: invoice_id, view_field: invoice_id }]
+    sort: [{ view_field: invoice_id, direction: ascending }]
+    delivery: eventual
+    obligations: [visibility]
+  - name: list_outstanding
+    scope: invoices.read
+    view: billing.invoice.OutstandingInvoices
+    projection: outstanding
+    sort: [{ view_field: invoice_id, direction: ascending }]
+    delivery: read_your_writes
+    obligations: [visibility]
+intents:
+  - name: create_invoice
+    scope: invoices.manage
+    command: billing.invoice.CreateInvoice
+    stream_id: { kind: generated_uuid_v7 }
+    expected_version: { kind: no_stream }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [invoice_by_id, outstanding]
+    obligations: [aggregate, payee_from_email, created_email]
+  - name: issue_invoice
+    scope: invoices.manage
+    command: billing.invoice.IssueInvoice
+    stream_id: { kind: command_field, field: invoice_id }
+    expected_version: { kind: operation_field, field: expected_version }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [invoice_by_id, outstanding]
+    obligations: [aggregate, issued_clock]
+  - name: pay_invoice
+    scope: invoices.manage
+    command: billing.invoice.PayInvoice
+    stream_id: { kind: command_field, field: invoice_id }
+    expected_version: { kind: operation_field, field: expected_version }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [invoice_by_id, outstanding]
+    obligations: [aggregate]
+  - name: cancel_invoice
+    scope: invoices.manage
+    command: billing.invoice.CancelInvoice
+    stream_id: { kind: command_field, field: invoice_id }
+    expected_version: { kind: operation_field, field: expected_version }
+    idempotency: { kind: operation_field, field: idempotency_key }
+    projections: [invoice_by_id, outstanding]
+    obligations: [aggregate]
+slots:
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 0 }, source: { kind: generated_uuid_v7 } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 1 }, source: { kind: literal, value: Email } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 2 }, source: { kind: literal, value: false } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 3 }, source: { kind: absent } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 4 }, source: { kind: literal, value: [] } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 5 }, source: { kind: literal, value: {} } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 6 }, source: { kind: absent } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 7 }, source: { kind: obligation, name: payee_from_email } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 8 }, source: { kind: literal, value: 0 } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 9 }, source: { kind: literal, value: PT1H } }
+  - { coordinate: { command: billing.invoice.CreateInvoice, slot: 10 }, source: { kind: literal, value: "AA==" } }
+operation_fields:
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: account_id }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: channel }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: is_recurring }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: issued_at }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: lines }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: metadata }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: note }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: payee }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: reminder_count }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: settlement_window }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: signature }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.CancelInvoice, outcome: cancelled, field: total }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: account_id }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: channel }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: is_recurring }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: issued_at }, policy: { kind: obligation, name: issued_clock } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: lines }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: metadata }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: note }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: payee }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: reminder_count }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: settlement_window }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: signature }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.IssueInvoice, outcome: issued, field: total }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: account_id }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: channel }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: is_recurring }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: issued_at }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: lines }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: metadata }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: note }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: payee }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: reminder_count }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: settlement_window }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: signature }, policy: { kind: preserve } }
+  - { coordinate: { command: billing.invoice.PayInvoice, outcome: settled, field: total }, policy: { kind: preserve } }
