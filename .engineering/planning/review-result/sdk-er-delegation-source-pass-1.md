@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: review-result:sdk-er-delegation-source-pass-1
 kind: review-result
 status: active
@@ -41,8 +41,8 @@ All commands used this environment:
 RUSTUP_TOOLCHAIN=1.91.0
 CARGO_BUILD_JOBS=1
 CARGO_NET_OFFLINE=true
-CARGO_TARGET_DIR=~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/target
-TMPDIR=~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/scratch/tmp
+CARGO_TARGET_DIR=home-path:sha256:d781fedd321172d1a6c310f076c58c73069487ec6179196687d9e4d294f3d77e
+TMPDIR=home-path:sha256:a5cadbf343307276e9f09f538b5f93c2231ac2633a9e207ed4ef14dc55e7e99a
 RUSTC_WRAPPER=
 RUSTC_WORKSPACE_WRAPPER=
 CARGO_BUILD_RUSTC_WRAPPER=
@@ -65,7 +65,7 @@ RUSTFLAGS=-C link-arg=-fuse-ld=lld
    First executable result, exit 101, red output verbatim:
 
    ```text
-      Compiling service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/crates/service-builder)
+      Compiling service-builder v0.5.11 (home-path:sha256:b25590bdaec49830128dd976fa29351618ebb1b9dc490a7c15cf49f101275e37)
        Finished `test` profile [unoptimized] target(s) in 1.23s
         Running tests/v4.rs (target/debug/deps/v4-f68292df097e397b)
 
@@ -168,7 +168,7 @@ RUSTFLAGS=-C link-arg=-fuse-ld=lld
    Exit 101, red output verbatim:
 
    ```text
-      Compiling service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/crates/service-builder)
+      Compiling service-builder v0.5.11 (home-path:sha256:b25590bdaec49830128dd976fa29351618ebb1b9dc490a7c15cf49f101275e37)
        Finished `test` profile [unoptimized] target(s) in 0.94s
         Running tests/v4_execution.rs (target/debug/deps/v4_execution-5e9b0d24f8285983)
 
@@ -267,28 +267,28 @@ implementation, so all five are introduced.
 
 ## Paths written outside the worktree
 
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/report.md`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/scratch/`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/scratch/tmp/`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/01-operation-field-type.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/01-operation-field-type.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/01-operation-field-type.capacity`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/02-operation-field-type-red.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/02-operation-field-type-red.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/02-operation-field-type-red.capacity`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/03-plan-target-red.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/03-plan-target-red.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/03-plan-target-red.capacity`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/04-openapi-contract-red.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/04-openapi-contract-red.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/04-openapi-contract-red.capacity`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/05-idempotency-version-red.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/05-idempotency-version-red.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/05-idempotency-version-red.capacity`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/06-intent-obligation-red.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/06-intent-obligation-red.exit`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-1/logs/06-intent-obligation-red.capacity`
+- `home-path:sha256:fd5fda164659678d197f77d8d42db17d6ebf6103a1dc75974fd3131d821fd9b2`
+- `home-path:sha256:c6ecbb99d06436ae182e681d88f4d998eeefb0f29571b656ae408272d899b130`
+- `home-path:sha256:a98e69d0d91246712fbe762ba341cab36644cf55ab57459c4b69db7be5068a9a`
+- `home-path:sha256:df5700b68a76dbb2d129f256e2fecfec774fefd7118bf3b58b9139d687c51578`
+- `home-path:sha256:f6bf5416cc1bf8f1bab528c0771971175bcbe53f45eb440debb0c70821182635`
+- `home-path:sha256:52186a7dc8fe531c40de080338828ac6e31cd8595185b80cf8b5208313be44c2`
+- `home-path:sha256:73a9bc0bf4392000937f9026e7daec5e0e0ff96319f4a4b8e43fa46acc5e7aae`
+- `home-path:sha256:f61a40c4fe0a51e5f10cbceb341937881e4046bba78fd3739acc17ad4533db42`
+- `home-path:sha256:a6b62923b474c923a1f2cb108f581da449a10cdc1aa478653a9598a18265b072`
+- `home-path:sha256:8149fcb576a8b1e9660463b26d4756d08928ccc0fa296de18b8a8d4ce2fb4025`
+- `home-path:sha256:c96552ce6de7813c665abd107b0306d4d98772b828c36576c7f07092d35c6b00`
+- `home-path:sha256:0f9fc1180b27d2728f67a22574e6f0534069253bed0eb82c4aeca2803ad02462`
+- `home-path:sha256:6e139138979ffe19c1ca161ba8c830fae72a14a4e9c46b55c8b29adc6c46a3e2`
+- `home-path:sha256:ede12736d55edf2c18149bb5b21fd6a7d224d1e67aed04f2cd65198b472f3c56`
+- `home-path:sha256:cef472390e93767bd5d0a020656a8526359afc8736b48654ece31b2553a64629`
+- `home-path:sha256:578617a85a977c62a9fe83fc2be498955b1ed271bab25dcede8037e1e519bd21`
+- `home-path:sha256:2bd85cc07c15b98ef49d6ed72fde24fd5938010c9e16a50a0a371899c74fe508`
+- `home-path:sha256:b2795e100d2ad8eb7b5c41e44d0a827c12dc0afa4b743332324f8f4be828c26f`
+- `home-path:sha256:d2e4d67fe593af54e190187ee3ba024d2021e9edaf37a9e6ae4e7826870487c5`
+- `home-path:sha256:5ab627246b348b9594ec7f5f8475fd753dfc185e19fc9cd4c3efcbb2477251c2`
+- `home-path:sha256:00cf0962125b2e0f608ebb4f70964e48fc4cc9d79f2ba0a53eb1c8b21297f90c`
+- `home-path:sha256:6f0fd5eebea40da3c55a67fbb84b1d96d30570c1036a7074b41602d84a245de7`
 
 ```findings
 - file: crates/service-runtime-ir/src/v4.rs

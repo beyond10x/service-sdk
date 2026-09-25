@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: story:er-service-delegation
 kind: story
 status: active
@@ -279,7 +279,7 @@ Evidence: local-evidence sdk-delegation/resume/full-gate-compat-report.md and fu
 
 Original full M6 author assignment is CLOSED at local candidate663be6f772fdf3ee9c0003b08d4f6d17357c3f73 (tree d7ada01885e5900a977e8c0a899c7baf4c9e0cd9). Complete actual PostgreSQL task check111 passed, including ten required persistence cases, six workload configurations and zero skips. Final exact-candidate generated billing/gatepass regeneration, locked builds and child-process provider/restart/repair acceptance112–115 all passed. Root independently rehashed49 source paths,122 generated artifacts and309 check artifacts, and read all five terminal exit statuses.
 
-Whole author report: ~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/resume/final-author-report.md, SHA256 fb35eda65f10df54ff0d753078510490fe2ec72587d6c62bc46425616e61a12c. Root verification: coordinator-final-author-verification.json in that directory. Final-source manifest fbf2774e56331817e357920b4314b7b9883a08b03c6119f42d77419713c4c37a; generated b7fa5048fa2c0554368ccfe117e62e1e43aa585a412dacc0dec23de2109a58df; checks50ede27868ea1e92dfc4467560f7ca9c03d1617e3709722deacd42aee754a908.
+Whole author report: home-path:sha256:ecab6ded4297287877315cf4f9aa1614ec3cafe4f15e6d30ce2329026ae668b2, SHA256 fb35eda65f10df54ff0d753078510490fe2ec72587d6c62bc46425616e61a12c. Root verification: coordinator-final-author-verification.json in that directory. Final-source manifest fbf2774e56331817e357920b4314b7b9883a08b03c6119f42d77419713c4c37a; generated b7fa5048fa2c0554368ccfe117e62e1e43aa585a412dacc0dec23de2109a58df; checks50ede27868ea1e92dfc4467560f7ca9c03d1617e3709722deacd42aee754a908.
 
 Required independent whole-source review (original max2 passes) and qualified integration remain. These checks prove author acceptance, not provider qualification or final integrated M6 completion. Disposable PG fixture was torn down; worker lease released. No publication or external mail delivery claimed.
 

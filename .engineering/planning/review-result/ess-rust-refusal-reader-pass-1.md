@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: review-result:ess-rust-refusal-reader-pass-1
 kind: review-result
 status: active
@@ -75,7 +75,7 @@ CARGO_CACHE_RUSTC_INFO=0 and CARGO_NET_OFFLINE=true. No CARGO_TARGET_DIR overrid
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -89,7 +89,7 @@ exit "$adversary_status"
 ```
 
 ```text
-   Compiling service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-rust-refusal-reader/crates/service-builder)
+   Compiling service-builder v0.5.11 (home-path:sha256:1e4f9c427e00f9150e021e23b375d6dcc6e675323f01e5534d727bb34f66da82)
     Finished `test` profile [unoptimized] target(s) in 1.06s
      Running unittests src/lib.rs (target/debug/deps/service_builder-0616f57529aa5443)
 
@@ -107,7 +107,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -138,7 +138,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -169,7 +169,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -200,7 +200,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -231,7 +231,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -271,7 +271,7 @@ execution newly attributed to this reviewer.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -285,7 +285,7 @@ exit "$adversary_status"
 ```
 
 ```text
-   Compiling service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-rust-refusal-reader/crates/service-builder)
+   Compiling service-builder v0.5.11 (home-path:sha256:1e4f9c427e00f9150e021e23b375d6dcc6e675323f01e5534d727bb34f66da82)
     Finished `test` profile [unoptimized] target(s) in 1.65s
      Running unittests src/lib.rs (target/debug/deps/service_builder-0616f57529aa5443)
 
@@ -350,7 +350,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -374,7 +374,7 @@ Exit: 0.
 ```bash
 export TMPDIR="$PWD/target"
 export RUSTC_WRAPPER=/usr/bin/sccache
-export SCCACHE_SERVER_UDS=~/.local/state/worktree/trees/b10x/ess/wt-752828a285ba/target/w4-cache.sock
+export SCCACHE_SERVER_UDS=home-path:sha256:a1df7e48de99917d83200cb60964e15c1af6c71d8557e99154a84970f6e94c45
 export CARGO_INCREMENTAL=0
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
@@ -388,7 +388,7 @@ exit "$adversary_status"
 ```
 
 ```text
-    Checking service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-rust-refusal-reader/crates/service-builder)
+    Checking service-builder v0.5.11 (home-path:sha256:1e4f9c427e00f9150e021e23b375d6dcc6e675323f01e5534d727bb34f66da82)
     Finished `dev` profile [unoptimized] target(s) in 0.88s
 ```
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/1
+format: aep.planning-md/2
 id: review-result:sdk-er-delegation-source-pass-2
 kind: review-result
 status: active
@@ -29,9 +29,9 @@ The only changed path is a test file. The two removed lines replace an import an
 1. `crates/service-builder/tests/v4_execution.rs:270`, `owner_obligation_checks_the_loaded_subject_not_an_unrelated_partition_instance`. A builder-admitted `sdk.auth.owner-and-conjunctive-scopes/v1` protects public payment. The selected invoice is owned by A; a valid other invoice in the same partition is owned by B. B's verified authority must be refused without an append. The first exact execution, before an affected-suite run, failed for this assertion (log 01, exit 101). The final case uses two consistent ER storage/logical identities and the public `execute_public_json` entrypoint. Its exact command was `cargo test --locked -p service-builder --test v4_execution owner_obligation_checks_the_loaded_subject_not_an_unrelated_partition_instance -- --exact --test-threads=1`. Final exact result, exit 101, red output verbatim from `logs/10-owner-public-final-compact.log`:
 
 ```text
-   Compiling service-builder v0.5.11 (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-2-20260917/crates/service-builder)
+   Compiling service-builder v0.5.11 (home-path:sha256:bebed5ec777e67301f1f4532a5b11c1eed56e172a4a8444bce41c0e08d37d918)
     Finished `test` profile [unoptimized] target(s) in 1.30s
-     Running tests/v4_execution.rs (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/target/debug/deps/v4_execution-5e9b0d24f8285983)
+     Running tests/v4_execution.rs (home-path:sha256:8396e4ca77e008901da067c5985108cf22bbc7a05d2e86997d6ce79ed7e5d324)
 
 running 1 test
 test owner_obligation_checks_the_loaded_subject_not_an_unrelated_partition_instance ... FAILED
@@ -59,7 +59,7 @@ The retained log 09 prints the complete `Ok(Committed { ... })` value, including
 
 ```text
     Finished `test` profile [unoptimized] target(s) in 0.15s
-     Running tests/v4_execution.rs (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/target/debug/deps/v4_execution-5e9b0d24f8285983)
+     Running tests/v4_execution.rs (home-path:sha256:8396e4ca77e008901da067c5985108cf22bbc7a05d2e86997d6ce79ed7e5d324)
 
 running 1 test
 test lifecycle_obligation_accepts_the_selected_logical_identity_in_an_allowed_state ... FAILED
@@ -87,7 +87,7 @@ After both cases existed, the final command `cargo test --locked -p service-buil
 
 ```text
     Finished `test` profile [unoptimized] target(s) in 0.14s
-     Running tests/v4_execution.rs (~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/target/debug/deps/v4_execution-5e9b0d24f8285983)
+     Running tests/v4_execution.rs (home-path:sha256:8396e4ca77e008901da067c5985108cf22bbc7a05d2e86997d6ce79ed7e5d324)
 
 running 9 tests
 test admission_precedes_decode_and_committed_projection_failure_keeps_receipt ... ok
@@ -145,22 +145,22 @@ These are separate failures in the fifth original correction class, selected SDK
 
 ## Paths written outside the review worktree
 
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/report.md`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/01-owner-subject-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/02-v4-execution-affected.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/03-lifecycle-identity-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/04-owner-valid-instance-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/05-v4-execution-final-affected.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/06-owner-public-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/07-lifecycle-public-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/08-v4-execution-public-affected.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/09-owner-public-final-exact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/10-owner-public-final-compact.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/logs/11-v4-execution-final.log`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/scratch/`
-- `~/beyond10x/.ess-evolution/waves/0009-service-convergence/sdk-delegation/source-review-2/scratch/tmp/`
-- `~/.local/state/worktree/trees/b10x/service-sdk/ess-evolution-sdk-source-review-1-20260916/target/` (assigned compiler cache)
+- `home-path:sha256:55cb9670d72a21739963300eec281fde453160810748d684b69acf2d833b0766`
+- `home-path:sha256:b5a9cd9185d77d773e0cbccbe413c8597dd7e30ee645e439d9f7409e66e3f1a5`
+- `home-path:sha256:0095207515c40945e5722ebe1d98f7f74a75b1f9f5c4e18ff46fade577a2ffdb`
+- `home-path:sha256:53d2541c0c87e2dd1045a2682ccd701d0a92ef85e3c234b8829772e2d3346aeb`
+- `home-path:sha256:6925d26ea31fc42f43e2154e162af57f3745fbd791265be427cec503ca711b0b`
+- `home-path:sha256:918f9b0e48bfb13366f47494327a396f6b2971fadf4e619b89f615a740d189e9`
+- `home-path:sha256:3d8d4e8af74ee8197649a61e66499d678dc8a16854be9ce21c6cf33261cce895`
+- `home-path:sha256:8ba2f08bd7580c2cd1c02ccb423be6b7996e1429cf1d3682bdc862440056c344`
+- `home-path:sha256:9e712af9587f4a741849f51f4d6058c1b18592355dcb8a3a986321929ad61f21`
+- `home-path:sha256:99050a1ab27cad446b25f4034d151169239a9df22c9393adeef46dae9dd2b605`
+- `home-path:sha256:905c1250b842680bd09539fa7263aa7a911895bad6e79dc0e051a4fcb9dcda24`
+- `home-path:sha256:d59b626303f929cdbd53fcd4a986be4e5e51df90f9e99f7388f6b172e7d6c38c`
+- `home-path:sha256:68daf20a12c1595b3489218fa0373e96c4c89e21ba3067775f7456b0ff5c2527`
+- `home-path:sha256:21ae581b761bb22a4c913f489b370d9d2df87708d2aee704063c0fe6c04dcbd0`
+- `home-path:sha256:6405e1c4bfd8af6521f7ed07b68233576e3e3afea698052f25265475b5f10e58`
+- `home-path:sha256:cc80627dc47abd95f16603c58807a84917f3f0c6b91746eb5fa50828b46b9b5d` (assigned compiler cache)
 
 The source and cache trees remain managed for the coordinator; no cleanup, commit, publication, AEP write or source fix was performed. Review assignment CLOSE after writing this report and releasing both own leases.
 
