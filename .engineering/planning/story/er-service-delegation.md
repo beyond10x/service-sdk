@@ -2,7 +2,7 @@
 format: aep.planning-md/2
 id: story:er-service-delegation
 kind: story
-status: active
+status: implemented
 title: Delegate SDK service semantics to ER and verify generated billing and gatepass services
 owner: service-sdk
 refs:
@@ -50,7 +50,7 @@ scope:
   path: crates/service-runtime/
 - confidence: inferred
   path: docs/design/ess-evolution-er-delegation.md
-revision: 21
+revision: 22
 ---
 # Complete ER delegation and generated service acceptance
 
