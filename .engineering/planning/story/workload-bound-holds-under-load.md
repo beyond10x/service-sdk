@@ -2,11 +2,14 @@
 format: aep.planning-md/2
 id: story:workload-bound-holds-under-load
 kind: story
-status: draft
+status: implemented
 title: The two-process workload bound holds under machine load
 relations:
 - serves: vision:composable-services
-revision: 1
+scope:
+- confidence: cited
+  path: crates/service-host/tests/persistence.rs
+revision: 5
 ---
 # The two-process workload bound holds under machine load
 
