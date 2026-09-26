@@ -21,11 +21,11 @@ use crate::{
 /// Exact persisted format for an ER-delegated runtime IR.
 pub const RUNTIME_IR_FORMAT_V4: &str = "service-runtime-ir/4";
 
-/// Exact accepted ER semantic target (Entity Runtime `0.23.0`) named by the pinned ESS lowerer.
-pub const ACCEPTED_ENTITY_RUNTIME_REVISION: &str = "77aac6eac95d0392a00e8dee8d04038ef70e47de";
+/// Exact accepted ER semantic target (Entity Runtime `0.24.1`) named by the pinned ESS lowerer.
+pub const ACCEPTED_ENTITY_RUNTIME_REVISION: &str = "4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44";
 
 /// Exact `entity-eventlog` revision; it shares the accepted `entity-core` crate identity.
-pub const ADAPTER_ENTITY_RUNTIME_REVISION: &str = "77aac6eac95d0392a00e8dee8d04038ef70e47de";
+pub const ADAPTER_ENTITY_RUNTIME_REVISION: &str = "4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44";
 
 /// A compiler-minted `/4` runtime document.
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]

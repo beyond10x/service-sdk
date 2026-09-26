@@ -601,8 +601,8 @@ dependencies = [
 
 [[package]]
 name = "entity-core"
-version = "0.23.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+version = "0.24.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.24.1#4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44"
 dependencies = [
  "serde",
  "serde_json",
@@ -610,8 +610,8 @@ dependencies = [
 
 [[package]]
 name = "entity-eventlog"
-version = "0.23.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+version = "0.24.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.24.1#4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44"
 dependencies = [
  "entity-core",
  "entity-executor",
@@ -629,8 +629,8 @@ dependencies = [
 
 [[package]]
 name = "entity-executor"
-version = "0.23.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+version = "0.24.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.24.1#4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -639,8 +639,8 @@ dependencies = [
 
 [[package]]
 name = "entity-query"
-version = "0.23.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+version = "0.24.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.24.1#4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -650,8 +650,8 @@ dependencies = [
 
 [[package]]
 name = "entity-store"
-version = "0.23.0"
-source = "git+https://github.com/beyond10x/entity-runtime?tag=0.23.0#77aac6eac95d0392a00e8dee8d04038ef70e47de"
+version = "0.24.1"
+source = "git+https://github.com/beyond10x/entity-runtime?tag=0.24.1#4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44"
 dependencies = [
  "entity-core",
  "fs2",
@@ -677,8 +677,8 @@ dependencies = [
 
 [[package]]
 name = "ess-compiler"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-domain",
  "ess-primitives",
@@ -689,8 +689,8 @@ dependencies = [
 
 [[package]]
 name = "ess-deployment"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-compiler",
  "ess-realization",
@@ -704,8 +704,8 @@ dependencies = [
 
 [[package]]
 name = "ess-domain"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-primitives",
  "schemars 0.8.22",
@@ -717,8 +717,8 @@ dependencies = [
 
 [[package]]
 name = "ess-entity-runtime"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "entity-core",
  "ess-compiler",
@@ -732,8 +732,8 @@ dependencies = [
 
 [[package]]
 name = "ess-gen"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -747,8 +747,8 @@ dependencies = [
 
 [[package]]
 name = "ess-primitives"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -759,8 +759,8 @@ dependencies = [
 
 [[package]]
 name = "ess-realization"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -772,8 +772,8 @@ dependencies = [
 
 [[package]]
 name = "ess-service-contract"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -782,8 +782,8 @@ dependencies = [
 
 [[package]]
 name = "ess-synth"
-version = "0.31.0"
-source = "git+https://github.com/beyond10x/ess.git?tag=0.31.0#f7de9f82af1e2b47a5a8789cbe7ce03ab649a329"
+version = "0.33.0"
+source = "git+https://github.com/beyond10x/ess.git?tag=0.33.0#3ec2deb977bb19c292a611dcf92a3e676352864a"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -795,8 +795,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-core"
-version = "0.4.0"
-source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8#fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8"
 dependencies = [
  "serde",
  "serde_json",
@@ -808,8 +808,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-postgres"
-version = "0.4.0"
-source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8#fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8"
 dependencies = [
  "eventlog-core",
  "rustls",
@@ -825,8 +825,8 @@ dependencies = [
 
 [[package]]
 name = "eventlog-sqlite"
-version = "0.4.0"
-source = "git+https://github.com/beyond10x/eventlog?rev=70096af8c231fedf6d2206c97ce2940b99aecdb8#70096af8c231fedf6d2206c97ce2940b99aecdb8"
+version = "0.5.0"
+source = "git+https://github.com/beyond10x/eventlog?rev=fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8#fe8a0a7e6e97afde87b349f0840d6e2ed28df3f8"
 dependencies = [
  "eventlog-core",
  "nix",
@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2439,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "hex",
@@ -2453,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "entity-eventlog",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "service-host"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "futures",
  "serde",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "ess-compiler",

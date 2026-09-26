@@ -53,8 +53,8 @@ fn sources(name: &str) -> EssSources {
     .expect("explicit source inventory")
 }
 
-/// Released Entity Runtime `0.23.0` (tag commit), the target of the ESS 0.31 lowerer.
-const ENTITY_RUNTIME_0_23_0: &str = "77aac6eac95d0392a00e8dee8d04038ef70e47de";
+/// Released Entity Runtime `0.24.1` (tag commit), the target of the ESS 0.33 lowerer.
+const ENTITY_RUNTIME_0_24_1: &str = "4746bd7cc37d27c7cc5815c44a62a96f3ddc1f44";
 
 /// The fixture sources with exact textual edits applied; every edit must match once.
 fn edited_sources(name: &str, edits: &[(&str, &str, &str)]) -> EssSources {
@@ -156,13 +156,13 @@ fn strict_reloads_refuse_changed_definition_binding_and_target_revision() {
         .expect("billing compiles");
     let runtime = build.runtime_ir.to_canonical_json();
     assert!(
-        runtime.contains(ENTITY_RUNTIME_0_23_0),
-        "the persisted /4 document names the released Entity Runtime 0.23.0 target"
+        runtime.contains(ENTITY_RUNTIME_0_24_1),
+        "the persisted /4 document names the released Entity Runtime 0.24.1 target"
     );
     for changed in [
         runtime.replacen("\"service\": \"billing\"", "\"service\": \"other\"", 1),
         runtime.replacen(
-            ENTITY_RUNTIME_0_23_0,
+            ENTITY_RUNTIME_0_24_1,
             "0000000000000000000000000000000000000000",
             1,
         ),

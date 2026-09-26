@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+## 0.7.0 - 2026-09-26
+
+### Changed
+
+- Build on Eventlog 0.5.0, Entity Runtime 0.24.1 and ESS 0.33.0, one version of each across the
+  SDK and the ESS lowerer. On PostgreSQL a resumed feed page now reads the stream identity instead
+  of rewriting and committing its row, so a quiescent feed catch-up writes nothing and no longer
+  pays one commit per page. Persisted `service-runtime-ir/4` documents name Entity Runtime 0.24.1
+  as their accepted target; a `/4` document naming 0.23.0 is refused on reload and must be
+  recompiled.
+
+### Tests
+
+- The two-process PostgreSQL workload proof fails when a quiescent feed catch-up writes any durable
+  row, naming the table, and reports per-store-call timing, database commits and container CPU
+  throttling for the catch-up interval.
+
 ## 0.6.0 - 2026-09-25
 
 This release supersedes 0.5.9, 0.5.10 and 0.5.11. Tags exist only up to 0.5.9 and GitHub
@@ -138,7 +157,7 @@ Releases only up to 0.5.8, so the changes in those three sections below are firs
 - Align generated-service Connector factories and conformance contracts with Connectors 0.5.2,
   retaining delegated execution provenance across the released composition boundary.
 
-## Unreleased
+## 0.7.0 - 2026-09-26
 
 - Align generated Connector factories and conformance with Connectors 0.5.0, preserving
   receiver-verified agent, attempt, delegation, and grant provenance through service execution.
