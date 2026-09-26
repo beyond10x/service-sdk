@@ -74,6 +74,7 @@ struct Observations {
     waiter_micros: AtomicU64,
     samples: AtomicU64,
     sample_micros: AtomicU64,
+    timing: std::sync::Mutex<BTreeMap<&'static str, [u64; 3]>>,
 }
 struct ObservedStore {
     inner: Arc<dyn EventStore>,
@@ -82,11 +83,20 @@ struct ObservedStore {
 impl ObservedStore {
     fn observe<'a, T: Send + 'a>(
         &'a self,
+        name: &'static str,
         future: BoxFuture<'a, Result<T, EventLogError>>,
     ) -> BoxFuture<'a, Result<T, EventLogError>> {
         Box::pin(async move {
             self.observations.calls.fetch_add(1, Ordering::Relaxed);
+            let began = Instant::now();
             let result = future.await;
+            let micros = u64::try_from(began.elapsed().as_micros()).unwrap_or(u64::MAX);
+            if let Ok(mut timing) = self.observations.timing.lock() {
+                let entry = timing.entry(name).or_default();
+                entry[0] += 1;
+                entry[1] += micros;
+                entry[2] = entry[2].max(micros);
+            }
             if let Err(error) = &result {
                 let category = match error {
                     EventLogError::Conflict { .. } => "conflict",
@@ -106,7 +116,7 @@ impl ObservedStore {
 macro_rules! observed {
     ($($name:ident($($argument:ident: $ty:ty),*) -> $result:ty;)+) => {
         $(fn $name<'a>(&'a self, $($argument: $ty),*) -> BoxFuture<'a, Result<$result, EventLogError>> {
-            self.observe(self.inner.$name($($argument),*))
+            self.observe(stringify!($name), self.inner.$name($($argument),*))
         })+
     };
 }
@@ -138,13 +148,16 @@ impl EventStore for ObservedStore {
         &self,
         projector: Arc<dyn Projector>,
     ) -> BoxFuture<'_, Result<(), EventLogError>> {
-        self.observe(self.inner.create_projections(projector))
+        self.observe(
+            "create_projections",
+            self.inner.create_projections(projector),
+        )
     }
     fn register_inline(
         &self,
         projector: Arc<dyn Projector>,
     ) -> BoxFuture<'_, Result<(), EventLogError>> {
-        self.observe(self.inner.register_inline(projector))
+        self.observe("register_inline", self.inner.register_inline(projector))
     }
     fn is_inline<'a>(&'a self, name: &'a str) -> BoxFuture<'a, bool> {
         self.inner.is_inline(name)
@@ -266,6 +279,7 @@ async fn metrics(State(state): State<ChildState>) -> Json<Value> {
         "samples": state.observations.samples.load(Ordering::Relaxed),
         "sample_micros": state.observations.sample_micros.load(Ordering::Relaxed),
         "checked_out": pool.checked_out, "waiting": pool.waiting,
+        "store_timing": state.observations.timing.lock().unwrap().iter().map(|(name, [count, total, max])| ((*name).to_owned(), json!({"count": count, "total_micros": total, "max_micros": max}))).collect::<serde_json::Map<_, _>>(),
         "proc_status": std::fs::read_to_string("/proc/self/status").unwrap(),
         "proc_stat": std::fs::read_to_string("/proc/self/stat").unwrap(),
         "proc_io": std::fs::read_to_string("/proc/self/io").unwrap(),
@@ -887,6 +901,46 @@ fn docker_stats(fixture: &Fixture) -> Result<String> {
     Ok(String::from_utf8(output.stdout)?)
 }
 
+/// Row count and newest row version of every table in the proof schema. Any insert, update or
+/// delete changes one of them, so an unchanged value means the interval wrote no durable row.
+fn table_versions(fixture: &Fixture) -> Result<String> {
+    fixture.sql(&format!(
+        "SELECT string_agg(c.relname || '=' || (xpath('/row/v/text()', query_to_xml(format('SELECT count(*) || '':'' || coalesce(max(xmin::text::bigint), 0) AS v FROM %I.%I', n.nspname, c.relname), false, true, '')))[1]::text, ' ' ORDER BY c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = '{}' AND c.relkind = 'r'",
+        fixture.schema
+    ))
+}
+
+/// Where catch-up time goes: per-store-call totals in each SDK process, database commits, and the
+/// database container's CPU throttling (cgroup v2 with the cgroupfs driver; null elsewhere).
+async fn feed_probe(
+    fixture: &Fixture,
+    client: &reqwest::Client,
+    origins: &[String; 2],
+) -> Result<Value> {
+    let mut store = Vec::new();
+    for origin in origins {
+        let value: Value = client
+            .get(format!("{origin}/metrics"))
+            .send()
+            .await?
+            .json()
+            .await?;
+        store.push(value["store_timing"].clone());
+    }
+    let id = Command::new("docker")
+        .args(["inspect", "--format", "{{.Id}}", &fixture.container])
+        .output()?;
+    let id = String::from_utf8(id.stdout)?.trim().to_owned();
+    let cpu = std::fs::read_to_string(format!("/sys/fs/cgroup/docker/{id}/cpu.stat")).ok();
+    let commits = fixture
+        .sql("SELECT xact_commit FROM pg_stat_database WHERE datname = current_database()")?;
+    Ok(json!({
+        "store": store,
+        "database_xact_commit": commits.trim().parse::<u64>()?,
+        "database_cpu_stat": cpu,
+    }))
+}
+
 fn freeze_inputs(fixture: &Fixture) -> Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -1049,6 +1103,8 @@ pub(super) async fn measure(fixture: &Fixture) -> Result<()> {
                 result.accepted_creates > 0 && result.accepted_revisions > 0 && result.replays > 0,
                 "required successful operation classes missing"
             );
+            let probe_before = feed_probe(fixture, &client, &origins).await?;
+            let versions_before = table_versions(fixture)?;
             let feed_start = Instant::now();
             // Four bounded readers use two connections per process; each SDK page stays <=32.
             let captured = Arc::new(slots.lock().await.clone());
@@ -1104,6 +1160,16 @@ pub(super) async fn measure(fixture: &Fixture) -> Result<()> {
                 catchup.await??;
             }
             let feed_elapsed = feed_start.elapsed();
+            let versions_after = table_versions(fixture)?;
+            let probe_after = feed_probe(fixture, &client, &origins).await?;
+            let written = versions_after
+                .split_whitespace()
+                .filter(|table| !versions_before.split_whitespace().any(|was| was == *table))
+                .collect::<Vec<_>>();
+            ensure!(
+                written.is_empty() && versions_before == versions_after,
+                "quiescent feed catch-up wrote durable rows (table=rows:newest xmin after): {written:?}"
+            );
             for key in warmup
                 .offered_create_keys
                 .keys()
@@ -1151,7 +1217,7 @@ pub(super) async fn measure(fixture: &Fixture) -> Result<()> {
                 "accepted_revisions": result.accepted_revisions, "replays": result.replays,
                 "provider_error_counts": result.errors, "unresolved_or_refused_responses": result.responses_with_error,
                 "operation_counts": result.kinds, "response_bytes": result.response_bytes, "persisted": persisted.trim(),
-                "quiescent_feed_seconds": feed_elapsed.as_secs_f64(),
+                "quiescent_feed_seconds": feed_elapsed.as_secs_f64(), "quiescent_feed_probe": {"before": probe_before, "after": probe_after},
                 "process_before": before, "process_after": after, "database_before": db_before, "database_after": db_after,
                 "queue_measurement": "sampled waiter-microseconds; requested interval 1 ms, actual sample_micros/samples",
                 "driver_dispatch": result.dispatch,
