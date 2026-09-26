@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-09-26
+
 ### Changed
 
 - Build on Eventlog 0.5.0, Entity Runtime 0.24.1 and ESS 0.33.0, one version of each across the
@@ -155,7 +157,7 @@ Releases only up to 0.5.8, so the changes in those three sections below are firs
 - Align generated-service Connector factories and conformance contracts with Connectors 0.5.2,
   retaining delegated execution provenance across the released composition boundary.
 
-## Unreleased
+## 0.7.0 - 2026-09-26
 
 - Align generated Connector factories and conformance with Connectors 0.5.0, preserving
   receiver-verified agent, attempt, delegation, and grant provenance through service execution.

@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "service-builder"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2439,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "service-catalog"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "hex",
@@ -2453,7 +2453,7 @@ dependencies = [
 
 [[package]]
 name = "service-conformance"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "eventlog-sqlite",
@@ -2472,7 +2472,7 @@ dependencies = [
 
 [[package]]
 name = "service-connectors"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "async-trait",
  "eventlog-core",
@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "service-definition"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "ess-compiler",
  "ess-domain",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "service-engine"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "entity-store",
@@ -2520,7 +2520,7 @@ dependencies = [
 
 [[package]]
 name = "service-eventlog"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "entity-eventlog",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "service-host"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2576,7 +2576,7 @@ dependencies = [
 
 [[package]]
 name = "service-http"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "axum",
  "bytes",
@@ -2601,7 +2601,7 @@ dependencies = [
 
 [[package]]
 name = "service-obligations"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2612,7 +2612,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "futures",
  "serde",
@@ -2623,7 +2623,7 @@ dependencies = [
 
 [[package]]
 name = "service-runtime-ir"
-version = "0.6.0"
+version = "0.7.0"
 dependencies = [
  "entity-core",
  "ess-compiler",
@@ -2835,7 +2835,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
