@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:service-sdk-v0-1
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - derived_from: epic:builder-runtime
 - serves: vision:composable-services
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-01T21:37:46Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-01T21:37:46Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-01T22:27:38Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Build service-sdk 0.1
 

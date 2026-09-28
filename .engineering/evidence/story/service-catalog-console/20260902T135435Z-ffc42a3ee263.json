@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-02T13:54:35Z",
+  "actor": "human:timo",
+  "artifact": "story:service-catalog-console",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Service SDK 0.2.4 release gate",
+    "reference": "task check with Connector embedding seam 6410df32 and exact Vue activity tests"
+  }
+}

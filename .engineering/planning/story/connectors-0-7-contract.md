@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:connectors-0-7-contract
 kind: story
 status: active
@@ -24,6 +24,9 @@ scope:
 - confidence: cited
   path: crates/service-host/Cargo.toml
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-07T08:26:55Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-07T08:26:55Z", actor: "human:timo", revision: 4, imported: true}
 ---
 ## Outcome
 

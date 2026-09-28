@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T23:45:28Z",
+  "actor": "human:timo",
+  "artifact": "task:align-connectors-0-6-2",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local:task-check-2026-09-05"
+  }
+}

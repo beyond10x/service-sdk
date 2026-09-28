@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T12:07:42Z",
+  "actor": "human:timo",
+  "artifact": "story:optional-projection-fields",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Service SDK full task check and 22-case adversarial projection suite",
+    "reference": "local:service-sdk-optional-projection-2026-09-04"
+  }
+}

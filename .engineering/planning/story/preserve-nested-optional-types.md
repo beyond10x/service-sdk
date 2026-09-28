@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:preserve-nested-optional-types
 kind: story
 status: implemented
@@ -14,6 +14,10 @@ scope:
 - confidence: cited
   path: crates/service-builder/tests/build.rs
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T12:02:54Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T12:02:54Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T12:07:43Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Context
 

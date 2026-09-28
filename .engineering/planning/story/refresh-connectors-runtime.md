@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:refresh-connectors-runtime
 kind: story
 status: implemented
@@ -22,6 +22,10 @@ scope:
 - confidence: cited
   path: crates/service-connectors/Cargo.toml
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T04:03:34Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T04:03:34Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T04:06:18Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Refresh the generated Connector runtime
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:er-service-delegation
 kind: story
 status: implemented
@@ -51,6 +51,10 @@ scope:
 - confidence: inferred
   path: docs/design/ess-evolution-er-delegation.md
 revision: 22
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-16T13:24:05Z", actor: "human:timo", revision: 6, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-16T13:24:05Z", actor: "human:timo", revision: 7, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-25T12:21:59Z", actor: "human:timo", revision: 22, decided_on: {"recorded":{"test_result":2,"review_outcome":1}}, imported: true}
 ---
 # Complete ER delegation and generated service acceptance
 

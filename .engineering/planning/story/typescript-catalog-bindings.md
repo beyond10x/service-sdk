@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:typescript-catalog-bindings
 kind: story
 status: draft

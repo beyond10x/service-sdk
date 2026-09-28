@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: release-plan:service-sdk-0-5-9
 kind: release-plan
 status: active
@@ -8,6 +8,8 @@ summary: Publish the Connectors 0.6.2 factory identity for generated services.
 relations:
 - delivers: story:align-current-connectors-service-identity
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-04T23:34:56Z", actor: "human:timo", revision: 2, imported: true}
 ---
 ## Outcome
 

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T04:06:18Z",
+  "actor": "human:timo",
+  "artifact": "story:refresh-connectors-runtime",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local:service-sdk-0.5.5"
+  }
+}

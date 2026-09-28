@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:generated-ess-component-release
 kind: story
 status: active
@@ -28,6 +28,9 @@ scope:
 - confidence: cited
   path: crates/service-runtime
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T01:01:04Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T01:01:04Z", actor: "human:timo", revision: 4, imported: true}
 ---
 # Story: Generate standalone ESS component releases
 

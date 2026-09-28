@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-17T03:15:10Z",
+  "actor": "human:timo",
+  "artifact": "story:er-service-delegation",
+  "kind": "story",
+  "revision": 21,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "final corrected task check and generated billing/gatepass acceptance at 9a51ced",
+    "reference": "local-evidence:ess-evolution/waves/0009-service-convergence/sdk-delegation/source-correction-2/coordinator-final-acceptance.json"
+  }
+}

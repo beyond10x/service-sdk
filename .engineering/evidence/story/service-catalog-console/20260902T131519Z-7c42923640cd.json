@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-02T13:15:19Z",
+  "actor": "human:timo",
+  "artifact": "story:service-catalog-console",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "Service SDK 0.2.3 widget reactivity regression gate"
+  }
+}

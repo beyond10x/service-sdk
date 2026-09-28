@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-02T12:44:55Z",
+  "actor": "human:timo",
+  "artifact": "story:service-catalog-console",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check plus generated docs production build",
+    "reference": "crates/service-builder/tests/build.rs"
+  }
+}

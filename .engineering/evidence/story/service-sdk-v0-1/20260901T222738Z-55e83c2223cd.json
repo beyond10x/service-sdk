@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-01T22:27:38Z",
+  "actor": "human:timo",
+  "artifact": "story:service-sdk-v0-1",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "1375ad98f3807abf325861d184bd05f9c3c3f68e"
+  }
+}
