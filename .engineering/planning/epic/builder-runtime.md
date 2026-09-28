@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:builder-runtime
 kind: epic
 status: active
@@ -9,6 +9,9 @@ relations:
 - derived_from: initiative:service-sdk
 - serves: vision:composable-services
 revision: 3
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-01T21:37:46Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-01T21:37:46Z", actor: "human:timo", revision: 3, imported: true}
 ---
 # Builder and runtime foundations
 

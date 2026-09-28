@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-07T08:44:38Z",
+  "actor": "human:timo",
+  "artifact": "story:connectors-0-7-contract",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task --concurrency 1 check with disposable PostgreSQL and the repository target directory",
+    "reference": "local-evidence:devcenter-claude-20260907/sdk-connectors07-task-check.log"
+  }
+}

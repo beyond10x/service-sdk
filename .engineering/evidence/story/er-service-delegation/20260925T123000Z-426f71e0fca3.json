@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-25T12:30:00Z",
+  "actor": "human:timo",
+  "artifact": "story:er-service-delegation",
+  "kind": "story",
+  "revision": 21,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "service-sdk 0.6.0 release gate (task check with PostgreSQL, 185 tests; generated billing/gatepass acceptance against the published commit)",
+    "reference": "https://github.com/beyond10x/service-sdk/releases/tag/0.6.0"
+  }
+}

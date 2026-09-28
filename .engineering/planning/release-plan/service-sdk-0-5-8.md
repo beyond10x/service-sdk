@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: release-plan:service-sdk-0-5-8
 kind: release-plan
 status: implemented
@@ -10,6 +10,9 @@ relations:
 - delivers: story:reject-null-optional-projections
 - delivers: story:preserve-nested-optional-types
 revision: 4
+transitions:
+- {from: "draft", to: "active", at: "2026-09-04T12:50:33Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T12:58:46Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Outcome
 

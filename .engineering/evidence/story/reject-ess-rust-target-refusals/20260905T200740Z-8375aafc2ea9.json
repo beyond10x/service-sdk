@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T20:07:40Z",
+  "actor": "human:timo",
+  "artifact": "story:reject-ess-rust-target-refusals",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Exact f9a7cf7 ESS producer: eight real pre-write refusals, six valid controls,63-file equality with published6616 baseline; original SDK ESS graph restored",
+    "reference": "target/review-boundaries-5/frozen-producer-compatibility.md"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-01T23:29:37Z",
+  "actor": "human:timo",
+  "artifact": "story:generated-service-realization",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "9ee0cd04807511674e68e2550e1fcc83f9df364c"
+  }
+}

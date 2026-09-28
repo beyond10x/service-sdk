@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T08:31:14Z",
+  "actor": "human:timo",
+  "artifact": "task:align-connectors-0-6-4",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check; git diff --check",
+    "reference": "codex:frontend_speed/session-76729"
+  }
+}

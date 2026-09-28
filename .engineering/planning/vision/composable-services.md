@@ -1,11 +1,14 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: vision:composable-services
 kind: vision
 status: approved
 title: Composable standalone services
 summary: Define once, synthesize safe standalone event-sourced services, and compose them without monolith coupling.
 revision: 3
+transitions:
+- {from: "draft", to: "in_review", at: "2026-09-01T21:37:45Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "in_review", to: "approved", at: "2026-09-01T21:37:45Z", actor: "human:timo", revision: 3, imported: true}
 ---
 # Composable standalone services
 

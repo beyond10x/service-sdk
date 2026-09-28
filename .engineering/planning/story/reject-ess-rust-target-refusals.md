@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:reject-ess-rust-target-refusals
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ scope:
 - confidence: cited
   path: crates/service-builder
 revision: 11
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-05T18:42:00Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-05T18:42:01Z", actor: "human:timo", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-05T20:09:52Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":2,"review_outcome":1}}, imported: true}
 ---
 ## Finding and source
 

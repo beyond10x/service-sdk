@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-02T01:25:18Z",
+  "actor": "human:timo",
+  "artifact": "story:operational-connector-runtime",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "/tmp/b10x-service-sdk-check.log"
+  }
+}

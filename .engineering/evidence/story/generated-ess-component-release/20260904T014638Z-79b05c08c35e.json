@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T01:46:38Z",
+  "actor": "human:timo",
+  "artifact": "story:generated-ess-component-release",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (ESS 0.13.1)",
+    "reference": "Taskfile.yml"
+  }
+}

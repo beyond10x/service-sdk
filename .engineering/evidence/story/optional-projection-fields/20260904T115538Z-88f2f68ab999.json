@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-04T11:55:38Z",
+  "actor": "human:timo",
+  "artifact": "story:optional-projection-fields",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:recovery-wave-one-optional-projection-fields-pass-1",
+    "review": "review-result:recovery-wave-one-optional-projection-fields-pass-1",
+    "outcome": "fixed"
+  }
+}

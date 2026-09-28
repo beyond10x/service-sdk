@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T12:53:33Z",
+  "actor": "human:timo",
+  "artifact": "release-plan:service-sdk-0-5-8",
+  "kind": "release-plan",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "RUSTC_WRAPPER=/usr/bin/sccache task check",
+    "reference": "local:service-sdk-0.5.8-release-gate-2026-09-04"
+  }
+}

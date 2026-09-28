@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T17:40:54Z",
+  "actor": "human:timo",
+  "artifact": "story:generated-identity-http-delivery",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (0.4.2)",
+    "reference": "Taskfile.yml"
+  }
+}

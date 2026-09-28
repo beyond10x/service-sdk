@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:align-connectors-0-6-2
 kind: task
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - derived_from: story:align-current-connectors-service-identity
 - serves: vision:composable-services
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T23:34:55Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T23:34:55Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T23:45:28Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: Align generated services with Connectors 0.6.2
 

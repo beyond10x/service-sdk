@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-02T12:32:39Z",
+  "actor": "human:timo",
+  "artifact": "story:service-catalog-console",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "Taskfile.yml"
+  }
+}

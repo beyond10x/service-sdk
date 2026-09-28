@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-05T19:50:20Z",
+  "actor": "human:timo",
+  "artifact": "story:reject-ess-rust-target-refusals",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Seven SDK task check dependencies; 111 Rust and 4 web tests passed on e9fcbb960b7a5283666c23c4e0478d4e7b7406d7",
+    "reference": "target/review-boundaries-5/full-sdk-gate/record.json"
+  }
+}

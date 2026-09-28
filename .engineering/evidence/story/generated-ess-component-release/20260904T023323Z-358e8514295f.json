@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T02:33:23Z",
+  "actor": "human:timo",
+  "artifact": "story:generated-ess-component-release",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local:service-sdk-0.5.4-release-action"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T02:07:37Z",
+  "actor": "human:timo",
+  "artifact": "story:generated-ess-component-release",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local:service-sdk-0.5.3-chart-workdir"
+  }
+}
