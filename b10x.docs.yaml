@@ -44,9 +44,6 @@ surfaces:
   - kind: uses
     label: Persists generated services through Eventlog
     target: eventlog/docs
-  - kind: supports
-    label: Generates service factories for Connector composition
-    target: connectors/docs
   routeBase: /docs/service-sdk/
   sections:
   - kind: quickstart
